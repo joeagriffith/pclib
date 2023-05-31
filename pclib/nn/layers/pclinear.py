@@ -32,7 +32,6 @@ class PCLinearUniweighted(nn.Module):
 
         self.in_features = in_features
         self.out_features = out_features
-        self.bias = bias
 
         self.nu = nu
         self.mu = mu
@@ -41,9 +40,9 @@ class PCLinearUniweighted(nn.Module):
 
         self.device = device
 
-        self.weight = Parameter(torch.empty(out_features, in_features), **factory_kwargs)
+        self.weight = Parameter(torch.empty((out_features, in_features), **factory_kwargs))
         if bias:
-            self.bias = Parameter(torch.empty(out_features), **factory_kwargs)
+            self.bias = Parameter(torch.empty(out_features, **factory_kwargs))
         else:
             self.register_parameter('bias', None)
         self.reset_parameters()
@@ -56,25 +55,26 @@ class PCLinearUniweighted(nn.Module):
             nn.init.uniform_(self.bias, -bound, bound)
 
     def init_vars(self, batch_size, bias=False):
-        e = torch.zeros((batch_size, self.in_size), device=self.device)
-        r = torch.zeros((batch_size, self.out_size), device=self.device)
-        if bias:
-            r += self.bias
-        return e, r
+        r = torch.zeros((batch_size, self.out_features), device=self.device)
+        e = torch.zeros((batch_size, self.in_features), device=self.device)
+        # if bias:
+            # r += self.bias
+        return r, e
 
-    def _calc_err(self, input: Tensor, td_pred: Tensor) -> Tensor:
+    def forward(self, input: Tensor, r: Tensor, td_err=None) -> Tensor:
+
+        td_pred = F.linear(r, self.weight.t())
+        td_pred = F.tanh(td_pred)
         e = input - td_pred
         if self.relu_errs:
             e = F.relu(e)
-        return e
-
-    def forward(self, input: Tensor, r: Tensor, td_err=None) -> Tensor:
-        td_pred = F.linear(r, self.weight.t())
-        e = self._calc_err(input, td_pred)
 
         update = F.linear(e, self.weight, self.bias)
+        update = F.tanh(update)
 
-        r = (self.nu * r) + (self.mu * update) + (self.eta * td_err)
+        r = (self.nu * r) + (self.mu * update)
+        if td_err is not None:
+            r += (self.eta * td_err)
 
         return r, e
 
