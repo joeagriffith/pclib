@@ -21,7 +21,7 @@ def evaluate_pc(model, data_loader, criterion, device, flatten=False):
         model.eval()
 
         loss = 0.0
-        acc = torch.zeros(3, device=device)
+        acc = torch.zeros(2, device=device)
         errs = torch.zeros(len(model.layers), device=device)
 
         for images, y in data_loader:
@@ -29,11 +29,11 @@ def evaluate_pc(model, data_loader, criterion, device, flatten=False):
             if flatten:
                 x = torch.flatten(x, start_dim=1)
             target = y.to(device)
-            R, E = model(x, full_data=True)
+            out, R, E = model(x, full_data=True)
 
-            loss += criterion(R[-1], target).item()
+            loss += criterion(out, target).item()
 
-            acc += topk_accuracy(R[-1], target, (1,3,5))
+            acc += topk_accuracy(out, target, (1,3))
 
             for i, e in enumerate(E):
                 errs[i] += e.square().mean()
