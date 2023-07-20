@@ -6,6 +6,57 @@ from torch import Tensor
 from torch.nn.parameter import Parameter
 from typing import Optional
 
+
+class PCLinearBasic(nn.Module):
+    __constants__ = ['in_features', 'out_features']
+    in_features: int
+    out_features: int
+    weight: Tensor
+    bias: Optional[Tensor]
+
+    def __init__(self,
+                 in_features: int,
+                 out_features: int,
+                 bias: bool = True,
+
+                 device=torch.device('cpu'),
+                 dtype=None
+                 ) -> None:
+
+        factory_kwargs = {'device': device, 'dtype': dtype}
+        super(PCLinearBasic, self).__init__()
+
+        self.in_features = in_features
+        self.out_features = out_features
+
+        self.device = device
+
+        self.linear = nn.Linear(out_features, in_features, bias, **factory_kwargs)
+        self.linear.weight.data *= 0.1
+
+    # Returns a tuple of two tensors, r and e, of shape (batch_size, out_features) and (batch_size, in_features) respectively
+    # TODO: use factory kwargs?
+    def init_state(self, batch_size):
+        state = [
+            torch.zeros((batch_size, self.out_features), device=self.device),
+            torch.zeros((batch_size, self.in_features), device=self.device)
+        ]
+        # if bias: # TODO: is r_bias a better initialisation than zeros?
+            # r += self.bias
+        return state
+
+    def to(self, *args, **kwargs):
+        self.device = args[0]
+        return super().to(*args, **kwargs)
+
+    def forward(self, x, state) -> Tensor:
+
+        state[1] = x - self.linear(state[0])
+        update = F.linear(state[1], self.linear.weight.T, None)
+        state[0] += update
+
+        return state
+
 class PCLinearUni(nn.Module):
     __constants__ = ['in_features', 'out_features']
     in_features: int
@@ -45,7 +96,7 @@ class PCLinearUni(nn.Module):
             nn.init.uniform_(self.bias, -bound, bound)
 
     # Returns a tuple of two tensors, r and e, of shape (batch_size, out_features) and (batch_size, in_features) respectively
-    def init_vars(self, batch_size):
+    def init_state(self, batch_size):
         state = [
             torch.zeros((batch_size, self.out_features), device=self.device),
             torch.zeros((batch_size, self.in_features), device=self.device)
@@ -108,7 +159,7 @@ class PCLinear(nn.Module):
             nn.init.uniform_(self.bias, -bound, bound)
 
     # Returns a tuple of two tensors, r and e, of shape (batch_size, out_features) and (batch_size, in_features) respectively
-    def init_vars(self, batch_size, bias=False):
+    def init_state(self, batch_size, bias=False):
         state = [
             torch.zeros((batch_size, self.out_features), device=self.device),
             torch.zeros((batch_size, self.in_features), device=self.device)

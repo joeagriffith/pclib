@@ -1,4 +1,4 @@
-from pclib.nn.layers import PCLinearUni as PCLinear
+from pclib.nn.layers import PCLinearBasic as PCLinear
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,18 +27,19 @@ class SmallLinearClassifier(nn.Module):
         self.device = device
 
     def step(self, x, state, y=None):
-        if y is not None:
-            assert y.shape == state[-1][0].shape
-            state[-1][0] = y
         for i, layer in enumerate(self.layers):
             state[i] = layer(x, state[i])
             x = state[i][0]
+        if y is not None:
+            y_norm = y / torch.norm(y, dim=1, keepdim=True)
+            y_scaled = y_norm * torch.norm(state[-1][0], dim=1, keepdim=True)
+            state[1][0] = y_scaled
         return state
 
-    def init_vars(self, batch_size: int):
+    def init_state(self, batch_size: int):
         state = []
         for layer in self.layers:
-            state_i = layer.init_vars(batch_size)
+            state_i = layer.init_state(batch_size)
             state.append(state_i)
         return state
 
@@ -54,7 +55,7 @@ class SmallLinearClassifier(nn.Module):
             steps = self.steps
 
         if state is None:
-            state = self.init_vars(x.shape[0])
+            state = self.init_state(x.shape[0])
 
         for _ in range(steps):
             state = self.step(x, state, y)
