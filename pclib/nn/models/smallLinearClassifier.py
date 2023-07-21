@@ -1,4 +1,4 @@
-from pclib.nn.layers import PCLinearBasic as PCLinear
+from pclib.nn.layers import PCLinearUni as PCLinear
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -64,7 +64,3 @@ class SmallLinearClassifier(nn.Module):
             
         return out, state
             
-
-
-
-

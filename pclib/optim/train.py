@@ -76,17 +76,17 @@ def train_lin(
                 if step_i > 0:
                     with torch.no_grad():
                         for i in range(len(model.layers)):
-                            model.layers[i].linear.weight.grad = -(state[i][1].T @ state[i][0]) / b_size
-                            if model.layers[i].linear.bias is not None:
+                            model.layers[i].weight.grad = -(state[i][0].T @ state[i][1]) / b_size
+                            if model.layers[i].bias is not None:
                                 target_bias = x.mean(axis=0) if i == 0 else state[i-1][0].mean(axis=0)
-                                model.layers[i].linear.bias.grad = model.layers[i].linear.bias - target_bias
+                                model.layers[i].bias.grad = model.layers[i].bias - target_bias
                             if isinstance(model.layers[i], PCLinear):
                                 model.layers[i].weight_td.grad = -(state[i][1].T @ state[i][0]) / b_size
                 
             # Regularisation
             reg = torch.zeros(1).to(device)
             for i in range(len(model.layers)):
-                reg += model.layers[i].linear.weight.square().mean()
+                reg += model.layers[i].weight.square().mean()
                 if isinstance(model.layers[i], PCLinear):
                     reg += model.layers[i].weight_td.square().mean()
             reg *= reg_coeff
@@ -94,19 +94,19 @@ def train_lin(
 
             # Parameter Update
             for i in range(len(model.layers)):
-                model.layers[i].linear.weight.data -= lr * model.layers[i].linear.weight.grad
-                if model.layers[i].linear.bias is not None:
-                    assert model.layers[i].linear.bias.grad is not None, f"layer {i} bias has no grad"
-                    model.layers[i].linear.bias.data -= lr * model.layers[i].linear.bias.grad
+                model.layers[i].weight.data -= lr * model.layers[i].weight.grad
+                if model.layers[i].bias is not None:
+                    assert model.layers[i].bias.grad is not None, f"layer {i} bias has no grad"
+                    model.layers[i].bias.data -= lr * model.layers[i].bias.grad
                 if isinstance(model.layers[i], PCLinear):
-                    model.layers[i].linear.weight_td.data -= lr * model.layers[i].weight_td.grad
+                    model.layers[i].weight_td.data -= lr * model.layers[i].weight_td.grad
 
             # Track batch statistics
             for i in range(len(model.layers)):
                 batches_R_mags[i].append(state[i][0].norm(dim=1).mean().item())
                 batches_E_mags[i].append(state[i][1].norm(dim=1).mean().item())
-                batches_Weight_means[i].append(model.layers[i].linear.weight.mean().item())
-                batches_Weight_stds[i].append(model.layers[i].linear.weight.std().item())
+                batches_Weight_means[i].append(model.layers[i].weight.mean().item())
+                batches_Weight_stds[i].append(model.layers[i].weight.std().item())
                 if track_td:
                     batches_WeightTD_means[i].append(model.layers[i].weight_td.mean().item())
                     batches_WeightTD_stds[i].append(model.layers[i].weight_td.std().item())
@@ -132,6 +132,7 @@ def train_lin(
 
     return step, stats
 
+    
 def train(
     model, 
     train_data,
