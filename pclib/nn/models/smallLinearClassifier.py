@@ -1,4 +1,4 @@
-from pclib.nn.layers import PCLinearUni as PCLinear
+from pclib.nn.layers import PCLinear
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,8 +8,8 @@ class SmallLinearClassifier(nn.Module):
     in_features: int
     num_classes: int
 
-    def __init__(self, input_size, num_classes, hidden_sizes = [], steps=5, bias=False, device=torch.device('cpu'), dtype=None):
-        factory_kwargs = {'bias': bias, 'device': device, 'dtype': dtype}
+    def __init__(self, input_size, num_classes, hidden_sizes = [], steps=5, bias=True, symmetric=True, device=torch.device('cpu'), dtype=None):
+        factory_kwargs = {'bias': bias, 'symmetric': symmetric, 'device': device, 'dtype': dtype}
         super(SmallLinearClassifier, self).__init__()
 
         self.in_features = input_size

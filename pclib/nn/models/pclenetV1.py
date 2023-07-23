@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from pclib.nn.layers import PCConv, PCLinearUni
+from pclib.nn.layers import PCConv
 from functools import reduce
 
 # TODO: Broken, y in step cant be assigned to nn.Linear layer
