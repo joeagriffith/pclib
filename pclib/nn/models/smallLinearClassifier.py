@@ -1,4 +1,4 @@
-from pclib.nn.layers import PCLinear
+from pclib.nn.layers import DualPELayer as PPELayer
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,9 +18,9 @@ class SmallLinearClassifier(nn.Module):
         layers = []
         prev_size = input_size
         for size in hidden_sizes:
-            layers.append(PCLinear(prev_size, size, **factory_kwargs))
+            layers.append(PPELayer(prev_size, size, **factory_kwargs))
             prev_size = size
-        layers.append(PCLinear(prev_size, num_classes, **factory_kwargs))
+        layers.append(PPELayer(prev_size, num_classes, **factory_kwargs))
 
         self.layers = nn.ModuleList(layers)
         self.steps = steps
