@@ -76,10 +76,14 @@ def train(
                         for i in range(len(model.layers)):
                             model.layers[i].weight_td.grad = -(state[i][1].T @ state[i][0]) / b_size
                             if model.layers[i].bias is not None:
-                                target_bias = x.mean(axis=0) if i == 0 else state[i-1][0].mean(axis=0)
                                 if isinstance(model.layers[i], DualPELayer):
+                                    raise("Not Tested with new error update to bias")
+                                    target_bias = x.mean(axis=0) if i == 0 else state[i-1][0].mean(axis=0)
                                     target_bias = torch.cat((target_bias, target_bias))
-                                model.layers[i].bias.grad = model.layers[i].bias - target_bias.expand(model.layers[i].bias.shape)
+                                    model.layers[i].bias.grad = model.layers[i].bias - target_bias.expand(model.layers[i].bias.shape)
+                                else:
+                                    model.layers[i].bias.grad = state[i][1].mean(axis=0)
+
                             if not model.layers[i].symmetric:
                                 model.layers[i].weight_bu.grad = -(state[i][0].T @ state[i][1]) / b_size
                 
