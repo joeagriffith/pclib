@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from pclib.optim.eval import topk_accuracy, evaluate_pc
-from pclib.nn.layers import DualPELayer
+from pclib.nn.layers import DualPopPCLinear
 
 def train(
     model, 
@@ -25,33 +25,39 @@ def train(
 
     # Track epochs, indexed: [layer][epoch]
     if stats is None:
-        epochs_R_mags = [[] for _ in range(len(model.layers))]
-        epochs_E_mags = [[] for _ in range(len(model.layers))]
-        epochs_WeightTD_means = [[] for _ in range(len(model.layers))]
-        epochs_WeightTD_stds = [[] for _ in range(len(model.layers))]
-        epochs_WeightBU_means = [[] for _ in range(len(model.layers))]
-        epochs_WeightBU_stds = [[] for _ in range(len(model.layers))]
+        stats = {
+            "R_norms": [[] for _ in range(len(model.layers))],
+            "E_mags": [[] for _ in range(len(model.layers))],
+            "WeightTD_means": [[] for _ in range(len(model.layers))],
+            "WeightTD_stds": [[] for _ in range(len(model.layers))],
+            "Bias_means": [[] for _ in range(len(model.layers))],
+            "Bias_stds": [[] for _ in range(len(model.layers))],
+            "WeightBU_means": [[] for _ in range(len(model.layers))],
+            "WeightBU_stds": [[] for _ in range(len(model.layers))],
+        }
         
 
     for epoch in range(num_epochs):
 
         # Track batches, indexed: [layer][batch]
-        batches_R_mags = [[] for _ in range(len(model.layers))]
-        batches_E_mags = [[] for _ in range(len(model.layers))]
-        batches_WeightTD_means = [[] for _ in range(len(model.layers))]
-        batches_WeightTD_stds = [[] for _ in range(len(model.layers))]
-        batches_WeightBU_means = [[] for _ in range(len(model.layers))]
-        batches_WeightBU_stds = [[] for _ in range(len(model.layers))]
+        epoch_stats = {
+            "R_norms": [[] for _ in range(len(model.layers))],
+            "E_mags": [[] for _ in range(len(model.layers))],
+            "WeightTD_means": [[] for _ in range(len(model.layers))],
+            "WeightTD_stds": [[] for _ in range(len(model.layers))],
+            "Bias_means": [[] for _ in range(len(model.layers))],
+            "Bias_stds": [[] for _ in range(len(model.layers))],
+            "WeightBU_means": [[] for _ in range(len(model.layers))],
+            "WeightBU_stds": [[] for _ in range(len(model.layers))],
+        }
         
-        #  Initialise variables and prepare data for new epoch
         model.train()
-
         loop = tqdm(enumerate(train_loader), total=len(train_loader), leave=False)    
         if epoch > 0:
-            norm_e = sum([epochs_E_mags[i][-1] for i in range(len(model.layers))]) / len(model.layers)
+            vfe = sum([stats['E_mags'][i][-1] for i in range(len(model.layers))])
             loop.set_description(f"Epoch [{epoch}/{num_epochs}]")
             loop.set_postfix(
-                norm_e = norm_e,
+                VFE = vfe,
         #         train_err_mean = train_err.mean() / (batch_idx + 1),
         #         val_loss = val_loss, 
         #         val_acc = val_acc[0].item(),
@@ -65,36 +71,35 @@ def train(
             step += b_size
 
             # Initialise belief and error tensors
-            state = model.init_state(b_size)
+            state = model.init_state(b_size, mode='rand')
 
-            for step_i in range(model.steps):
-                with torch.no_grad():
-                    state = model.step(x, state, y)
+            with torch.no_grad():
+                # Forward pass
+                out, state = model(x, state, y)
 
-                if step_i > 0:
-                    with torch.no_grad():
-                        for i in range(len(model.layers)):
-                            model.layers[i].weight_td.grad = -(state[i][1].T @ state[i][0]) / b_size
-                            if model.layers[i].bias is not None:
-                                if isinstance(model.layers[i], DualPELayer):
-                                    raise("Not Tested with new error update to bias")
-                                    target_bias = x.mean(axis=0) if i == 0 else state[i-1][0].mean(axis=0)
-                                    target_bias = torch.cat((target_bias, target_bias))
-                                    model.layers[i].bias.grad = model.layers[i].bias - target_bias.expand(model.layers[i].bias.shape)
-                                else:
-                                    model.layers[i].bias.grad = state[i][1].mean(axis=0)
+                # Calculate grads
+                for i in range(len(model.layers)):
+                    model.layers[i].weight_td.grad = -(state[i][1].T @ torch.relu(state[i][0])) / b_size
+                    if model.layers[i].bias is not None:
+                        if isinstance(model.layers[i], DualPopPCLinear):
+                            raise("Not Tested with new error update to bias")
+                            target_bias = x.mean(axis=0) if i == 0 else state[i-1][0].mean(axis=0)
+                            target_bias = torch.cat((target_bias, target_bias))
+                            model.layers[i].bias.grad = model.layers[i].bias - target_bias.expand(model.layers[i].bias.shape)
+                        else:
+                            model.layers[i].bias.grad = -state[i][1].mean(axis=0)
 
-                            if not model.layers[i].symmetric:
-                                model.layers[i].weight_bu.grad = -(state[i][0].T @ state[i][1]) / b_size
+                    if not model.layers[i].symmetric:
+                        model.layers[i].weight_bu.grad = -(state[i][0].T @ state[i][1]) / b_size
                 
             # Regularisation
-            reg = torch.zeros(1).to(device)
-            for i in range(len(model.layers)):
-                reg += model.layers[i].weight_td.square().mean()
-                if not model.layers[i].symmetric:
-                    reg += model.layers[i].weight_bu.square().mean()
-            reg *= reg_coeff
-            reg.backward()
+            # reg = torch.zeros(1).to(device)
+            # for i in range(len(model.layers)):
+            #     reg += model.layers[i].weight_td.square().mean()
+            #     if not model.layers[i].symmetric:
+            #         reg += model.layers[i].weight_bu.square().mean()
+            # reg *= reg_coeff
+            # reg.backward()
 
             # Parameter Update
             for i in range(len(model.layers)):
@@ -107,31 +112,28 @@ def train(
 
             # Track batch statistics
             for i in range(len(model.layers)):
-                batches_R_mags[i].append(state[i][0].norm(dim=1).mean().item())
-                batches_E_mags[i].append(state[i][1].norm(dim=1).mean().item())
-                batches_WeightTD_means[i].append(model.layers[i].weight_td.mean().item())
-                batches_WeightTD_stds[i].append(model.layers[i].weight_td.std().item())
+                epoch_stats['R_norms'][i].append(state[i][0].norm(dim=1).mean().item())
+                epoch_stats['E_mags'][i].append(state[i][1].square().mean().item())
+                epoch_stats['WeightTD_means'][i].append(model.layers[i].weight_td.mean().item())
+                epoch_stats['WeightTD_stds'][i].append(model.layers[i].weight_td.std().item())
                 if not model.layers[i].symmetric:
-                    batches_WeightBU_means[i].append(model.layers[i].weight_bu.mean().item())
-                    batches_WeightBU_stds[i].append(model.layers[i].weight_bu.std().item())
+                    epoch_stats['WeightBU_means'][i].append(model.layers[i].weight_bu.mean().item())
+                    epoch_stats['WeightBU_stds'][i].append(model.layers[i].weight_bu.std().item())
+                if model.layers[i].bias is not None:
+                    epoch_stats['Bias_means'][i].append(model.layers[i].bias.mean().item())
+                    epoch_stats['Bias_stds'][i].append(model.layers[i].bias.std().item())
 
         # Track epoch statistics
         for i in range(len(model.layers)):
-            epochs_R_mags[i].append(torch.tensor(batches_R_mags[i]).mean().item())
-            epochs_E_mags[i].append(torch.tensor(batches_E_mags[i]).mean().item())
-            epochs_WeightTD_means[i].append(torch.tensor(batches_WeightTD_means[i]).mean().item())
-            epochs_WeightTD_stds[i].append(torch.tensor(batches_WeightTD_stds[i]).mean().item())
+            stats['R_norms'][i].append(torch.tensor(epoch_stats['R_norms'][i]).mean().item())
+            stats['E_mags'][i].append(torch.tensor(epoch_stats['E_mags'][i]).mean().item())
+            stats['WeightTD_means'][i].append(torch.tensor(epoch_stats['WeightTD_means'][i]).mean().item())
+            stats['WeightTD_stds'][i].append(torch.tensor(epoch_stats['WeightTD_stds'][i]).mean().item())
             if not model.layers[i].symmetric:
-                epochs_WeightBU_means[i].append(torch.tensor(batches_WeightBU_means[i]).mean().item())
-                epochs_WeightBU_stds[i].append(torch.tensor(batches_WeightBU_stds[i]).mean().item())
-
-    stats = {
-        "R_mags": epochs_R_mags,
-        "E_mags": epochs_E_mags,
-        "Weight_means": epochs_WeightTD_means,
-        "Weight_stds": epochs_WeightTD_stds,
-        "WeightBU_means": epochs_WeightBU_means,
-        "WeightBU_stds": epochs_WeightBU_stds,
-    }
+                stats['WeightBU_means'][i].append(torch.tensor(epoch_stats['WeightBU_means'][i]).mean().item())
+                stats['WeightBU_stds'][i].append(torch.tensor(epoch_stats['WeightBU_stds'][i]).mean().item())
+            if model.layers[i].bias is not None:
+                stats['Bias_means'][i].append(torch.tensor(epoch_stats['Bias_means'][i]).mean().item())
+                stats['Bias_stds'][i].append(torch.tensor(epoch_stats['Bias_stds'][i]).mean().item())
 
     return step, stats
