@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from pclib.nn.layers import PCConv
+from pclib.nn.layers import Conv2d
 from functools import reduce
 
 # TODO: Broken, y in step cant be assigned to nn.Linear layer
@@ -26,9 +26,9 @@ class PCLeNetV1(nn.Module):
 
         self.steps = steps
         self.layers = nn.ModuleList([
-            PCConv(shape[0], shape[1], (5,5), nu, mu, eta, maxpool=2, padding=2, relu_errs=relu_errs),
-            PCConv(shape[1], shape[2], (5,5), nu, mu, eta, maxpool=2, relu_errs=relu_errs),
-            PCConv(shape[2], shape[3], (5,5), nu, mu, eta, relu_errs=relu_errs),
+            Conv2d(shape[0], shape[1], (5,5), nu, mu, eta, maxpool=2, padding=2, relu_errs=relu_errs),
+            Conv2d(shape[1], shape[2], (5,5), nu, mu, eta, maxpool=2, relu_errs=relu_errs),
+            Conv2d(shape[2], shape[3], (5,5), nu, mu, eta, relu_errs=relu_errs),
         ])
 
         self.classifier = nn.Sequential(

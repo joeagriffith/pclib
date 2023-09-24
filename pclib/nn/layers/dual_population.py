@@ -6,7 +6,7 @@ from torch import Tensor
 from torch.nn.parameter import Parameter
 from typing import Optional
 
-class DualPopPCLinear(nn.Module):
+class DualPopulation(nn.Module):
     __constants__ = ['in_features', 'out_features']
     in_features: int
     out_features: int
@@ -25,7 +25,7 @@ class DualPopPCLinear(nn.Module):
                  ) -> None:
 
         factory_kwargs = {'device': device, 'dtype': dtype}
-        super(DualPopPCLinear, self).__init__()
+        super(DualPopulation, self).__init__()
 
         self.in_features = in_features
         self.out_features = out_features

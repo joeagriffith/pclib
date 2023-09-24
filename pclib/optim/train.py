@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from pclib.optim.eval import topk_accuracy, evaluate_pc
-from pclib.nn.layers import DualPopPCLinear
+from pclib.nn.layers import DualPopulation, PrecisionWeighted
 
 def train(
     model, 
@@ -81,16 +81,20 @@ def train(
                 for i in range(len(model.layers)):
                     model.layers[i].weight_td.grad = -(state[i][1].T @ torch.relu(state[i][0])) / b_size
                     if model.layers[i].bias is not None:
-                        if isinstance(model.layers[i], DualPopPCLinear):
+                        if isinstance(model.layers[i], DualPopulation):
                             raise("Not Tested with new error update to bias")
                             target_bias = x.mean(axis=0) if i == 0 else state[i-1][0].mean(axis=0)
                             target_bias = torch.cat((target_bias, target_bias))
                             model.layers[i].bias.grad = model.layers[i].bias - target_bias.expand(model.layers[i].bias.shape)
                         else:
                             model.layers[i].bias.grad = -state[i][1].mean(axis=0)
+                        
+                        if not model.layers[i].symmetric:
+                            model.layers[i].weight_bu.grad = -(state[i][0].T @ state[i][1]) / b_size
 
-                    if not model.layers[i].symmetric:
-                        model.layers[i].weight_bu.grad = -(state[i][0].T @ state[i][1]) / b_size
+                        if isinstance(model.layers[i], PrecisionWeighted):
+                            model.layers[i].weight_var.grad = -((state[i][1].T @ state[i][2]) / b_size - torch.eye(model.layers[i].weight_var.shape[0], device=device))
+
                 
             # Regularisation
             # reg = torch.zeros(1).to(device)
@@ -109,6 +113,8 @@ def train(
                     model.layers[i].bias.data -= lr * model.layers[i].bias.grad
                 if not model.layers[i].symmetric:
                     model.layers[i].weight_bu.data -= lr * model.layers[i].weight_bu.grad
+                if isinstance(model.layers[i], PrecisionWeighted):
+                    model.layers[i].weight_var.data = lr * model.layers[i].weight_var.grad
 
             # Track batch statistics
             for i in range(len(model.layers)):

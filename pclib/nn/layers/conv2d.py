@@ -6,7 +6,7 @@ from torch.nn.modules.utils import _single, _pair
 from torch import Tensor
 from typing import Optional, List, Tuple, Union
 
-class PCConv(nn.Module):
+class Conv2d(nn.Module):
     def __init__(self, 
                  in_shape,
                  out_shape,
@@ -24,7 +24,7 @@ class PCConv(nn.Module):
                  relu_errs=True,
                  **kwargs,
                 ):
-        super().__init__()
+        super(Conv2d, self).__init__()
         self.r_shape = out_shape
         self.e_shape = in_shape
 
@@ -67,7 +67,7 @@ class PCConv(nn.Module):
             r += self.eta*td_err
         return r, e
 
-class PCConvV2(nn.modules.conv._ConvNd):
+class Conv2dV2(nn.modules.conv._ConvNd):
 
     def __init__(
             self, 
@@ -97,7 +97,7 @@ class PCConvV2(nn.modules.conv._ConvNd):
         stride_ = _pair(stride)
         padding_ = padding if isinstance(padding, str) else _pair(padding)
         dilation_ = _pair(dilation)
-        super(PCConvV2, self).__init__(
+        super(Conv2dV2, self).__init__(
             e_shape[0], r_shape[0], kernel_size_, stride_, padding_, dilation_,
             False, _pair(0), groups, bias, padding_mode, **self.factory_kwargs
         )
@@ -207,7 +207,7 @@ class PCConvV2(nn.modules.conv._ConvNd):
             r += self.eta*td_err
         return r, e
 
-class PCConvV3(nn.Module):
+class Conv2dV3(nn.Module):
     def __init__(self, 
                  e_shape,
                  r_shape,
@@ -224,7 +224,7 @@ class PCConvV3(nn.Module):
                  padding=0,
                  **kwargs,
                 ):
-        super(PCConvV3, self).__init__()
+        super(Conv2dV3, self).__init__()
         self.e_shape = e_shape
         self.r_shape = r_shape
 

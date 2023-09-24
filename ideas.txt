@@ -1,0 +1,6 @@
+reducing timescale for higher layers by either reducing forward propagated error size (if corrective) or reducing gamma.
+- Either reduce forward propagated error magnitude (if corrective) or reduce gamma
+- Not beneficial for static inference (probably)
+
+r update is better without update *= d_actv_fn(r)
+- why?

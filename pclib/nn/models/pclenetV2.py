@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from pclib.nn.layers import PCConvV2, PCLinear
+from pclib.nn.layers import Conv2dV2, Linear
 from functools import reduce
 
 class PCLeNetV2(nn.Module):
@@ -25,12 +25,12 @@ class PCLeNetV2(nn.Module):
 
         self.steps = steps
         self.layers = nn.ModuleList([
-            PCConvV2(shape[0], shape[1], (5,5), nu=nu, mu=mu, eta=eta, maxpool=2, padding=2, relu_errs=relu_errs),
-            PCConvV2(shape[1], shape[2], (5,5), nu=nu, mu=mu, eta=eta, maxpool=2, relu_errs=relu_errs),
-            PCConvV2(shape[2], shape[3], (5,5), nu=nu, mu=mu, eta=eta, relu_errs=relu_errs),
+            Conv2dV2(shape[0], shape[1], (5,5), nu=nu, mu=mu, eta=eta, maxpool=2, padding=2, relu_errs=relu_errs),
+            Conv2dV2(shape[1], shape[2], (5,5), nu=nu, mu=mu, eta=eta, maxpool=2, relu_errs=relu_errs),
+            Conv2dV2(shape[2], shape[3], (5,5), nu=nu, mu=mu, eta=eta, relu_errs=relu_errs),
 
-            PCLinear(reduce(lambda x, y: x * y, shape[3]), 84, nu, mu, eta, relu_errs=relu_errs),
-            PCLinear(84, num_classes, nu, mu, eta, relu_errs=relu_errs),
+            Linear(reduce(lambda x, y: x * y, shape[3]), 84, nu, mu, eta, relu_errs=relu_errs),
+            Linear(84, num_classes, nu, mu, eta, relu_errs=relu_errs),
         ])
 
 
