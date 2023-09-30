@@ -22,7 +22,7 @@ class Linear(nn.Module):
                  symmetric: bool = True,
                  actv_fn: callable = F.relu,
                  d_actv_fn: callable = None,
-                 actv_mode: str = 'Wf(r)', # 'f(Wr)' or 'Wf(r)'
+                 actv_mode: str = 'Wf(x)', # 'f(Wx)' or 'Wf(x)'
                  gamma: float = 0.1,
                  beta: float = 1.0,
 
@@ -74,45 +74,43 @@ class Linear(nn.Module):
             self.weight_bu.data *= 0.1
             
 
-    # Returns a tuple of two tensors, r and e, of shape (batch_size, out_features) and (batch_size, in_features) respectively
+    # Returns a tuple of two tensors, x and e, of shape (batch_size, out_features) and (batch_size, in_features) respectively
     def init_state(self, batch_size, mode='zeros'):
         assert mode in ['zeros', 'rand'], f"Invalid mode {mode}"
         if mode == 'zeros':
-            state = [
-                torch.zeros((batch_size, self.out_features), device=self.device),
-                # self.bias.detach().clone(),
-                torch.zeros((batch_size, self.in_features), device=self.device)
-            ]
+            state = {
+                'x': torch.zeros((batch_size, self.out_features), device=self.device),
+                'e': self.bias.detach().clone(),
+            }
         elif mode == 'rand':
-            state = [
-                torch.rand((batch_size, self.out_features), device=self.device) * 0.1,
-                # self.bias.detach().clone(),
-                torch.zeros((batch_size, self.in_features), device=self.device)
-            ]
+            state = {
+                'x': torch.rand((batch_size, self.out_features), device=self.device) * 0.1,
+                'e': self.bias.detach().clone(),
+            }
         return state
 
     def to(self, *args, **kwargs):
         self.device = args[0]
         return super().to(*args, **kwargs)
 
-    def forward(self, x, state, td_error=None) -> Tensor:
+    def forward(self, x_below, state, td_error=None) -> Tensor:
 
         weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
         
-        if self.actv_mode == 'f(Wr)':
-            pred = F.linear(state[0], self.weight_td, self.bias)
-            state[1] = x - self.actv_fn(pred)
-            update = F.linear(state[1] * self.d_actv_fn(pred), weight_bu, None)
-        elif self.actv_mode == 'Wf(r)':
-            pred = F.linear(self.actv_fn(state[0]), self.weight_td, self.bias)
-            state[1] = x - pred
-            update = F.linear(state[1], weight_bu, None) * self.d_actv_fn(state[0])
+        if self.actv_mode == 'f(Wx)':
+            pred = F.linear(state['x'], self.weight_td, self.bias)
+            state['e'] = x_below - self.actv_fn(pred)
+            update = F.linear(state['e'] * self.d_actv_fn(pred), weight_bu, None)
+        elif self.actv_mode == 'Wf(x)':
+            pred = F.linear(self.actv_fn(state['x']), self.weight_td, self.bias)
+            state['e'] = x_below - pred
+            update = F.linear(state['e'], weight_bu, None) * self.d_actv_fn(state['x'])
         else:
             raise ValueError(f"Invalid actv_mode {self.actv_mode}")
 
         if td_error is not None:
             update -= self.beta * td_error
 
-        state[0] += self.gamma * update
+        state['x'] += self.gamma * update
 
         return state

@@ -32,18 +32,18 @@ class PCLinearClassifier(nn.Module):
     def step(self, x, state, y=None):
         for i, layer in enumerate(self.layers):
             if i < len(self.layers) - 1:
-                td_error = state[i+1][1]
+                td_error = state[i+1]['e']
             else:
                 td_error = None
             state[i] = layer(x, state[i], td_error)
-            x = state[i][0]
+            x = state[i]['x']
         if y is not None:
             # y_norm = y / torch.norm(y, dim=1, keepdim=True)
             # y_scaled = y_norm * torch.norm(state[-1][0], dim=1, keepdim=True)
             # state[-1][0] = y_scaled
-            y_new = torch.ones_like(state[-1][0]) * 0.03
+            y_new = torch.ones_like(state[-1]['x']) * 0.03
             y_new = y_new + (y * 0.94)
-            state[-1][0] = y_new
+            state[-1]['x'] = y_new
         return state
 
     def init_state(self, batch_size: int, mode='zeros'):
@@ -70,7 +70,7 @@ class PCLinearClassifier(nn.Module):
         for _ in range(steps):
             state = self.step(x, state, y)
             
-        out = state[-1][0]
+        out = state[-1]['x']
             
         return out, state
             

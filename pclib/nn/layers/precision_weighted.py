@@ -69,43 +69,41 @@ class PrecisionWeighted(nn.Module):
     def init_state(self, batch_size, mode='zeros'):
         assert mode in ['zeros', 'rand', 'randn'], f"Invalid mode {mode}"
         if mode == 'zeros':
-            state = [
-                torch.zeros((batch_size, self.out_features), device=self.device),
-                torch.zeros((batch_size, self.in_features), device=self.device),
-                torch.zeros((batch_size, self.in_features), device=self.device)
-            ]
+            state = {
+                'x': torch.zeros((batch_size, self.out_features), device=self.device),
+                'e': torch.zeros((batch_size, self.in_features), device=self.device),
+                'eps': torch.zeros((batch_size, self.in_features), device=self.device)
+            }
         elif mode == 'rand':
-            state = [
-                torch.rand((batch_size, self.out_features), device=self.device) * 0.1,
-                torch.rand((batch_size, self.in_features), device=self.device) * 0.1,
-                torch.zeros((batch_size, self.in_features), device=self.device)
-            ]
+            state = {
+                'x': torch.rand((batch_size, self.out_features), device=self.device) * 0.1,
+                'e': torch.zeros((batch_size, self.in_features), device=self.device),
+                'eps': torch.zeros((batch_size, self.in_features), device=self.device)
+            }
         elif mode == 'randn':
-            state = [
-                torch.randn((batch_size, self.out_features), device=self.device) * 0.1,
-                torch.randn((batch_size, self.in_features), device=self.device) * 0.1,
-                torch.zeros((batch_size, self.in_features), device=self.device)
-            ]
-        # if bias: # TODO: is r_bias a better initialisation than zeros?
-            # r += self.bias
+            state = {
+                'x': torch.randn((batch_size, self.out_features), device=self.device) * 0.1,
+                'e': torch.zeros((batch_size, self.in_features), device=self.device),
+                'eps': torch.zeros((batch_size, self.in_features), device=self.device)
+            }
         return state
 
     def to(self, *args, **kwargs):
         self.device = args[0]
         return super().to(*args, **kwargs)
 
-    def forward(self, x, state, td_error=None) -> Tensor:
+    def forward(self, x_below, state, td_error=None) -> Tensor:
 
-        state[2] += self.gamma * (F.linear(state[1], self.weight_var, None) - state[2])
+        state['eps'] += self.gamma * (F.linear(state['e'], self.weight_var, None) - state['eps'])
 
-        pred = F.linear(self.actv_fn(state[0]), self.weight_td, self.bias)
-        state[1] += self.gamma * (x - pred - state[2])
+        pred = F.linear(self.actv_fn(state['x']), self.weight_td, self.bias)
+        state['e'] += self.gamma * (x_below - pred - state['eps'])
 
         weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
         assert self.actv_fn == F.relu, "Only relu supported for now"
-        update = F.linear(state[1], weight_bu, None) * torch.sign(torch.relu(state[0]))
+        update = F.linear(state['e'], weight_bu, None) * torch.sign(torch.relu(state['x']))
         if td_error is not None:
             update -= td_error
-        state[0] += self.gamma * update
+        state['x'] += self.gamma * update
 
         return state

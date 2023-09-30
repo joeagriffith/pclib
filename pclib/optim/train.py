@@ -82,23 +82,23 @@ def train(
             # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
             for i, layer in enumerate(model.layers):
                 
-                if layer.actv_mode == 'Wf(r)':
-                    layer.weight_td.grad = -(state[i][1].T @ layer.actv_fn(state[i][0])) / b_size
+                if layer.actv_mode == 'Wf(x)':
+                    layer.weight_td.grad = -(state[i]['e'].T @ layer.actv_fn(state[i]['x'])) / b_size
                     if layer.bias is not None:
-                        layer.bias.grad = -state[i][1].mean(axis=0)
+                        layer.bias.grad = -state[i]['e'].mean(axis=0)
                     if not layer.symmetric:
-                        layer.weight_bu.grad = -(layer.actv_fn(state[i][0]).T @ state[i][1]) / b_size
+                        layer.weight_bu.grad = -(layer.actv_fn(state[i]['x']).T @ state[i]['e']) / b_size
 
-                elif layer.actv_mode == 'f(Wr)':
-                    pred = F.linear(state[i][0], layer.weight_td, layer.bias)
-                    layer.weight_td.grad = -((state[i][1] * layer.d_actv_fn(pred)).T @ state[i][0]) / b_size
+                elif layer.actv_mode == 'f(Wx)':
+                    pred = F.linear(state[i]['x'], layer.weight_td, layer.bias)
+                    layer.weight_td.grad = -((state[i]['e'] * layer.d_actv_fn(pred)).T @ state[i]['x']) / b_size
                     if layer.bias is not None:
-                        layer.bias.grad = -(state[i][1] * layer.d_actv_fn(pred)).mean(axis=0)
+                        layer.bias.grad = -(state[i]['e'] * layer.d_actv_fn(pred)).mean(axis=0)
                     if not layer.symmetric:
-                        layer.weight_bu.grad = -(state[i][0].T @ (state[i][1] * layer.d_actv_fn(pred))) / b_size
+                        layer.weight_bu.grad = -(state[i]['x'].T @ (state[i]['e'] * layer.d_actv_fn(pred))) / b_size
 
                 if isinstance(layer, (PrecisionWeighted, PrecisionWeightedV2)):
-                    layer.weight_var.grad = 0.1 * -((state[i][2].T @ state[i][1]) / b_size - torch.eye(layer.weight_var.shape[0], device=device))
+                    layer.weight_var.grad = 0.1 * -((state[i]['eps'].T @ state[i]['e']) / b_size - torch.eye(layer.weight_var.shape[0], device=device))
 
                 
             # Regularisation (L2)
@@ -128,8 +128,8 @@ def train(
 
             # Track batch statistics
             for i, layer in enumerate(model.layers):
-                epoch_stats['R_norms'][i].append(state[i][0].norm(dim=1).mean().item())
-                epoch_stats['E_mags'][i].append(state[i][1].square().mean().item())
+                epoch_stats['R_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
+                epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
                 epoch_stats['WeightTD_means'][i].append(layer.weight_td.mean().item())
                 epoch_stats['WeightTD_stds'][i].append(layer.weight_td.std().item())
                 epoch_stats['train_vfe'].append(vfe(state).item())
