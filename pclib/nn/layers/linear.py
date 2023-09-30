@@ -22,6 +22,7 @@ class Linear(nn.Module):
                  symmetric: bool = True,
                  actv_fn: callable = F.relu,
                  d_actv_fn: callable = None,
+                 actv_mode: str = 'Wf(r)', # 'f(Wr)' or 'Wf(r)'
                  gamma: float = 0.1,
                  beta: float = 1.0,
 
@@ -36,6 +37,7 @@ class Linear(nn.Module):
         self.out_features = out_features
         self.symmetric = symmetric
         self.actv_fn = actv_fn
+        self.actv_mode = actv_mode
         self.gamma = gamma
         self.beta = beta
         self.device = device
@@ -78,15 +80,15 @@ class Linear(nn.Module):
         if mode == 'zeros':
             state = [
                 torch.zeros((batch_size, self.out_features), device=self.device),
+                # self.bias.detach().clone(),
                 torch.zeros((batch_size, self.in_features), device=self.device)
             ]
         elif mode == 'rand':
             state = [
                 torch.rand((batch_size, self.out_features), device=self.device) * 0.1,
+                # self.bias.detach().clone(),
                 torch.zeros((batch_size, self.in_features), device=self.device)
             ]
-        # if bias: # TODO: is r_bias a better initialisation than zeros?
-            # r += self.bias
         return state
 
     def to(self, *args, **kwargs):
@@ -95,19 +97,22 @@ class Linear(nn.Module):
 
     def forward(self, x, state, td_error=None) -> Tensor:
 
-        # pred = self.actv_fn(F.linear(state[0], self.weight_td, self.bias))
-        # state[1] = x - pred 
-        # state[1] += self.gamma * (x - pred) # Iterative, is better?
-        pred = F.linear(state[0], self.weight_td, self.bias)
-        state[1] = x - self.actv_fn(pred)
-
         weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
+        
+        if self.actv_mode == 'f(Wr)':
+            pred = F.linear(state[0], self.weight_td, self.bias)
+            state[1] = x - self.actv_fn(pred)
+            update = F.linear(state[1] * self.d_actv_fn(pred), weight_bu, None)
+        elif self.actv_mode == 'Wf(r)':
+            pred = F.linear(self.actv_fn(state[0]), self.weight_td, self.bias)
+            state[1] = x - pred
+            update = F.linear(state[1], weight_bu, None) * self.d_actv_fn(state[0])
+        else:
+            raise ValueError(f"Invalid actv_mode {self.actv_mode}")
 
-        # update = F.linear(state[1], weight_bu, None) # Better, why?
-        # update = F.linear(state[1], weight_bu, None) * self.d_actv_fn(state[0])
-        update = F.linear(state[1] * self.d_actv_fn(pred), weight_bu, None)
         if td_error is not None:
             update -= self.beta * td_error
+
         state[0] += self.gamma * update
 
         return state

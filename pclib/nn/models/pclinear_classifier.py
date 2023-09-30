@@ -9,7 +9,7 @@ class PCLinearClassifier(nn.Module):
     in_features: int
     num_classes: int
 
-    def __init__(self, input_size, num_classes, hidden_sizes = [], steps=5, bias=True, symmetric=True, actv_fn=F.relu, gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
+    def __init__(self, input_size, num_classes, hidden_sizes = [], steps=5, bias=True, symmetric=True, actv_fn=F.relu, actv_mode='Wf(r)', gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
         factory_kwargs = {'bias': bias, 'symmetric': symmetric, 'device': device, 'dtype': dtype}
         super(PCLinearClassifier, self).__init__()
 
@@ -21,9 +21,9 @@ class PCLinearClassifier(nn.Module):
         layers = []
         prev_size = input_size
         for size in hidden_sizes:
-            layers.append(Linear(prev_size, size, actv_fn=actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+            layers.append(Linear(prev_size, size, actv_fn=actv_fn, actv_mode=actv_mode, gamma=gamma, beta=beta, **factory_kwargs))
             prev_size = size
-        layers.append(Linear(prev_size, num_classes, actv_fn=actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+        layers.append(Linear(prev_size, num_classes, actv_fn=actv_fn, actv_mode=actv_mode, gamma=gamma, beta=beta, **factory_kwargs))
 
         self.layers = nn.ModuleList(layers)
         self.steps = steps
@@ -38,9 +38,12 @@ class PCLinearClassifier(nn.Module):
             state[i] = layer(x, state[i], td_error)
             x = state[i][0]
         if y is not None:
-            y_norm = y / torch.norm(y, dim=1, keepdim=True)
-            y_scaled = y_norm * torch.norm(state[-1][0], dim=1, keepdim=True)
-            state[-1][0] = y_scaled
+            # y_norm = y / torch.norm(y, dim=1, keepdim=True)
+            # y_scaled = y_norm * torch.norm(state[-1][0], dim=1, keepdim=True)
+            # state[-1][0] = y_scaled
+            y_new = torch.ones_like(state[-1][0]) * 0.03
+            y_new = y_new + (y * 0.94)
+            state[-1][0] = y_new
         return state
 
     def init_state(self, batch_size: int, mode='zeros'):
