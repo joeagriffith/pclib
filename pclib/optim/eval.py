@@ -47,16 +47,27 @@ def evaluate_pc(model, data_loader, criterion, device, flatten=False):
         return loss, acc, errs
 
 
-def track_vfe(model, x, y=None, steps=100, init_mode='rand'):
+def track_vfe(model, x, y=None, steps=100, init_mode='rand', plot_Es=False):
     assert len(x.shape) == 2, f"Invalid shape {x.shape}, input and targets must be pre-processed."
     state = model.init_state(x.shape[0], mode=init_mode)
     vfes = []
+    E = [[] for _ in range(len(model.layers))]
     for step_i in range(steps):
         with torch.no_grad():
             state = model.step(x, state, y)
             vfes.append(vfe(state).item())
+            for i in range(len(model.layers)):
+                E[i].append(state[i][1].square().sum(dim=1).mean().item())
         
-    plt.plot(vfes)
+    plt.plot(vfes, label='VFE')
+
+    if plot_Es:
+        for i in range(len(model.layers)):
+            plt.plot(E[i], label=f'layer {i} E')
+    plt.legend()
+    plt.show()
+        
+
 
 def accuracy(model, dataset, batch_size=1024, steps=100, return_all=False, plot=True):
     dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=False)

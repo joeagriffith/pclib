@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from pclib.nn.layers import PrecisionWeighted, PrecisionWeightedV2
 
 def plot_stats(stats, model, symmetric=False, bias=False):
     extra_rows = 0
@@ -24,6 +25,8 @@ def plot_stats(stats, model, symmetric=False, bias=False):
             axs.flat[idx].plot(stats['Bias_means'][i], label=f"Layer {i}")
             axs.flat[idx+1].plot(stats['Bias_stds'][i], label=f"Layer {i}")
             idx += 2
+        # if isinstance(model.layers[i], (PrecisionWeighted, PrecisionWeightedV2)):
+        #     axs.flat[idx].plot(stats)
 
     axs.flat[0].set_title(f"R_norms")
     axs.flat[1].set_title(f"E_mags")

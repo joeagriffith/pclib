@@ -1,3 +1,4 @@
+# from pclib.nn.layers import PrecisionWeightedV2 as Linear
 from pclib.nn.layers import Linear
 import torch
 import torch.nn as nn
@@ -8,20 +9,21 @@ class PCLinearClassifier(nn.Module):
     in_features: int
     num_classes: int
 
-    def __init__(self, input_size, num_classes, hidden_sizes = [], steps=5, bias=True, symmetric=True, gamma=0.1, device=torch.device('cpu'), dtype=None):
+    def __init__(self, input_size, num_classes, hidden_sizes = [], steps=5, bias=True, symmetric=True, actv_fn=F.relu, gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
         factory_kwargs = {'bias': bias, 'symmetric': symmetric, 'device': device, 'dtype': dtype}
         super(PCLinearClassifier, self).__init__()
 
         self.in_features = input_size
         self.num_classes = num_classes
         self.gamma = gamma
+        self.beta = beta
 
         layers = []
         prev_size = input_size
         for size in hidden_sizes:
-            layers.append(Linear(prev_size, size, gamma=gamma, **factory_kwargs))
+            layers.append(Linear(prev_size, size, actv_fn=actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
             prev_size = size
-        layers.append(Linear(prev_size, num_classes, gamma=gamma, **factory_kwargs))
+        layers.append(Linear(prev_size, num_classes, actv_fn=actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
 
         self.layers = nn.ModuleList(layers)
         self.steps = steps
@@ -64,7 +66,6 @@ class PCLinearClassifier(nn.Module):
 
         for _ in range(steps):
             state = self.step(x, state, y)
-
             
         out = state[-1][0]
             
