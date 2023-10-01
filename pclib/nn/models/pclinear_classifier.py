@@ -15,6 +15,8 @@ class PCLinearClassifier(nn.Module):
 
         self.in_features = input_size
         self.num_classes = num_classes
+        self.bias = bias
+        self.symmetric = symmetric
         self.gamma = gamma
         self.beta = beta
 
@@ -73,4 +75,16 @@ class PCLinearClassifier(nn.Module):
         out = state[-1]['x']
             
         return out, state
+
+    def generate(self, y, steps=None, step_size=0.01):
+        if steps is None:
+            steps = self.steps
+
+        state = self.init_state(y.shape[0])
+        x = torch.randn((y.shape[0], self.in_features), device=self.device)
+        for _ in range(steps):
+            state = self.step(x, state, y)
+            x -= step_size * state[0]['e']
+            
+        return x, state
             

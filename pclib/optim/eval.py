@@ -57,7 +57,7 @@ def track_vfe(model, x, y=None, steps=100, init_mode='rand', plot_Es=False):
             state = model.step(x, state, y)
             vfes.append(vfe(state).item())
             for i in range(len(model.layers)):
-                E[i].append(state[i][1].square().sum(dim=1).mean().item())
+                E[i].append(state[i]['e'].square().sum(dim=1).mean().item())
         
     plt.plot(vfes, label='VFE')
 
@@ -80,7 +80,7 @@ def accuracy(model, dataset, batch_size=1024, steps=100, return_all=False, plot=
             with torch.no_grad():
                 state = model.step(x, state)
             
-            pred = state[-1][0].argmax(dim=1)
+            pred = state[-1]['x'].argmax(dim=1)
             correct[step_i] += (pred == y).sum().item()
 
     acc = [c/len(dataset) for c in correct]

@@ -97,16 +97,16 @@ class Linear(nn.Module):
 
         weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
         
-        if self.actv_mode == 'f(Wx)':
-            pred = F.linear(state['x'], self.weight_td, self.bias)
-            state['e'] = x_below - self.actv_fn(pred)
-            update = F.linear(state['e'] * self.d_actv_fn(pred), weight_bu, None)
-        elif self.actv_mode == 'Wf(x)':
-            pred = F.linear(self.actv_fn(state['x']), self.weight_td, self.bias)
-            state['e'] = x_below - pred
+        if self.actv_mode == 'Wf(x)':
+            state['pred'] = F.linear(self.actv_fn(state['x']), self.weight_td, self.bias)
+            state['e'] = x_below - state['pred']
             update = F.linear(state['e'], weight_bu, None) * self.d_actv_fn(state['x'])
+        elif self.actv_mode == 'f(Wx)':
+            state['pred'] = F.linear(state['x'], self.weight_td, self.bias)
+            state['e'] = x_below - self.actv_fn(state['pred'])
+            update = F.linear(state['e'] * self.d_actv_fn(state['pred']), weight_bu, None)
         else:
-            raise ValueError(f"Invalid actv_mode {self.actv_mode}")
+            raise ValueError(f"Invalid actv_mode {self.actv_mode}, must be one of ['f(Wx)', 'Wf(x)']")
 
         if td_error is not None:
             update -= self.beta * td_error

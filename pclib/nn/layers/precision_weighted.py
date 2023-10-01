@@ -21,7 +21,10 @@ class PrecisionWeighted(nn.Module):
                  bias: bool = True,
                  symmetric: bool = True,
                  actv_fn: callable = F.relu,
+                 d_actv_fn: callable = None,
+                 actv_mode: str = 'Wf(x)', # 'f(Wx)' or 'Wf(x)'
                  gamma: float = 0.1,
+                 beta: float = 1.0,
 
                  device=torch.device('cpu'),
                  dtype=None
@@ -34,9 +37,19 @@ class PrecisionWeighted(nn.Module):
         self.out_features = out_features
         self.symmetric = symmetric
         self.actv_fn = actv_fn
+        self.actv_mode = actv_mode
         self.gamma = gamma
-
+        self.beta = beta
         self.device = device
+
+        if d_actv_fn is not None:
+            self.d_actv_fn: callable = d_actv_fn
+        elif actv_fn == F.relu:
+            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x))
+        elif actv_fn == F.sigmoid:
+            self.d_actv_fn: callable = lambda x: torch.sigmoid(x) * (1 - torch.sigmoid(x))
+        elif actv_fn == F.tanh:
+            self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
 
         self.weight_td = Parameter(torch.empty((in_features, out_features), **factory_kwargs))
         self.weight_var = Parameter(torch.empty((in_features, in_features), **factory_kwargs))
@@ -52,9 +65,9 @@ class PrecisionWeighted(nn.Module):
 
     def reset_parameters(self) -> None:
         nn.init.kaiming_uniform_(self.weight_td, a=math.sqrt(5))
-        # self.weight_td.data *= 0.1
+        self.weight_td.data *= 0.1
         nn.init.kaiming_uniform_(self.weight_var, a=math.sqrt(5))
-        # self.weight_var.data *= 0.1
+        self.weight_var.data *= 0.1
         self.weight_var.data += torch.eye(self.weight_var.shape[0], device=self.device)
         if self.bias is not None:
             fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight_td.T)
@@ -62,7 +75,7 @@ class PrecisionWeighted(nn.Module):
             nn.init.uniform_(self.bias, -bound, bound)
         if not self.symmetric:
             nn.init.kaiming_uniform_(self.weight_bu, a=math.sqrt(5))
-            # self.weight_bu.data *= 0.1
+            self.weight_bu.data *= 0.1
             
 
     # Returns a tuple of two tensors, r and e, of shape (batch_size, out_features) and (batch_size, in_features) respectively
@@ -93,17 +106,25 @@ class PrecisionWeighted(nn.Module):
         return super().to(*args, **kwargs)
 
     def forward(self, x_below, state, td_error=None) -> Tensor:
+        
+        weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
 
         state['eps'] += self.gamma * (F.linear(state['e'], self.weight_var, None) - state['eps'])
 
-        pred = F.linear(self.actv_fn(state['x']), self.weight_td, self.bias)
-        state['e'] += self.gamma * (x_below - pred - state['eps'])
+        if self.actv_mode == 'Wf(x)':
+            state['pred'] = F.linear(self.actv_fn(state['x']), self.weight_td, self.bias)
+            state['e'] += self.gamma * (x_below - state['pred'] - state['eps'])
+            update = F.linear(state['e'], weight_bu, None) * self.d_actv_fn(state['x'])
+        elif self.actv_mode == 'f(Wx)':
+            state['pred'] = F.linear(state['x'], self.weight_td, self.bias)
+            state['e'] += self.gamma * (x_below - self.actv_fn(state['pred']) - state['eps'])
+            update = F.linear(state['e'] * self.d_actv_fn(state['pred']), weight_bu, None)
+        else:
+            raise ValueError(f"Invalid actv_mode {self.actv_mode}, must be one of ['f(Wx)', 'Wf(x)']")
 
-        weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
-        assert self.actv_fn == F.relu, "Only relu supported for now"
-        update = F.linear(state['e'], weight_bu, None) * torch.sign(torch.relu(state['x']))
         if td_error is not None:
-            update -= td_error
+            update -= self.beta * td_error
+
         state['x'] += self.gamma * update
 
         return state

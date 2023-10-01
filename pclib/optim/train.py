@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from pclib.optim.eval import topk_accuracy, evaluate_pc
-from pclib.nn.layers import PrecisionWeighted, PrecisionWeightedV2
+from pclib.nn.layers import PrecisionWeighted
 from pclib.utils.functional import vfe
 
 def train(
@@ -90,14 +90,13 @@ def train(
                         layer.weight_bu.grad = -(layer.actv_fn(state[i]['x']).T @ state[i]['e']) / b_size
 
                 elif layer.actv_mode == 'f(Wx)':
-                    pred = F.linear(state[i]['x'], layer.weight_td, layer.bias)
-                    layer.weight_td.grad = -((state[i]['e'] * layer.d_actv_fn(pred)).T @ state[i]['x']) / b_size
+                    layer.weight_td.grad = -((state[i]['e'] * layer.d_actv_fn(state[i]['pred'])).T @ state[i]['x']) / b_size
                     if layer.bias is not None:
-                        layer.bias.grad = -(state[i]['e'] * layer.d_actv_fn(pred)).mean(axis=0)
+                        layer.bias.grad = -(state[i]['e'] * layer.d_actv_fn(state[i]['pred'])).mean(axis=0)
                     if not layer.symmetric:
-                        layer.weight_bu.grad = -(state[i]['x'].T @ (state[i]['e'] * layer.d_actv_fn(pred))) / b_size
+                        layer.weight_bu.grad = -(state[i]['x'].T @ (state[i]['e'] * layer.d_actv_fn(state[i]['pred']))) / b_size
 
-                if isinstance(layer, (PrecisionWeighted, PrecisionWeightedV2)):
+                if isinstance(layer, PrecisionWeighted):
                     layer.weight_var.grad = 0.1 * -((state[i]['eps'].T @ state[i]['e']) / b_size - torch.eye(layer.weight_var.shape[0], device=device))
 
                 
@@ -123,7 +122,7 @@ def train(
                     layer.bias.data -= lr * layer.bias.grad
                 if not layer.symmetric:
                     layer.weight_bu.data -= lr * layer.weight_bu.grad
-                if isinstance(layer, (PrecisionWeighted, PrecisionWeightedV2)):
+                if isinstance(layer, PrecisionWeighted):
                     layer.weight_var.data -= lr * layer.weight_var.grad
 
             # Track batch statistics
