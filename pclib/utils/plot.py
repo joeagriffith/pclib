@@ -30,8 +30,8 @@ def plot_stats(stats, model):
 
     axs.flat[0].set_title(f"X_norms")
     axs.flat[1].set_title(f"E_mags")
-    axs.flat[2].set_title(f"WeightTD_means")
-    axs.flat[3].set_title(f"WeightTD_stds")
+    axs.flat[2].set_title(f"Weight_means")
+    axs.flat[3].set_title(f"Weight_stds")
     axs.flat[0].legend()
     axs.flat[1].legend()
     axs.flat[2].legend()
