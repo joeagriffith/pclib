@@ -41,7 +41,7 @@ class PCLinearClassifier(nn.Module):
             x = state[i]['x']
         
         if y is not None:
-            state[-1]['x'] = y
+            state[-1]['x'] = y.clone()
         return state
 
     def init_state(self, batch_size: int, mode='zeros'):
@@ -60,20 +60,21 @@ class PCLinearClassifier(nn.Module):
     def forward(self, x, state=None, y=None, steps=None):
         assert len(x.shape) == 2, f"Input must be 2D, got {len(x.shape)}D"
 
-        if y is not None:
-            y_new = torch.ones_like(y) * 0.03
-            y_new = y_new + (y * 0.94)
-
         if steps is None:
             steps = self.steps
 
         if state is None:
             state = self.init_state(x.shape[0])
+        
+        if y is not None:
+            temp = torch.ones_like(state[-1]['x']) * 0.03
+            y = temp + (y * 0.94)
+            state[-1]['x'] = y.clone()
 
         for _ in range(steps):
             state = self.step(x, state, y)
             
-        out = state[-1]['x']
+        out = state[-1]['x'].clone()
             
         return out, state
 
