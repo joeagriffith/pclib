@@ -39,13 +39,9 @@ class PCLinearClassifier(nn.Module):
                 td_error = None
             state[i] = layer(x, state[i], td_error)
             x = state[i]['x']
+        
         if y is not None:
-            # y_norm = y / torch.norm(y, dim=1, keepdim=True)
-            # y_scaled = y_norm * torch.norm(state[-1][0], dim=1, keepdim=True)
-            # state[-1][0] = y_scaled
-            y_new = torch.ones_like(state[-1]['x']) * 0.03
-            y_new = y_new + (y * 0.94)
-            state[-1]['x'] = y_new
+            state[-1]['x'] = y
         return state
 
     def init_state(self, batch_size: int, mode='zeros'):
@@ -63,6 +59,11 @@ class PCLinearClassifier(nn.Module):
 
     def forward(self, x, state=None, y=None, steps=None):
         assert len(x.shape) == 2, f"Input must be 2D, got {len(x.shape)}D"
+
+        if y is not None:
+            y_new = torch.ones_like(y) * 0.03
+            y_new = y_new + (y * 0.94)
+
         if steps is None:
             steps = self.steps
 
