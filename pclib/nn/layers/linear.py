@@ -10,14 +10,14 @@ from typing import Optional
 class Linear(nn.Module):
     __constants__ = ['in_features', 'out_features']
     size: int
-    next_size: Optional[int]
+    prev_size: Optional[int]
     weight_td: Optional[Tensor]
     weight_bu: Optional[Tensor]
     bias: Optional[Tensor]
 
     def __init__(self,
                  size: int,
-                 next_size: int = None,
+                 prev_size: int = None,
                  bias: bool = True,
                  symmetric: bool = True,
                  actv_fn: callable = F.relu,
@@ -32,7 +32,7 @@ class Linear(nn.Module):
         super(Linear, self).__init__()
 
         self.size = size
-        self.next_size = next_size
+        self.prev_size = prev_size
         self.symmetric = symmetric
         self.actv_fn = actv_fn
         self.gamma = gamma
@@ -48,14 +48,14 @@ class Linear(nn.Module):
         elif actv_fn == F.tanh:
             self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
         
-        if next_size is not None:
-            self.weight_td = Parameter(torch.empty((size, next_size), **factory_kwargs))
+        if prev_size is not None:
+            self.weight_td = Parameter(torch.empty((prev_size, size), **factory_kwargs))
             if bias:
-                self.bias = Parameter(torch.empty(size, **factory_kwargs))
+                self.bias = Parameter(torch.empty(prev_size, **factory_kwargs))
             else:
                 self.register_parameter('bias', None)
             if not symmetric:
-                self.weight_bu = Parameter(torch.empty((next_size, size), **factory_kwargs))
+                self.weight_bu = Parameter(torch.empty((size, prev_size), **factory_kwargs))
             else:
                 self.register_parameter('weight_bu', None)
             self.reset_parameters()
@@ -75,61 +75,31 @@ class Linear(nn.Module):
             nn.init.kaiming_uniform_(self.weight_bu, a=math.sqrt(5))
             self.weight_bu.data *= 0.1
             
-
-    # Returns a tuple of two tensors, x and e, of shape (batch_size, out_features) and (batch_size, in_features) respectively
-    def init_state(self, batch_size, mode='zeros'):
-        assert mode in ['zeros', 'rand', 'randn'], f"Invalid mode {mode}"
-        if mode == 'zeros':
-            state = {
-                'x': torch.zeros((batch_size, self.size), device=self.device),
-                'e': torch.zeros((batch_size, self.size), device=self.device),
-            }
-        elif mode == 'rand':
-            state = {
-                'x': torch.rand((batch_size, self.size), device=self.device) * 0.1,
-                'e': torch.rand((batch_size, self.size), device=self.device) * 0.1,
-            }
-        elif mode == 'randn':
-            state = {
-                'x': torch.randn((batch_size, self.size), device=self.device) * 0.1,
-                'e': torch.randn((batch_size, self.size), device=self.device) * 0.1,
-            }
-        return state
+    def init_state(self, batch_size):
+        return {
+            'x': torch.zeros((batch_size, self.size), device=self.device),
+            'e': torch.zeros((batch_size, self.size), device=self.device),
+        }
 
     def to(self, *args, **kwargs):
         self.device = args[0]
         return super().to(*args, **kwargs)
 
-    def predict(self, f_x_lp1):
-        return F.linear(f_x_lp1, self.weight_td, self.bias)
-
-    def update_e(self, state, f_x_lp1=None):
-        if f_x_lp1 is not None:
-            state['pred'] = self.predict(f_x_lp1)
+    def predict(self, state):
+        return F.linear(self.actv_fn(state['x']), self.weight_td, self.bias)
+    
+    def update_x(self, state, e_below=None):
+        if e_below is not None:
+            weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
+            update = F.linear(e_below, weight_bu, None)
+            state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
+        state['x'] += self.gamma * (-state['e'])
+        return state
+        
+    def update_e(self, state, pred=None):
+        if pred is not None:
+            state['pred'] = pred
         else:
             state['pred'] = state['x']
         state['e'] = state['x'] - state['pred']
         return state
-    
-    def update_x(self, state, bu_error=None):
-        if bu_error is not None:
-            state['x'] += self.gamma * (bu_error * self.d_actv_fn(state['x']))
-        state['x'] += self.gamma * (-state['e'])
-        return state
-    
-    def forward_error(self, state):
-        error_prop = None
-        if self.next_size is not None:
-            weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
-            error_prop = F.linear(state['e'], weight_bu, None)
-        return error_prop
-    
-    def forward(self, state, bu_error=None, f_x_lp1=None) -> Tensor:
-
-        state = self.update_e(state, f_x_lp1)
-
-        state = self.update_x(state, bu_error)
-
-        error_prop = self.forward_error(state)
-
-        return state, error_prop

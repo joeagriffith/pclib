@@ -47,14 +47,14 @@ def evaluate_pc(model, data_loader, criterion, device, flatten=False):
         return loss, acc, errs
 
 
-def track_vfe(model, x, y=None, steps=100, init_mode='rand', plot_Es=False):
+def track_vfe(model, x, y=None, steps=100, plot_Es=False):
     assert len(x.shape) == 2, f"Invalid shape {x.shape}, input and targets must be pre-processed."
-    state = model.init_state(x.shape[0], mode=init_mode)
+    state = model.init_state(x, y)
     vfes = []
     E = [[] for _ in range(len(model.layers))]
     for step_i in range(steps):
         with torch.no_grad():
-            state = model.step(x, state, y)
+            state = model.step(state, y)
             vfes.append(vfe(state).item())
             for i in range(len(model.layers)):
                 E[i].append(state[i]['e'].square().sum(dim=1).mean().item())
@@ -69,25 +69,12 @@ def track_vfe(model, x, y=None, steps=100, init_mode='rand', plot_Es=False):
         
 
 
-def accuracy(model, dataset, batch_size=1024, steps=100, return_all=False, plot=True):
+def accuracy(model, dataset, batch_size=1024, steps=100):
     dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=False)
-    correct = [0 for _ in range(steps)]
+    correct = 0
     for x, y in dataloader:
         x = x.flatten(start_dim=1)
-        state = model.init_state(x.shape[0], mode='rand')
-
-        for step_i in range(steps):
-            with torch.no_grad():
-                state = model.step(x, state)
-            
-            pred = model.get_output(state).argmax(dim=1)
-            correct[step_i] += (pred == y).sum().item()
-
-    acc = [c/len(dataset) for c in correct]
-    if plot:
-        plt.plot(acc)
-        print(f"Max accuracy: {max(acc)}")
-    if return_all:
-        return acc
-    else:
-        return max(acc)
+        pred = model.classify(x, steps)
+        correct += (pred == y).sum().item()
+    acc = correct/len(dataset)
+    return acc

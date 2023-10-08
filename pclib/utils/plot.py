@@ -15,16 +15,16 @@ def plot_stats(stats, model):
         axs.flat[0].plot(stats['R_norms'][i], label=f"Layer {i}")
         axs.flat[1].plot(stats['E_mags'][i], label=f"Layer {i}")
         if i < len(stats['WeightTD_means']):
-            axs.flat[2].plot(stats['WeightTD_means'][i], label=f"Layer {i}")
-            axs.flat[3].plot(stats['WeightTD_stds'][i], label=f"Layer {i}")
+            axs.flat[2].plot(stats['WeightTD_means'][i], label=f"Layer {i+1}")
+            axs.flat[3].plot(stats['WeightTD_stds'][i], label=f"Layer {i+1}")
             idx = 4
             if not model.symmetric:
-                axs.flat[idx].plot(stats['WeightBU_means'][i], label=f"Layer {i}")
-                axs.flat[idx+1].plot(stats['WeightBU_stds'][i], label=f"Layer {i}")
+                axs.flat[idx].plot(stats['WeightBU_means'][i], label=f"Layer {i+1}")
+                axs.flat[idx+1].plot(stats['WeightBU_stds'][i], label=f"Layer {i+1}")
                 idx += 2
             if model.bias:
-                axs.flat[idx].plot(stats['Bias_means'][i], label=f"Layer {i}")
-                axs.flat[idx+1].plot(stats['Bias_stds'][i], label=f"Layer {i}")
+                axs.flat[idx].plot(stats['Bias_means'][i], label=f"Layer {i+1}")
+                axs.flat[idx+1].plot(stats['Bias_stds'][i], label=f"Layer {i+1}")
                 idx += 2
             # if isinstance(model.layers[i], PrecisionWeighted):
             #     axs.flat[idx].plot(stats)

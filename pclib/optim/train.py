@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from pclib.optim.eval import topk_accuracy, evaluate_pc
 from pclib.nn.layers import PrecisionWeighted
-from pclib.utils.functional import vfe
+from pclib.utils.functional import vfe, format_y
 
 def train(
     model, 
@@ -76,47 +76,46 @@ def train(
                 val_VFE = stats['val_vfe'][-1],
             )
 
-        for images, target in loop:
+        for images, targets in loop:
             x = images.flatten(start_dim=1)
-            y = F.one_hot(target, model.num_classes).float()
-            false_y = F.one_hot((target + torch.randint_like(target, low=1, high=model.num_classes)) % model.num_classes, model.num_classes).float()
+            y = format_y(targets, model.num_classes)
+            false_targets = (targets + torch.randint_like(targets, low=1, high=model.num_classes)) % model.num_classes
+            false_y = format_y(false_targets, model.num_classes)
             b_size = x.shape[0]
             step += b_size
 
-            state = model.init_state(b_size, mode=init_mode)
             # Forward pass
             with torch.no_grad():
-                out, state = model(x, state, y)
+                out, state = model(x, state=None, y=y)
 
             # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
             for i, layer in enumerate(model.layers):
                 
-                if layer.next_size is not None:
-                    layer.weight_td.grad = -(state[i]['e'].T @ layer.actv_fn(state[i+1]['x'])) / b_size
+                if layer.prev_size is not None:
+                    layer.weight_td.grad = -(state[i-1]['e'].T @ layer.actv_fn(state[i]['x'])) / b_size
                     if layer.bias is not None:
-                        layer.bias.grad = -state[i]['e'].mean(axis=0)
+                        layer.bias.grad = -state[i-1]['e'].mean(axis=0)
                     if not layer.symmetric:
-                        layer.weight_bu.grad = -(layer.actv_fn(state[i+1]['x']).T @ state[i]['e']) / b_size
+                        layer.weight_bu.grad = -(layer.actv_fn(state[i]['x']).T @ state[i-1]['e']) / b_size
 
                 if isinstance(layer, PrecisionWeighted):
                     raise NotImplementedError("PrecisionWeighted not implemented for trainV2.")
 
-                # # A negative phase pass, increases VFE for negative data
-                # if neg_coeff is not None:
-                #     neg_state = model.init_state(b_size, mode=init_mode)
-                #     # Forward pass
-                #     with torch.no_grad():
-                #         out, neg_state = model(x, neg_state, false_y)
+            # A negative phase pass, increases VFE for negative data
+            if neg_coeff is not None:
+                # Forward pass
+                with torch.no_grad():
+                    out, neg_state = model(x, state=None, y=false_y)
 
-                #     # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
-                #     for i, layer in enumerate(model.layers):
-                        
-                #         if layer.next_size is not None:
-                #             layer.weight_td.grad += -neg_coeff * -(neg_state[i]['e'].T @ layer.actv_fn(neg_state[i+1]['x'])) / b_size
-                #             if layer.bias is not None:
-                #                 layer.bias.grad += -neg_coeff * -neg_state[i]['e'].mean(axis=0)
-                #             if not layer.symmetric:
-                #                 layer.weight_bu.grad += -neg_coeff * -(layer.actv_fn(neg_state[i+1]['x']).T @ neg_state[i]['e']) / b_size
+                # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
+                for i, layer in enumerate(model.layers):
+                    
+                    if layer.prev_size is not None:
+                        layer.weight_td.grad += -neg_coeff * -(neg_state[i-1]['e'].T @ layer.actv_fn(neg_state[i]['x'])) / b_size
+                        if layer.bias is not None:
+                            layer.bias.grad += -neg_coeff * -neg_state[i-1]['e'].mean(axis=0)
+                        if not layer.symmetric:
+                            layer.weight_bu.grad += -neg_coeff * -(layer.actv_fn(neg_state[i]['x']).T @ neg_state[i-1]['e']) / b_size
                 
             # Parameter Update (Grad Descent)
             optimiser.step()
@@ -126,15 +125,15 @@ def train(
                 epoch_stats['R_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                 epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
                 epoch_stats['train_vfe'].append(vfe(state).item())
-                if layer.next_size is not None:
-                    epoch_stats['WeightTD_means'][i].append(layer.weight_td.mean().item())
-                    epoch_stats['WeightTD_stds'][i].append(layer.weight_td.std().item())
+                if layer.prev_size is not None:
+                    epoch_stats['WeightTD_means'][i-1].append(layer.weight_td.mean().item())
+                    epoch_stats['WeightTD_stds'][i-1].append(layer.weight_td.std().item())
                     if not model.layers[i].symmetric:
-                        epoch_stats['WeightBU_means'][i].append(layer.weight_bu.mean().item())
-                        epoch_stats['WeightBU_stds'][i].append(layer.weight_bu.std().item())
+                        epoch_stats['WeightBU_means'][i-1].append(layer.weight_bu.mean().item())
+                        epoch_stats['WeightBU_stds'][i-1].append(layer.weight_bu.std().item())
                     if model.layers[i].bias is not None:
-                        epoch_stats['Bias_means'][i].append(layer.bias.mean().item())
-                        epoch_stats['Bias_stds'][i].append(layer.bias.std().item())
+                        epoch_stats['Bias_means'][i-1].append(layer.bias.mean().item())
+                        epoch_stats['Bias_stds'][i-1].append(layer.bias.std().item())
 
 
         # Validation pass
@@ -143,11 +142,10 @@ def train(
             val_vfe = 0
             for images, target in val_loader:
                 x = images.flatten(start_dim=1)
-                state = model.init_state(x.shape[0], mode=init_mode)
 
                 # Forward pass
-                out, state = model(x, state)
-                val_vfe += vfe(state, batch_reduction='sum').item()
+                out, val_state = model(x)
+                val_vfe += vfe(val_state, batch_reduction='sum').item()
                 val_correct += (out.argmax(dim=1) == target).sum().item()
 
             val_acc = val_correct / len(val_data)
@@ -159,15 +157,15 @@ def train(
             stats['R_norms'][i].append(torch.tensor(epoch_stats['R_norms'][i]).mean().item())
             stats['E_mags'][i].append(torch.tensor(epoch_stats['E_mags'][i]).mean().item())
             stats['train_vfe'].append(torch.tensor(epoch_stats['train_vfe']).mean().item())
-            if layer.next_size is not None:
-                stats['WeightTD_means'][i].append(torch.tensor(epoch_stats['WeightTD_means'][i]).mean().item())
-                stats['WeightTD_stds'][i].append(torch.tensor(epoch_stats['WeightTD_stds'][i]).mean().item())
+            if layer.prev_size is not None:
+                stats['WeightTD_means'][i-1].append(torch.tensor(epoch_stats['WeightTD_means'][i-1]).mean().item())
+                stats['WeightTD_stds'][i-1].append(torch.tensor(epoch_stats['WeightTD_stds'][i-1]).mean().item())
                 if not layer.symmetric:
-                    stats['WeightBU_means'][i].append(torch.tensor(epoch_stats['WeightBU_means'][i]).mean().item())
-                    stats['WeightBU_stds'][i].append(torch.tensor(epoch_stats['WeightBU_stds'][i]).mean().item())
+                    stats['WeightBU_means'][i-1].append(torch.tensor(epoch_stats['WeightBU_means'][i-1]).mean().item())
+                    stats['WeightBU_stds'][i-1].append(torch.tensor(epoch_stats['WeightBU_stds'][i-1]).mean().item())
                 if layer.bias is not None:
-                    stats['Bias_means'][i].append(torch.tensor(epoch_stats['Bias_means'][i]).mean().item())
-                    stats['Bias_stds'][i].append(torch.tensor(epoch_stats['Bias_stds'][i]).mean().item())
+                    stats['Bias_means'][i-1].append(torch.tensor(epoch_stats['Bias_means'][i-1]).mean().item())
+                    stats['Bias_stds'][i-1].append(torch.tensor(epoch_stats['Bias_stds'][i-1]).mean().item())
         stats['val_acc'].append(val_acc)
         stats['val_vfe'].append(val_vfe)
     return step, stats
