@@ -115,15 +115,16 @@ def train(
             reg.backward()
 
             # Parameter Update (Grad Descent)
-            for i, layer in enumerate(model.layers):
-                layer.weight_td.data -= lr * layer.weight_td.grad
-                if layer.bias is not None:
-                    assert layer.bias.grad is not None, f"layer {i} bias has no grad"
-                    layer.bias.data -= lr * layer.bias.grad
-                if not layer.symmetric:
-                    layer.weight_bu.data -= lr * layer.weight_bu.grad
-                if isinstance(layer, PrecisionWeighted):
-                    layer.weight_var.data -= lr * layer.weight_var.grad
+            with torch.no_grad():
+                for i, layer in enumerate(model.layers):
+                    layer.weight_td.data -= lr * layer.weight_td.grad
+                    if layer.bias is not None:
+                        assert layer.bias.grad is not None, f"layer {i} bias has no grad"
+                        layer.bias.data -= lr * layer.bias.grad
+                    if not layer.symmetric:
+                        layer.weight_bu.data -= lr * layer.weight_bu.grad
+                    if isinstance(layer, PrecisionWeighted):
+                        layer.weight_var.data -= lr * layer.weight_var.grad
 
             # Track batch statistics
             for i, layer in enumerate(model.layers):
