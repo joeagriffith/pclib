@@ -10,7 +10,7 @@ from typing import Optional
 class Linear(nn.Module):
     __constants__ = ['in_features', 'out_features']
     size: int
-    prev_size: Optional[int]
+    next_size: Optional[int]
     weight_td: Optional[Tensor]
     weight_bu: Optional[Tensor]
     bias: Optional[Tensor]
@@ -59,6 +59,10 @@ class Linear(nn.Module):
             else:
                 self.register_parameter('weight_bu', None)
             self.reset_parameters()
+        else:
+            self.register_parameter('weight_td', None)
+            self.register_parameter('weight_bu', None)
+            self.register_parameter('bias', None)
 
     def reset_parameters(self) -> None:
         nn.init.kaiming_uniform_(self.weight_td, a=math.sqrt(5))
