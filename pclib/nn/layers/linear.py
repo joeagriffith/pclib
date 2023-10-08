@@ -6,26 +6,24 @@ from torch import Tensor
 from torch.nn.parameter import Parameter
 from typing import Optional
 
-
+# Whittington & Bogacz 2017
 class Linear(nn.Module):
     __constants__ = ['in_features', 'out_features']
-    in_features: int
-    out_features: int
-    weight_td: Tensor
+    size: int
+    prev_size: Optional[int]
+    weight_td: Optional[Tensor]
     weight_bu: Optional[Tensor]
     bias: Optional[Tensor]
 
     def __init__(self,
-                 in_features: int,
-                 out_features: int,
+                 size: int,
+                 next_size: int = None,
                  bias: bool = True,
                  symmetric: bool = True,
                  actv_fn: callable = F.relu,
                  d_actv_fn: callable = None,
-                 actv_mode: str = 'Wf(x)', # 'f(Wx)' or 'Wf(x)'
                  gamma: float = 0.1,
                  beta: float = 1.0,
-
                  device=torch.device('cpu'),
                  dtype=None
                  ) -> None:
@@ -33,11 +31,10 @@ class Linear(nn.Module):
         factory_kwargs = {'device': device, 'dtype': dtype}
         super(Linear, self).__init__()
 
-        self.in_features = in_features
-        self.out_features = out_features
+        self.size = size
+        self.next_size = next_size
         self.symmetric = symmetric
         self.actv_fn = actv_fn
-        self.actv_mode = actv_mode
         self.gamma = gamma
         self.beta = beta
         self.device = device
@@ -50,17 +47,18 @@ class Linear(nn.Module):
             self.d_actv_fn: callable = lambda x: torch.sigmoid(x) * (1 - torch.sigmoid(x))
         elif actv_fn == F.tanh:
             self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
-
-        self.weight_td = Parameter(torch.empty((in_features, out_features), **factory_kwargs))
-        if bias:
-            self.bias = Parameter(torch.empty(in_features, **factory_kwargs))
-        else:
-            self.register_parameter('bias', None)
-        if not symmetric:
-            self.weight_bu = Parameter(torch.empty((out_features, in_features), **factory_kwargs))
-        else:
-            self.register_parameter('weight_bu', None)
-        self.reset_parameters()
+        
+        if next_size is not None:
+            self.weight_td = Parameter(torch.empty((size, next_size), **factory_kwargs))
+            if bias:
+                self.bias = Parameter(torch.empty(size, **factory_kwargs))
+            else:
+                self.register_parameter('bias', None)
+            if not symmetric:
+                self.weight_bu = Parameter(torch.empty((next_size, size), **factory_kwargs))
+            else:
+                self.register_parameter('weight_bu', None)
+            self.reset_parameters()
 
     def reset_parameters(self) -> None:
         nn.init.kaiming_uniform_(self.weight_td, a=math.sqrt(5))
@@ -76,16 +74,21 @@ class Linear(nn.Module):
 
     # Returns a tuple of two tensors, x and e, of shape (batch_size, out_features) and (batch_size, in_features) respectively
     def init_state(self, batch_size, mode='zeros'):
-        assert mode in ['zeros', 'rand'], f"Invalid mode {mode}"
+        assert mode in ['zeros', 'rand', 'randn'], f"Invalid mode {mode}"
         if mode == 'zeros':
             state = {
-                'x': torch.zeros((batch_size, self.out_features), device=self.device),
-                'e': self.bias.detach().clone(),
+                'x': torch.zeros((batch_size, self.size), device=self.device),
+                'e': torch.zeros((batch_size, self.size), device=self.device),
             }
         elif mode == 'rand':
             state = {
-                'x': torch.rand((batch_size, self.out_features), device=self.device) * 0.1,
-                'e': self.bias.detach().clone(),
+                'x': torch.rand((batch_size, self.size), device=self.device) * 0.1,
+                'e': torch.rand((batch_size, self.size), device=self.device) * 0.1,
+            }
+        elif mode == 'randn':
+            state = {
+                'x': torch.randn((batch_size, self.size), device=self.device) * 0.1,
+                'e': torch.randn((batch_size, self.size), device=self.device) * 0.1,
             }
         return state
 
@@ -93,24 +96,36 @@ class Linear(nn.Module):
         self.device = args[0]
         return super().to(*args, **kwargs)
 
-    def forward(self, x_below, state, td_error=None) -> Tensor:
+    def predict(self, f_x_lp1):
+        return F.linear(f_x_lp1, self.weight_td, self.bias)
 
-        weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
-        
-        if self.actv_mode == 'Wf(x)':
-            state['pred'] = F.linear(self.actv_fn(state['x']), self.weight_td, self.bias)
-            state['e'] = x_below - state['pred']
-            update = F.linear(state['e'], weight_bu, None) * self.d_actv_fn(state['x'])
-        elif self.actv_mode == 'f(Wx)':
-            state['pred'] = F.linear(state['x'], self.weight_td, self.bias)
-            state['e'] = x_below - self.actv_fn(state['pred'])
-            update = F.linear(state['e'] * self.d_actv_fn(state['pred']), weight_bu, None)
+    def update_e(self, state, f_x_lp1=None):
+        if f_x_lp1 is not None:
+            state['pred'] = self.predict(f_x_lp1)
         else:
-            raise ValueError(f"Invalid actv_mode {self.actv_mode}, must be one of ['f(Wx)', 'Wf(x)']")
-
-        if td_error is not None:
-            update -= self.beta * td_error
-
-        state['x'] += self.gamma * update
-
+            state['pred'] = state['x']
+        state['e'] = state['x'] - state['pred']
         return state
+    
+    def update_x(self, state, bu_error=None):
+        if bu_error is not None:
+            state['x'] += self.gamma * (bu_error * self.d_actv_fn(state['x']))
+        state['x'] += self.gamma * (-state['e'])
+        return state
+    
+    def forward_error(self, state):
+        error_prop = None
+        if self.next_size is not None:
+            weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
+            error_prop = F.linear(state['e'], weight_bu, None)
+        return error_prop
+    
+    def forward(self, state, bu_error=None, f_x_lp1=None) -> Tensor:
+
+        state = self.update_e(state, f_x_lp1)
+
+        state = self.update_x(state, bu_error)
+
+        error_prop = self.forward_error(state)
+
+        return state, error_prop

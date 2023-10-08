@@ -9,7 +9,7 @@ class PCLinearClassifier(nn.Module):
     in_features: int
     num_classes: int
 
-    def __init__(self, input_size, num_classes, hidden_sizes = [], steps=5, bias=True, symmetric=True, actv_fn=F.relu, actv_mode='Wf(r)', gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
+    def __init__(self, input_size, num_classes, hidden_sizes = [], steps=5, bias=True, symmetric=True, actv_fn=F.relu, gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
         factory_kwargs = {'bias': bias, 'symmetric': symmetric, 'device': device, 'dtype': dtype}
         super(PCLinearClassifier, self).__init__()
 
@@ -21,27 +21,35 @@ class PCLinearClassifier(nn.Module):
         self.beta = beta
 
         layers = []
-        prev_size = input_size
-        for size in hidden_sizes:
-            layers.append(Linear(prev_size, size, actv_fn=actv_fn, actv_mode=actv_mode, gamma=gamma, beta=beta, **factory_kwargs))
-            prev_size = size
-        layers.append(Linear(prev_size, num_classes, actv_fn=actv_fn, actv_mode=actv_mode, gamma=gamma, beta=beta, **factory_kwargs))
+        size = num_classes
+        for next_size in hidden_sizes + [input_size]:
+            layers.append(Linear(size, next_size, actv_fn=actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+            size = next_size
+        layers.append(Linear(size, None, actv_fn=actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
 
         self.layers = nn.ModuleList(layers)
         self.steps = steps
         self.device = device
 
-    def step(self, x, state, y=None):
-        for i, layer in enumerate(self.layers):
-            if i < len(self.layers) - 1:
-                td_error = state[i+1]['e']
-            else:
-                td_error = None
-            state[i] = layer(x, state[i], td_error)
-            x = state[i]['x']
-        
+    def step(self, obs, state, y=None):
+
+        # Update Xs Top-down, ignore top layer
+        for i, layer in reversed(list(enumerate(self.layers))):
+            if i == len(self.layers) - 1: # last layer
+                continue
+            bu_error = self.layers[i-1].forward_error(state[i-1]) if i > 0 else None
+            state[i] = layer.update_x(state[i], bu_error)
         if y is not None:
-            state[-1]['x'] = y.clone()
+            state[0]['x'] = y.clone()
+        state[-1]['x'] = obs.clone() # TODO: redundant, here for "compatibility"
+
+        # Update Es Top-down, ignore top layer
+        for i, layer in reversed(list(enumerate(self.layers))):
+            if i == len(self.layers) - 1: # last layer
+                continue
+            f_x_lp1 = self.layers[i+1].actv_fn(state[i+1]['x'])
+            state[i] = layer.update_e(state[i], f_x_lp1)
+
         return state
 
     def init_state(self, batch_size: int, mode='zeros'):
@@ -58,38 +66,51 @@ class PCLinearClassifier(nn.Module):
         return self
 
     def get_output(self, state):
-        return state[-1]['x']
+        return state[0]['x']
+    
+    # Initialises xs in state using 1 sweep of top-down predictions
+    def init_xs(self, obs, state, y=None):
+        for i, layer in reversed(list(enumerate(self.layers))):
+            if i == len(self.layers) - 1: # last layer
+                state[i]['x'] = obs.clone()
+            else:
+                state[i]['x'] = layer.predict(f_x_lp1)
+            f_x_lp1 = layer.actv_fn(state[i]['x'])
 
-    def forward(self, x, state=None, y=None, steps=None):
-        assert len(x.shape) == 2, f"Input must be 2D, got {len(x.shape)}D"
+        if y is not None:
+            state[0]['x'] = y.clone()
+        return state
+
+    def init_es(self, state):
+        for i, layer in enumerate(self.layers):
+            f_x_lp1 = None
+            if i < len(self.layers) - 1:
+                f_x_lp1 = layer.actv_fn(state[i+1]['x'])
+            state[i] = layer.update_e(state[i], f_x_lp1)
+        return state
+
+
+    def forward(self, obs, state=None, y=None, steps=None):
+        assert len(obs.shape) == 2, f"Input must be 2D, got {len(obs.shape)}D"
 
         if steps is None:
             steps = self.steps
 
         if state is None:
-            state = self.init_state(x.shape[0])
-        
+            state = self.init_state(obs.shape[0])
+        state[-1]['x'] = obs.clone()
+
         if y is not None:
-            temp = torch.ones_like(state[-1]['x']) * 0.03
+            temp = torch.ones_like(y) * 0.03
             y = temp + (y * 0.94)
-            state[-1]['x'] = y.clone()
+            state[0]['x'] = y.clone()
+        
+        state = self.init_xs(obs, state, y)
+        state = self.init_es(state)
 
         for _ in range(steps):
-            state = self.step(x, state, y)
+            state = self.step(obs, state, y)
             
-        out = state[-1]['x'].clone()
+        out = state[0]['x']
             
         return out, state
-
-    def generate(self, y, steps=None, step_size=0.01):
-        if steps is None:
-            steps = self.steps
-
-        state = self.init_state(y.shape[0])
-        x = torch.randn((y.shape[0], self.in_features), device=self.device)
-        for _ in range(steps):
-            state = self.step(x, state, y)
-            x -= step_size * state[0]['e']
-            
-        return x, state
-            
