@@ -19,16 +19,8 @@ def train(
     init_mode='rand',
     step=0, 
     stats=None,
-    device='cpu',
-    optim='AdamW',
+    device="cpu",
 ):
-    assert optim in ['AdamW', 'Adam', 'SGD'], f"Invalid optimiser {optim}"
-    if optim == 'AdamW':
-        optimiser = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=reg_coeff)
-    elif optim == 'Adam':
-        optimiser = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=reg_coeff)
-    elif optim == 'SGD':
-        optimiser = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=reg_coeff)
 
     train_loader = train_data if isinstance(train_data, DataLoader) else DataLoader(train_data, batch_size, shuffle=True)
     val_loader = val_data if isinstance(val_data, DataLoader) else DataLoader(val_data, batch_size, shuffle=False)
@@ -77,9 +69,11 @@ def train(
 
         for batch_idx, (images, target) in loop:
             x = images.flatten(start_dim=1)
+            false_y = F.one_hot((target + torch.randint_like(target, low=1, high=model.num_classes)) % model.num_classes, model.num_classes).float()
             y = F.one_hot(target, model.num_classes).float()
             b_size = x.shape[0]
             step += b_size
+
 
             state = model.init_state(b_size, mode=init_mode)
             # Forward pass
@@ -106,32 +100,53 @@ def train(
                 if isinstance(layer, PrecisionWeighted):
                     layer.weight_var.grad = 0.1 * -((state[i]['eps'].T @ state[i]['e']) / b_size - torch.eye(layer.weight_var.shape[0], device=device))
 
+            neg_state = model.init_state(b_size, mode=init_mode)
+            # Forward pass
+            with torch.no_grad():
+                out, neg_state = model(x, neg_state, false_y)
+
+            # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
+            for i, layer in enumerate(model.layers):
+                
+                if layer.actv_mode == 'Wf(x)':
+                    layer.weight_td.grad -= 0.5 * -(neg_state[i]['e'].T @ layer.actv_fn(neg_state[i]['x'])) / b_size
+                    if layer.bias is not None:
+                        layer.bias.grad -= 0.5 * -neg_state[i]['e'].mean(axis=0)
+                    if not layer.symmetric:
+                        layer.weight_bu.grad -= 0.5 * -(layer.actv_fn(neg_state[i]['x']).T @ neg_state[i]['e']) / b_size
+
+                elif layer.actv_mode == 'f(Wx)':
+                    layer.weight_td.grad -= 0.5 * -((neg_state[i]['e'] * layer.d_actv_fn(neg_state[i]['pred'])).T @ neg_state[i]['x']) / b_size
+                    if layer.bias is not None:
+                        layer.bias.grad -= 0.5 * -(neg_state[i]['e'] * layer.d_actv_fn(neg_state[i]['pred'])).mean(axis=0)
+                    if not layer.symmetric:
+                        layer.weight_bu.grad -= 0.5 * -(neg_state[i]['x'].T @ (neg_state[i]['e'] * layer.d_actv_fn(neg_state[i]['pred']))) / b_size
+                
             # Regularisation (L2)
-            # reg = 0
-            # for i, layer in enumerate(model.layers):
-            #     reg += layer.weight_td.square().sum()
-            #     if layer.bias is not None:
-            #         reg += layer.bias.square().sum()
-            #     if not layer.symmetric:
-            #         reg += layer.weight_bu.square().sum()
-            #     # # Can't regularise variance, it's not a parameter (kinda)
-            #     # if isinstance(model.layers[i], (PrecisionWeighted, PrecisionWeightedV2):
-            #     #     reg += model.layers[i].weight_var.square().sum()
-            # reg *= reg_coeff
-            # reg.backward()
+            reg = 0
+            for i, layer in enumerate(model.layers):
+                reg += layer.weight_td.square().sum()
+                if layer.bias is not None:
+                    reg += layer.bias.square().sum()
+                if not layer.symmetric:
+                    reg += layer.weight_bu.square().sum()
+                # # Can't regularise variance, it's not a parameter (kinda)
+                # if isinstance(model.layers[i], (PrecisionWeighted, PrecisionWeightedV2):
+                #     reg += model.layers[i].weight_var.square().sum()
+            reg *= reg_coeff
+            reg.backward()
 
             # Parameter Update (Grad Descent)
             with torch.no_grad():
-                optimiser.step()
-                # for i, layer in enumerate(model.layers):
-                #     layer.weight_td.data -= lr * layer.weight_td.grad
-                #     if layer.bias is not None:
-                #         assert layer.bias.grad is not None, f"layer {i} bias has no grad"
-                #         layer.bias.data -= lr * layer.bias.grad
-                #     if not layer.symmetric:
-                #         layer.weight_bu.data -= lr * layer.weight_bu.grad
-                #     if isinstance(layer, PrecisionWeighted):
-                #         layer.weight_var.data -= lr * layer.weight_var.grad
+                for i, layer in enumerate(model.layers):
+                    layer.weight_td.data -= lr * layer.weight_td.grad
+                    if layer.bias is not None:
+                        assert layer.bias.grad is not None, f"layer {i} bias has no grad"
+                        layer.bias.data -= lr * layer.bias.grad
+                    if not layer.symmetric:
+                        layer.weight_bu.data -= lr * layer.weight_bu.grad
+                    if isinstance(layer, PrecisionWeighted):
+                        layer.weight_var.data -= lr * layer.weight_var.grad
 
             # Track batch statistics
             for i, layer in enumerate(model.layers):

@@ -57,6 +57,9 @@ class PCLinearClassifier(nn.Module):
             layer.to(device)
         return self
 
+    def get_output(self, state):
+        return state[-1]['x']
+
     def forward(self, x, state=None, y=None, steps=None):
         assert len(x.shape) == 2, f"Input must be 2D, got {len(x.shape)}D"
 

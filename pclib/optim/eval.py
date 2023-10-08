@@ -80,7 +80,7 @@ def accuracy(model, dataset, batch_size=1024, steps=100, return_all=False, plot=
             with torch.no_grad():
                 state = model.step(x, state)
             
-            pred = state[-1]['x'].argmax(dim=1)
+            pred = model.get_output(state).argmax(dim=1)
             correct[step_i] += (pred == y).sum().item()
 
     acc = [c/len(dataset) for c in correct]
