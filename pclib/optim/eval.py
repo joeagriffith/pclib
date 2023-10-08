@@ -54,7 +54,7 @@ def track_vfe(model, x, y=None, steps=100, plot_Es=False):
     E = [[] for _ in range(len(model.layers))]
     for step_i in range(steps):
         with torch.no_grad():
-            state = model.step(state, y)
+            model.step(state, y)
             vfes.append(vfe(state).item())
             for i in range(len(model.layers)):
                 E[i].append(state[i]['e'].square().sum(dim=1).mean().item())

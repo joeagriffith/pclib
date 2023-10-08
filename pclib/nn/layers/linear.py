@@ -94,7 +94,6 @@ class Linear(nn.Module):
             update = F.linear(e_below, weight_bu, None)
             state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
         state['x'] += self.gamma * (-state['e'])
-        return state
         
     def update_e(self, state, pred=None):
         if pred is not None:
@@ -102,4 +101,3 @@ class Linear(nn.Module):
         else:
             state['pred'] = state['x']
         state['e'] = state['x'] - state['pred']
-        return state

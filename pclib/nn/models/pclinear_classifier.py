@@ -38,18 +38,16 @@ class PCLinearClassifier(nn.Module):
             if i == len(self.layers) - 1: # don't update last layer
                 continue
             e_below = state[i-1]['e'] if i > 0 else None
-            state[i] = layer.update_x(state[i], e_below)
+            layer.update_x(state[i], e_below)
         if y is not None:
             state[0]['x'] = y.clone()
 
         # Update Es Top-down, collecting predictions as we descend.
         for i, layer in reversed(list(enumerate(self.layers))):
             if i < len(self.layers) - 1: # don't update last layer
-                state[i] = layer.update_e(state[i], pred)
+                layer.update_e(state[i], pred)
             if i > 0: # Bottom layer can't predict
                 pred = layer.predict(state[i])
-
-        return state
 
     # Initialises xs in state using 1 sweep of top-down predictions
     def _init_xs(self, obs, state, y=None):
@@ -60,14 +58,6 @@ class PCLinearClassifier(nn.Module):
                 state[i-1]['x'] = layer.predict(state[i])
         if y is not None:
             state[0]['x'] = y.clone()
-        return state
-
-    def _init_es(self, state):
-        # Doesn't have to be done top-down, done for consistency
-        for i, layer in reversed(list(enumerate(self.layers))):
-            if i > 0:
-                state[i-1]['e'] = state[i-1]['x'] - layer.predict(state[i])
-        return state
 
     def init_state(self, obs, y=None):
         state = []
@@ -75,8 +65,7 @@ class PCLinearClassifier(nn.Module):
             state_i = layer.init_state(obs.shape[0])
             state.append(state_i)
         
-        state = self._init_xs(obs, state, y)
-
+        self._init_xs(obs, state, y)
         return state
 
     def to(self, device):
@@ -98,7 +87,7 @@ class PCLinearClassifier(nn.Module):
             state = self.init_state(obs, y)
 
         for _ in range(steps):
-            state = self.step(state, y)
+            self.step(state, y)
             
         out = state[0]['x']
             
