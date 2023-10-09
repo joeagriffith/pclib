@@ -1,4 +1,4 @@
-# from pclib.nn.layers import PrecisionWeightedV2 as Linear
+from pclib.nn.layers import PrecisionWeighted as PrecisionWeighted
 from pclib.nn.layers import Linear
 from pclib.utils.functional import vfe, format_y
 import torch
@@ -10,7 +10,7 @@ class PCLinearClassifier(nn.Module):
     in_features: int
     num_classes: int
 
-    def __init__(self, input_size, num_classes, hidden_sizes = [], steps=5, bias=True, symmetric=True, actv_fn=F.relu, gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
+    def __init__(self, input_size, num_classes, hidden_sizes = [], steps=20, bias=True, symmetric=True, precision_weighted=False, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
         factory_kwargs = {'bias': bias, 'symmetric': symmetric, 'device': device, 'dtype': dtype}
         super(PCLinearClassifier, self).__init__()
 
@@ -18,13 +18,17 @@ class PCLinearClassifier(nn.Module):
         self.num_classes = num_classes
         self.bias = bias
         self.symmetric = symmetric
+        self.precision_weighted = precision_weighted
         self.gamma = gamma
         self.beta = beta
 
         layers = []
         prev_size = None
         for size in [num_classes] + hidden_sizes + [input_size]:
-            layers.append(Linear(size, prev_size, actv_fn=actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+            if precision_weighted:
+                layers.append(PrecisionWeighted(size, prev_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+            else:
+                layers.append(Linear(size, prev_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
             prev_size = size
 
         self.layers = nn.ModuleList(layers)

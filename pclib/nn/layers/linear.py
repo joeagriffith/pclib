@@ -93,11 +93,12 @@ class Linear(nn.Module):
             weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
             update = F.linear(e_below, weight_bu, None)
             state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
-        state['x'] += self.gamma * (-state['e'])
+        state['x'] += self.gamma * self.beta * (-state['e'])
         
     def update_e(self, state, pred=None):
         if pred is not None:
             state['pred'] = pred
         else:
             state['pred'] = state['x']
+        # state['e'] += self.gamma * (state['x'] - state['pred'] - state['e'])
         state['e'] = state['x'] - state['pred']

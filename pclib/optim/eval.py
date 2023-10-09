@@ -70,11 +70,12 @@ def track_vfe(model, x, y=None, steps=100, plot_Es=False):
 
 
 def accuracy(model, dataset, batch_size=1024, steps=100):
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=False)
-    correct = 0
-    for x, y in dataloader:
-        x = x.flatten(start_dim=1)
-        pred = model.classify(x, steps)
-        correct += (pred == y).sum().item()
-    acc = correct/len(dataset)
+    with torch.no_grad():
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=False)
+        correct = 0
+        for x, y in dataloader:
+            x = x.flatten(start_dim=1)
+            pred = model.classify(x, steps)
+            correct += (pred == y).sum().item()
+        acc = correct/len(dataset)
     return acc

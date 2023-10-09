@@ -10,6 +10,9 @@ def plot_stats(stats, model):
     if model.bias:
         extra_rows += 1
         height += 2
+    if model.precision_weighted:
+        extra_rows += 1
+        height += 2
     fig, axs = plt.subplots(2 + extra_rows, 2, figsize=(8, height))
     for i in range(len(model.layers)):
         axs.flat[0].plot(stats['R_norms'][i], label=f"Layer {i}")
@@ -26,8 +29,10 @@ def plot_stats(stats, model):
                 axs.flat[idx].plot(stats['Bias_means'][i], label=f"Layer {i+1}")
                 axs.flat[idx+1].plot(stats['Bias_stds'][i], label=f"Layer {i+1}")
                 idx += 2
-            # if isinstance(model.layers[i], PrecisionWeighted):
-            #     axs.flat[idx].plot(stats)
+            if model.precision_weighted:
+                axs.flat[idx].plot(stats['WeightVar_means'][i], label=f"Layer {i}")
+                axs.flat[idx+1].plot(stats['WeightVar_stds'][i], label=f"Layer {i}")
+                idx += 2
 
     axs.flat[0].set_title(f"X_norms")
     axs.flat[1].set_title(f"E_mags")
@@ -47,6 +52,12 @@ def plot_stats(stats, model):
     if model.bias:
         axs.flat[idx].set_title(f"Bias_means")
         axs.flat[idx+1].set_title(f"Bias_stds")
+        axs.flat[idx].legend()
+        axs.flat[idx+1].legend()
+        idx += 2
+    if model.precision_weighted:
+        axs.flat[idx].set_title(f"WeightVar_means")
+        axs.flat[idx+1].set_title(f"WeightVar_stds")
         axs.flat[idx].legend()
         axs.flat[idx+1].legend()
         idx += 2

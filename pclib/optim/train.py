@@ -45,6 +45,8 @@ def train(
             "Bias_stds": [[] for _ in range(len(model.layers)-1)],
             "WeightBU_means": [[] for _ in range(len(model.layers)-1)],
             "WeightBU_stds": [[] for _ in range(len(model.layers)-1)],
+            "WeightVar_means": [[] for _ in range(len(model.layers)-1)],
+            "WeightVar_stds": [[] for _ in range(len(model.layers)-1)],
             "train_vfe": [],
             "val_acc": [],
             "val_vfe": [],
@@ -52,6 +54,8 @@ def train(
         
 
     for epoch in range(num_epochs):
+
+        train_data.apply_transform()
 
         # Track batches, indexed: [layer][batch]
         epoch_stats = {
@@ -63,6 +67,8 @@ def train(
             "Bias_stds": [[] for _ in range(len(model.layers)-1)],
             "WeightBU_means": [[] for _ in range(len(model.layers)-1)],
             "WeightBU_stds": [[] for _ in range(len(model.layers)-1)],
+            "WeightVar_means": [[] for _ in range(len(model.layers)-1)],
+            "WeightVar_stds": [[] for _ in range(len(model.layers)-1)],
             "train_vfe": [],
         }
         
@@ -99,10 +105,10 @@ def train(
                         layer.weight_bu.grad = -(layer.actv_fn(state[i]['x']).T @ state[i-1]['e']) / b_size
 
                 if isinstance(layer, PrecisionWeighted):
-                    raise NotImplementedError("PrecisionWeighted not implemented for trainV2.")
+                    layer.weight_var.grad = -(((state[i]['eps'].T @ state[i]['e']) / b_size) - torch.eye(layer.weight_var.shape[0], device=device))
 
             # A negative phase pass, increases VFE for negative data
-            if neg_coeff is not None:
+            if neg_coeff is not None and neg_coeff > 0:
                 # Forward pass
                 with torch.no_grad():
                     out, neg_state = model(x, state=None, y=false_y)
@@ -119,6 +125,10 @@ def train(
                 
             # Parameter Update (Grad Descent)
             optimiser.step()
+            for layer in model.layers:
+                if isinstance(layer, PrecisionWeighted):
+                    layer.weight_var.data -= lr * layer.weight_var.grad
+                    layer.weight_var.data = torch.clamp(layer.weight_var.data, min=0.01)
 
             # Track batch statistics
             for i, layer in enumerate(model.layers):
@@ -134,6 +144,9 @@ def train(
                     if model.layers[i].bias is not None:
                         epoch_stats['Bias_means'][i-1].append(layer.bias.mean().item())
                         epoch_stats['Bias_stds'][i-1].append(layer.bias.std().item())
+                if isinstance(layer, PrecisionWeighted) and i < len(epoch_stats['WeightVar_means']):
+                    epoch_stats['WeightVar_means'][i].append(layer.weight_var.mean().item())
+                    epoch_stats['WeightVar_stds'][i].append(layer.weight_var.std().item())
 
 
         # Validation pass
@@ -166,6 +179,9 @@ def train(
                 if layer.bias is not None:
                     stats['Bias_means'][i-1].append(torch.tensor(epoch_stats['Bias_means'][i-1]).mean().item())
                     stats['Bias_stds'][i-1].append(torch.tensor(epoch_stats['Bias_stds'][i-1]).mean().item())
+            if isinstance(layer, PrecisionWeighted) and i < len(stats['WeightVar_means']):
+                stats['WeightVar_means'][i].append(torch.tensor(epoch_stats['WeightVar_means'][i]).mean().item())
+                stats['WeightVar_stds'][i].append(torch.tensor(epoch_stats['WeightVar_stds'][i]).mean().item())
         stats['val_acc'].append(val_acc)
         stats['val_vfe'].append(val_vfe)
     return step, stats
