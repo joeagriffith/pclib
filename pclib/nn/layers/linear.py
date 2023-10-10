@@ -39,6 +39,8 @@ class Linear(nn.Module):
         self.beta = beta
         self.device = device
 
+
+        # Default derivative of activation function
         if d_actv_fn is not None:
             self.d_actv_fn: callable = d_actv_fn
         elif actv_fn == F.relu:
@@ -48,6 +50,7 @@ class Linear(nn.Module):
         elif actv_fn == F.tanh:
             self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
         
+        # Initialise weights if not input layer
         if prev_size is not None:
             self.weight_td = Parameter(torch.empty((prev_size, size), **factory_kwargs))
             if bias:
@@ -85,20 +88,23 @@ class Linear(nn.Module):
         self.device = args[0]
         return super().to(*args, **kwargs)
 
+    # Returns a prediction of the state in the previous layer
     def predict(self, state):
         return F.linear(self.actv_fn(state['x']), self.weight_td, self.bias)
     
     def update_x(self, state, e_below=None):
+        # If not input layer, propagate error from layer below
         if e_below is not None:
             weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
             update = F.linear(e_below, weight_bu, None)
             state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
+        # This update will be zero if top layer
         state['x'] += self.gamma * self.beta * (-state['e'])
         
+    # Recalculates prediction-error between state and top-down prediction of it
     def update_e(self, state, pred=None):
         if pred is not None:
             state['pred'] = pred
         else:
             state['pred'] = state['x']
-        # state['e'] += self.gamma * (state['x'] - state['pred'] - state['e'])
         state['e'] = state['x'] - state['pred']
