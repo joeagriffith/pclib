@@ -96,7 +96,6 @@ class Linear(nn.Module):
     def propagate(self, e_below):
         weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
         return F.linear(e_below, weight_bu, None)
-
     
     def update_x(self, state, e_below=None):
         # If not input layer, propagate error from layer below
@@ -118,3 +117,12 @@ class Linear(nn.Module):
         if temp is not None:
             eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
             state['e'] += eps
+        
+    def update_grad(self, state, e_below):
+        b_size = e_below.shape[0]
+        self.weight_td.grad = -(e_below.T @ self.actv_fn(state['x'])) / b_size
+        if self.bias is not None:
+            self.bias.grad = -e_below.mean(dim=0)
+        if not self.symmetric:
+            self.weight_bu.grad = -(self.actv_fn(state['x']).T @ e_below) / b_size
+

@@ -113,3 +113,12 @@ class PrecisionWeighted(nn.Module):
             state['pred'] = state['x']
         
         state['e'] += (self.gamma * 5.0) * (state['x'] - state['pred'] - state['eps'])
+
+    def update_grad(self, state, e_below):
+        b_size = e_below.shape[0]
+        self.weight_td.grad = -(e_below.T @ self.actv_fn(state['x'])) / b_size
+        if self.bias is not None:
+            self.bias.grad = -e_below.mean(dim=0)
+        if not self.symmetric:
+            self.weight_bu.grad = -(self.actv_fn(state['x']).T @ e_below) / b_size
+        self.weight_var.grad = -(((state['eps'].T @ state['e']) / b_size) - torch.eye(state['e'].shape[1], device=self.device))

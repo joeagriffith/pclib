@@ -98,16 +98,8 @@ def train(
 
             # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
             for i, layer in enumerate(model.layers):
-                
-                if layer.prev_size is not None:
-                    layer.weight_td.grad = -(state[i-1]['e'].T @ layer.actv_fn(state[i]['x'])) / b_size
-                    if layer.bias is not None:
-                        layer.bias.grad = -state[i-1]['e'].mean(axis=0)
-                    if not layer.symmetric:
-                        layer.weight_bu.grad = -(layer.actv_fn(state[i]['x']).T @ state[i-1]['e']) / b_size
-
-                if isinstance(layer, PrecisionWeighted):
-                    layer.weight_var.grad = -(((state[i]['eps'].T @ state[i]['e']) / b_size) - torch.eye(layer.weight_var.shape[0], device=device))
+                if i > 0:
+                    layer.update_grad(state[i], state[i-1]['e'])                
 
             # A negative phase pass, increases VFE for negative data
             if neg_coeff is not None and neg_coeff > 0:
@@ -117,13 +109,8 @@ def train(
 
                 # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
                 for i, layer in enumerate(model.layers):
-                    
-                    if layer.prev_size is not None:
-                        layer.weight_td.grad += -neg_coeff * -(neg_state[i-1]['e'].T @ layer.actv_fn(neg_state[i]['x'])) / b_size
-                        if layer.bias is not None:
-                            layer.bias.grad += -neg_coeff * -neg_state[i-1]['e'].mean(axis=0)
-                        if not layer.symmetric:
-                            layer.weight_bu.grad += -neg_coeff * -(layer.actv_fn(neg_state[i]['x']).T @ neg_state[i-1]['e']) / b_size
+                    if i > 0:
+                        layer.update_grad(neg_state[i], -neg_coeff * neg_state[i-1]['e'])
                 
             # Parameter Update (Grad Descent)
             optimiser.step()
