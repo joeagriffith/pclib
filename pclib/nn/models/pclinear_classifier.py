@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+# Based on Whittington and Bogacz 2017
 class PCLinearClassifier(nn.Module):
     __constants__ = ['in_features', 'out_features']
     in_features: int
@@ -35,41 +37,53 @@ class PCLinearClassifier(nn.Module):
         self.steps = steps
         self.device = device
 
-    def step(self, state, y=None):
+    def step(self, state, obs=None, y=None, temp=None):
 
-        # Update Xs Top-down, ignore top layer
-        for i, layer in reversed(list(enumerate(self.layers))):
-            if i == len(self.layers) - 1: # don't update last layer
-                continue
+        # Update Xs
+        for i, layer in enumerate(self.layers):
             e_below = state[i-1]['e'] if i > 0 else None
             layer.update_x(state[i], e_below)
+        
+        # Pin input and output Xs if provided
+        if obs is not None:
+            state[-1]['x'] = obs.clone()
         if y is not None:
             state[0]['x'] = y.clone()
 
-        # Update Es Top-down, collecting predictions as we descend.
+        # Update Es, Top-down so we can collect predictions as we descend
         for i, layer in reversed(list(enumerate(self.layers))):
-            if i < len(self.layers) - 1: # don't update last layer
-                layer.update_e(state[i], pred)
+            if i < len(self.layers) - 1: # don't update top e (no prediction)
+                layer.update_e(state[i], pred, temp=temp)
             if i > 0: # Bottom layer can't predict
                 pred = layer.predict(state[i])
 
     # Initialises xs in state using 1 sweep of top-down predictions
-    def _init_xs(self, obs, state, y=None):
-        for i, layer in reversed(list(enumerate(self.layers))):
-            if i == len(self.layers) - 1: # last layer
-                state[i]['x'] = obs.clone()
-            if i > 0:
-                state[i-1]['x'] = layer.predict(state[i])
-        if y is not None:
-            state[0]['x'] = y.clone()
+    def _init_xs(self, state, obs=None, y=None):
+        if obs is not None:
+            for i, layer in reversed(list(enumerate(self.layers))):
+                if i == len(self.layers) - 1: # last layer
+                    state[i]['x'] = obs.clone()
+                if i > 0:
+                    state[i-1]['x'] = layer.predict(state[i])
+            if y is not None:
+                state[0]['x'] = y.clone()
+        elif y is not None:
+            for i, layer in enumerate(self.layers):
+                if i == 0:
+                    state[0]['x'] = y.clone()
+                elif i < len(self.layers) - 1:
+                    state[i]['x'] = layer.propagate(state[i-1]['x'])
 
-    def init_state(self, obs, y=None):
+    def init_state(self, obs=None, y=None):
+        if obs is not None:
+            b_size = obs.shape[0]
+        elif y is not None:
+            b_size = y.shape[0]
         state = []
         for layer in self.layers:
-            state_i = layer.init_state(obs.shape[0])
-            state.append(state_i)
+            state.append(layer.init_state(b_size))
         
-        self._init_xs(obs, state, y)
+        self._init_xs(state, obs, y)
         return state
 
     def to(self, device):
@@ -81,19 +95,20 @@ class PCLinearClassifier(nn.Module):
     def get_output(self, state):
         return state[0]['x']
 
-    def forward(self, obs, state=None, y=None, steps=None):
-        assert len(obs.shape) == 2, f"Input must be 2D, got {len(obs.shape)}D"
+    def calc_temp(self, step_i, steps):
+        return 1 - (step_i / steps)
 
+    def forward(self, obs=None, y=None, steps=None):
         if steps is None:
             steps = self.steps
 
-        if state is None:
-            state = self.init_state(obs, y)
+        state = self.init_state(obs, y)
 
-        for _ in range(steps):
-            self.step(state, y)
+        for i in range(steps):
+            temp = self.calc_temp(i, steps)
+            self.step(state, obs, y, temp)
             
-        out = state[0]['x']
+        out = self.get_output(state)
             
         return out, state
     
@@ -107,7 +122,7 @@ class PCLinearClassifier(nn.Module):
         for target in range(self.num_classes):
             targets = torch.full((obs.shape[0],), target, device=self.device, dtype=torch.long)
             y = format_y(targets, self.num_classes)
-            _, state = self.forward(obs, None, y, steps)
+            _, state = self.forward(obs, y, steps)
             vfes[:, target] = vfe(state, batch_reduction=None)
         
         return vfes.argmin(dim=1)

@@ -4,7 +4,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from pclib.optim.eval import topk_accuracy, evaluate_pc
+from pclib.optim.eval import topk_accuracy
 from pclib.nn.layers import PrecisionWeighted
 from pclib.utils.functional import vfe, format_y
 
@@ -23,13 +23,15 @@ def train(
     device="cpu",
     optim='AdamW',
 ):
-    assert optim in ['AdamW', 'Adam', 'SGD'], f"Invalid optimiser {optim}"
+    assert optim in ['AdamW', 'Adam', 'SGD', 'RMSprop'], f"Invalid optimiser {optim}"
     if optim == 'AdamW':
         optimiser = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=reg_coeff)
     elif optim == 'Adam':
         optimiser = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=reg_coeff)
     elif optim == 'SGD':
-        optimiser = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=reg_coeff)
+        optimiser = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=reg_coeff, momentum=0.9)
+    elif optim == 'RMSprop':
+        optimiser = torch.optim.RMSprop(model.parameters(), lr=lr, weight_decay=reg_coeff, momentum=0.9)
 
     train_loader = train_data if isinstance(train_data, DataLoader) else DataLoader(train_data, batch_size, shuffle=True)
     val_loader = val_data if isinstance(val_data, DataLoader) else DataLoader(val_data, batch_size, shuffle=False)
@@ -92,7 +94,7 @@ def train(
 
             # Forward pass
             with torch.no_grad():
-                out, state = model(x, state=None, y=y)
+                out, state = model(x, y=y)
 
             # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
             for i, layer in enumerate(model.layers):
@@ -111,7 +113,7 @@ def train(
             if neg_coeff is not None and neg_coeff > 0:
                 # Forward pass
                 with torch.no_grad():
-                    out, neg_state = model(x, state=None, y=false_y)
+                    out, neg_state = model(x, y=false_y)
 
                 # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
                 for i, layer in enumerate(model.layers):

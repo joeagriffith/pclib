@@ -92,19 +92,29 @@ class Linear(nn.Module):
     def predict(self, state):
         return F.linear(self.actv_fn(state['x']), self.weight_td, self.bias)
     
+    # propogates error from layer below, return an update for x
+    def propagate(self, e_below):
+        weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
+        return F.linear(e_below, weight_bu, None)
+
+    
     def update_x(self, state, e_below=None):
         # If not input layer, propagate error from layer below
         if e_below is not None:
-            weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
-            update = F.linear(e_below, weight_bu, None)
+            update = self.propagate(e_below)
             state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
         # This update will be zero if top layer
         state['x'] += self.gamma * self.beta * (-state['e'])
         
     # Recalculates prediction-error between state and top-down prediction of it
-    def update_e(self, state, pred=None):
+    # With simulated annealing
+    def update_e(self, state, pred=None, temp=None):
         if pred is not None:
             state['pred'] = pred
         else:
             state['pred'] = state['x']
         state['e'] = state['x'] - state['pred']
+
+        if temp is not None:
+            eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
+            state['e'] += eps
