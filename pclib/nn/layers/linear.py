@@ -8,7 +8,7 @@ from typing import Optional
 
 # Whittington & Bogacz 2017
 class Linear(nn.Module):
-    __constants__ = ['in_features', 'out_features']
+    __constants__ = ['size', 'prev_size']
     size: int
     prev_size: Optional[int]
     weight_td: Optional[Tensor]
