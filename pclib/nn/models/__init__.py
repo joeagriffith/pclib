@@ -1,1 +1,2 @@
 from pclib.nn.models.pclinear_classifier import PCLinearClassifier
+from pclib.nn.models.pcconv_classifier import PCConvClassifier

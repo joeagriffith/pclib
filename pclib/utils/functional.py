@@ -3,9 +3,9 @@ import torch.nn.functional as F
 
 def vfe(state, batch_reduction='mean', layer_reduction='sum'):
     if layer_reduction == 'sum':
-        vfe = sum([state_i['e'].square().sum(dim=1) for state_i in state])
+        vfe = sum([state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state])
     elif layer_reduction =='mean':
-        vfe = sum([state_i['e'].square().mean(dim=1) for state_i in state])
+        vfe = sum([state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state])
     if batch_reduction == 'sum':
         vfe = vfe.sum()
     elif batch_reduction == 'mean':

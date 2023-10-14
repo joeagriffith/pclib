@@ -80,8 +80,8 @@ class Linear(nn.Module):
             
     def init_state(self, batch_size):
         return {
-            'x': torch.zeros((batch_size, self.size), device=self.device),
-            'e': torch.zeros((batch_size, self.size), device=self.device),
+            'x': torch.zeros((batch_size, self.size), device=self.device, requires_grad=True),
+            'e': torch.zeros((batch_size, self.size), device=self.device, requires_grad=True),
         }
 
     def to(self, *args, **kwargs):
@@ -90,7 +90,7 @@ class Linear(nn.Module):
 
     # Returns a prediction of the state in the previous layer
     def predict(self, state):
-        return F.linear(self.actv_fn(state['x']), self.weight_td, self.bias)
+        return F.linear(self.actv_fn(state['x'].detach()), self.weight_td, self.bias)
     
     # propogates error from layer below, return an update for x
     def propagate(self, e_below):
@@ -109,20 +109,32 @@ class Linear(nn.Module):
     # With simulated annealing
     def update_e(self, state, pred=None, temp=None):
         if pred is not None:
-            state['pred'] = pred
-        else:
-            state['pred'] = state['x']
-        state['e'] = state['x'] - state['pred']
+            if pred.dim() == 4:
+                if pred.shape[2] == 1 and pred.shape[3] == 1:
+                    pred = pred.squeeze(-1).squeeze(-1)
+                else:
+                    raise ValueError("Prediction must be 2D, or 4D with 1x1 spatial dimensions")
+            state['e'] = state['x'].detach() - pred
 
         if temp is not None:
-            eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
+            eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
             state['e'] += eps
         
-    def update_grad(self, state, e_below):
-        b_size = e_below.shape[0]
-        self.weight_td.grad = -(e_below.T @ self.actv_fn(state['x'])) / b_size
-        if self.bias is not None:
-            self.bias.grad = -e_below.mean(dim=0)
-        if not self.symmetric:
-            self.weight_bu.grad = -(self.actv_fn(state['x']).T @ e_below) / b_size
-
+    def assert_grad(self, state, e_below):
+        with torch.no_grad():
+            b_size = e_below.shape[0]
+            true_weight_td_grad = -(e_below.T @ self.actv_fn(state['x'])) / b_size
+            assert(torch.eq(F.normalize(self.weight_td.grad, dim=(0,1)), F.normalize(true_weight_td_grad, dim=(0,1))).all(), f"true: {true_weight_td_grad}, backprop: {self.weight_td.grad}")
+            assert(torch.eq(self.weight_td.grad.norm(dim=(0,1)), true_weight_td_grad.norm(dim=(0,1))).all(), f"true: {true_weight_td_grad.norm(dim=(0,1))}, backprop: {self.weight_td.grad.norm(dim=(0,1))}")
+            assert(torch.eq(self.weight_td.grad, true_weight_td_grad).all(), f"true: {true_weight_td_grad}, backprop: {self.weight_td.grad}")
+            if self.bias is not None:
+                true_bias_grad = -e_below.mean(dim=0)
+                assert(torch.eq(F.normalize(self.bias.grad, dim=0), F.normalize(true_bias_grad, dim=0)).all(), f"true: {true_bias_grad}, backprop: {self.bias.grad}")
+                assert(torch.eq(self.bias.grad.norm(), true_bias_grad.norm()).all(), f"true: {true_bias_grad.norm()}, backprop: {self.bias.grad.norm()}")
+                assert(torch.eq(self.bias.grad, true_bias_grad).all(), f"true: {true_bias_grad}, backprop: {self.bias.grad}")
+            if not self.symmetric:
+                true_weight_bu_grad = -(self.actv_fn(state['x']).T @ e_below) / b_size
+                assert(torch.eq(F.normalize(self.weight_bu.grad, dim=(0,1)), F.normalize(true_weight_bu_grad, dim=(0,1))).all(), f"true: {true_weight_bu_grad}, backprop: {self.weight_bu.grad}")
+                assert(torch.eq(self.weight_bu.grad.norm(dim=(0,1)), true_weight_bu_grad.norm(dim=(0,1))).all(), f"true: {true_weight_bu_grad.norm(dim=(0,1))}, backprop: {self.weight_bu.grad.norm(dim=(0,1))}")
+                assert(torch.eq(self.weight_bu.grad, true_weight_bu_grad).all())
+            return True

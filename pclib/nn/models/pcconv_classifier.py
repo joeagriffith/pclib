@@ -1,5 +1,4 @@
-from pclib.nn.layers import PrecisionWeighted as PrecisionWeighted
-from pclib.nn.layers import Linear
+from pclib.nn.layers import Conv2d, Linear
 from pclib.utils.functional import vfe, format_y
 import torch
 import torch.nn as nn
@@ -7,17 +6,16 @@ import torch.nn.functional as F
 
 
 # Based on Whittington and Bogacz 2017
-class PCLinearClassifier(nn.Module):
+class PCConvClassifier(nn.Module):
     __constants__ = ['in_features', 'out_features']
     in_features: int
     num_classes: int
 
-    def __init__(self, input_size, num_classes, hidden_sizes = [], steps=20, bias=True, symmetric=True, precision_weighted=False, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
-        factory_kwargs = {'bias': bias, 'symmetric': symmetric, 'device': device, 'dtype': dtype}
-        super(PCLinearClassifier, self).__init__()
+    def __init__(self, steps=20, bias=True, symmetric=True, precision_weighted=False, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
+        factory_kwargs = {'bias': bias, 'device': device, 'dtype': dtype}
+        super(PCConvClassifier, self).__init__()
 
-        self.in_features = input_size
-        self.num_classes = num_classes
+        self.num_classes = 10
         self.bias = bias
         self.symmetric = symmetric
         self.precision_weighted = precision_weighted
@@ -25,15 +23,14 @@ class PCLinearClassifier(nn.Module):
         self.beta = beta
 
         layers = []
-        prev_size = None
-        for size in [num_classes] + hidden_sizes + [input_size]:
-            if precision_weighted:
-                layers.append(PrecisionWeighted(size, prev_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
-            else:
-                layers.append(Linear(size, prev_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
-            prev_size = size
-
+        layers.append(Linear(10, None, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+        layers.append(Linear(256, 10, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+        layers.append(Conv2d((128, 5, 5), (256, 1, 1), 5, 0, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+        layers.append(Conv2d((64, 7, 7), (128, 5, 5), 3, 0, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+        layers.append(Conv2d((32, 14, 14), (64, 7, 7), 3, 1, maxpool=2, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+        layers.append(Conv2d((1, 28, 28), (32, 14, 14), 5, 2, maxpool=2, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
         self.layers = nn.ModuleList(layers)
+        
         self.steps = steps
         self.device = device
 
@@ -46,9 +43,9 @@ class PCLinearClassifier(nn.Module):
         
         # Pin input and output Xs if provided
         if obs is not None:
-            state[-1]['x'] = obs.clone().detach()
+            state[-1]['x'] = obs.clone()
         if y is not None:
-            state[0]['x'] = y.clone().detach()
+            state[0]['x'] = y.clone()
 
         # Update Es, Top-down so we can collect predictions as we descend
         for i, layer in reversed(list(enumerate(self.layers))):
@@ -64,7 +61,13 @@ class PCLinearClassifier(nn.Module):
                 if i == len(self.layers) - 1: # last layer
                     state[i]['x'] = obs.clone()
                 if i > 0:
-                    state[i-1]['x'] = layer.predict(state[i])
+                    # print(f"i: {i}")
+                    pred = layer.predict(state[i])
+                    if pred.dim() == 4:
+                        if pred.shape[2] == 1 and pred.shape[3] == 1:
+                            pred = pred.squeeze(-1).squeeze(-1)
+                    # print(f"pred shape: {pred.shape}")
+                    state[i-1]['x'] = pred
             if y is not None:
                 state[0]['x'] = y.clone()
         elif y is not None:
@@ -72,20 +75,22 @@ class PCLinearClassifier(nn.Module):
                 if i == 0:
                     state[0]['x'] = y.clone()
                 elif i < len(self.layers) - 1:
-                    state[i]['x'] = layer.propagate(state[i-1]['x'])
+                    x_below = state[i-1]['x']
+                    if state[i]['x'].dim() == 4 and state[i-1]['x'].dim() == 2:
+                        x_below = x_below.unsqueeze(-1).unsqueeze(-1)
+                    state[i]['x'] = layer.propagate(x_below)
 
     def init_state(self, obs=None, y=None):
-        with torch.no_grad():
-            if obs is not None:
-                b_size = obs.shape[0]
-            elif y is not None:
-                b_size = y.shape[0]
-            state = []
-            for layer in self.layers:
-                state.append(layer.init_state(b_size))
-            
-            self._init_xs(state, obs, y)
-            return state
+        if obs is not None:
+            b_size = obs.shape[0]
+        elif y is not None:
+            b_size = y.shape[0]
+        state = []
+        for layer in self.layers:
+            state.append(layer.init_state(b_size))
+        
+        self._init_xs(state, obs, y)
+        return state
 
     def to(self, device):
         self.device = device

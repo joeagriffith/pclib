@@ -16,6 +16,7 @@ def train(
     lr = 3e-4,
     batch_size=1,
     reg_coeff = 1e-2,
+    flatten=True,
     init_mode='rand',
     neg_coeff=None,
     step=0, 
@@ -85,7 +86,10 @@ def train(
             )
 
         for images, targets in loop:
-            x = images.flatten(start_dim=1)
+            if flatten:
+                x = images.flatten(start_dim=1)
+            else:
+                x = images
             y = format_y(targets, model.num_classes)
             false_targets = (targets + torch.randint_like(targets, low=1, high=model.num_classes)) % model.num_classes
             false_y = format_y(false_targets, model.num_classes)
@@ -93,13 +97,17 @@ def train(
             step += b_size
 
             # Forward pass
-            with torch.no_grad():
-                out, state = model(x, y=y)
+            # with torch.no_grad():
+            out, state = model(x, y=y)
 
             # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
+            model.zero_grad()
+            vfe(state).backward()
+
+            # Assert grads
             for i, layer in enumerate(model.layers):
                 if i > 0:
-                    layer.update_grad(state[i], state[i-1]['e'])                
+                    layer.assert_grad(state[i], state[i-1]['e'])                
 
             # A negative phase pass, increases VFE for negative data
             if neg_coeff is not None and neg_coeff > 0:
@@ -108,9 +116,11 @@ def train(
                     out, neg_state = model(x, y=false_y)
 
                 # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
-                for i, layer in enumerate(model.layers):
-                    if i > 0:
-                        layer.update_grad(neg_state[i], -neg_coeff * neg_state[i-1]['e'])
+                # for i, layer in enumerate(model.layers):
+                #     if i > 0:
+                #         layer.update_grad(neg_state[i], -neg_coeff * neg_state[i-1]['e'])
+                loss = -neg_coeff * vfe(neg_state)
+                loss.backward()
                 
             # Parameter Update (Grad Descent)
             optimiser.step()
@@ -143,7 +153,11 @@ def train(
             val_correct = 0
             val_vfe = 0
             for images, target in val_loader:
-                x = images.flatten(start_dim=1)
+                if flatten:
+                    x = images.flatten(start_dim=1)
+                else:
+                    x = images
+                # x = images.flatten(start_dim=1)
 
                 # Forward pass
                 out, val_state = model(x)
