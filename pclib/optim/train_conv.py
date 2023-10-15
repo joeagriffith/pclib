@@ -8,7 +8,7 @@ from pclib.optim.eval import topk_accuracy
 from pclib.nn.layers import PrecisionWeighted
 from pclib.utils.functional import vfe, format_y
 
-def train(
+def train_conv(
     model, 
     train_data,
     val_data,
@@ -54,7 +54,6 @@ def train(
             "val_acc": [],
             "val_vfe": [],
         }
-        
 
     for epoch in range(num_epochs):
 
@@ -134,18 +133,18 @@ def train(
                 epoch_stats['R_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                 epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
                 epoch_stats['train_vfe'].append(vfe(state).item())
-                if layer.prev_shape is not None:
-                    epoch_stats['WeightTD_means'][i-1].append(layer.weight_td.mean().item())
-                    epoch_stats['WeightTD_stds'][i-1].append(layer.weight_td.std().item())
-                    if not model.layers[i].symmetric:
-                        epoch_stats['WeightBU_means'][i-1].append(layer.weight_bu.mean().item())
-                        epoch_stats['WeightBU_stds'][i-1].append(layer.weight_bu.std().item())
-                    if model.layers[i].bias is not None:
-                        epoch_stats['Bias_means'][i-1].append(layer.bias.mean().item())
-                        epoch_stats['Bias_stds'][i-1].append(layer.bias.std().item())
-                if isinstance(layer, PrecisionWeighted) and i < len(epoch_stats['WeightVar_means']):
-                    epoch_stats['WeightVar_means'][i].append(layer.weight_var.mean().item())
-                    epoch_stats['WeightVar_stds'][i].append(layer.weight_var.std().item())
+                # if layer.prev_shape is not None:
+                #     epoch_stats['WeightTD_means'][i-1].append(layer.conv_td.weight.mean().item())
+                #     epoch_stats['WeightTD_stds'][i-1].append(layer.conv_td.weight.std().item())
+                #     if not model.layers[i].symmetric:
+                #         epoch_stats['WeightBU_means'][i-1].append(layer.conv_bu.weight.mean().item())
+                #         epoch_stats['WeightBU_stds'][i-1].append(layer.conv_bu.weight.std().item())
+                #     if model.layers[i].bias is not None:
+                #         epoch_stats['Bias_means'][i-1].append(layer.conv.bias.mean().item())
+                #         epoch_stats['Bias_stds'][i-1].append(layer.conv.bias.std().item())
+                # if isinstance(layer, PrecisionWeighted) and i < len(epoch_stats['WeightVar_means']):
+                #     epoch_stats['WeightVar_means'][i].append(layer.weight_var.mean().item())
+                #     epoch_stats['WeightVar_stds'][i].append(layer.weight_var.std().item())
 
 
         # Validation pass
@@ -173,18 +172,18 @@ def train(
             stats['R_norms'][i].append(torch.tensor(epoch_stats['R_norms'][i]).mean().item())
             stats['E_mags'][i].append(torch.tensor(epoch_stats['E_mags'][i]).mean().item())
             stats['train_vfe'].append(torch.tensor(epoch_stats['train_vfe']).mean().item())
-            if layer.prev_shape is not None:
-                stats['WeightTD_means'][i-1].append(torch.tensor(epoch_stats['WeightTD_means'][i-1]).mean().item())
-                stats['WeightTD_stds'][i-1].append(torch.tensor(epoch_stats['WeightTD_stds'][i-1]).mean().item())
-                if not layer.symmetric:
-                    stats['WeightBU_means'][i-1].append(torch.tensor(epoch_stats['WeightBU_means'][i-1]).mean().item())
-                    stats['WeightBU_stds'][i-1].append(torch.tensor(epoch_stats['WeightBU_stds'][i-1]).mean().item())
-                if layer.bias is not None:
-                    stats['Bias_means'][i-1].append(torch.tensor(epoch_stats['Bias_means'][i-1]).mean().item())
-                    stats['Bias_stds'][i-1].append(torch.tensor(epoch_stats['Bias_stds'][i-1]).mean().item())
-            if isinstance(layer, PrecisionWeighted) and i < len(stats['WeightVar_means']):
-                stats['WeightVar_means'][i].append(torch.tensor(epoch_stats['WeightVar_means'][i]).mean().item())
-                stats['WeightVar_stds'][i].append(torch.tensor(epoch_stats['WeightVar_stds'][i]).mean().item())
+            # if layer.prev_shape is not None:
+            #     stats['WeightTD_means'][i-1].append(torch.tensor(epoch_stats['WeightTD_means'][i-1]).mean().item())
+            #     stats['WeightTD_stds'][i-1].append(torch.tensor(epoch_stats['WeightTD_stds'][i-1]).mean().item())
+            #     if not layer.symmetric:
+            #         stats['WeightBU_means'][i-1].append(torch.tensor(epoch_stats['WeightBU_means'][i-1]).mean().item())
+            #         stats['WeightBU_stds'][i-1].append(torch.tensor(epoch_stats['WeightBU_stds'][i-1]).mean().item())
+            #     if layer.bias is not None:
+            #         stats['Bias_means'][i-1].append(torch.tensor(epoch_stats['Bias_means'][i-1]).mean().item())
+            #         stats['Bias_stds'][i-1].append(torch.tensor(epoch_stats['Bias_stds'][i-1]).mean().item())
+            # if isinstance(layer, PrecisionWeighted) and i < len(stats['WeightVar_means']):
+            #     stats['WeightVar_means'][i].append(torch.tensor(epoch_stats['WeightVar_means'][i]).mean().item())
+            #     stats['WeightVar_stds'][i].append(torch.tensor(epoch_stats['WeightVar_stds'][i]).mean().item())
         stats['val_acc'].append(val_acc)
         stats['val_vfe'].append(val_vfe)
     return step, stats

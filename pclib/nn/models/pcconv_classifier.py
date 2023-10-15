@@ -36,16 +36,17 @@ class PCConvClassifier(nn.Module):
 
     def step(self, state, obs=None, y=None, temp=None):
 
-        # Update Xs
-        for i, layer in enumerate(self.layers):
-            e_below = state[i-1]['e'] if i > 0 else None
-            layer.update_x(state[i], e_below)
-        
-        # Pin input and output Xs if provided
-        if obs is not None:
-            state[-1]['x'] = obs.clone()
-        if y is not None:
-            state[0]['x'] = y.clone()
+        with torch.no_grad():
+            # Update Xs
+            for i, layer in enumerate(self.layers):
+                e_below = state[i-1]['e'] if i > 0 else None
+                layer.update_x(state[i], e_below)
+            
+            # Pin input and output Xs if provided
+            if obs is not None:
+                state[-1]['x'] = obs.clone()
+            if y is not None:
+                state[0]['x'] = y.clone()
 
         # Update Es, Top-down so we can collect predictions as we descend
         for i, layer in reversed(list(enumerate(self.layers))):
@@ -119,8 +120,6 @@ class PCConvClassifier(nn.Module):
         return out, state
     
     def classify(self, obs, state=None, steps=None):
-        assert len(obs.shape) == 2, f"Input must be 2D, got {len(obs.shape)}D"
-
         if steps is None:
             steps = self.steps
 

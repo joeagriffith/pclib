@@ -9,15 +9,15 @@ from typing import Optional
 # Whittington & Bogacz 2017
 class Linear(nn.Module):
     __constants__ = ['size', 'prev_size']
-    size: int
-    prev_size: Optional[int]
+    shape: int
+    prev_shape: Optional[int]
     weight_td: Optional[Tensor]
     weight_bu: Optional[Tensor]
     bias: Optional[Tensor]
 
     def __init__(self,
-                 size: int,
-                 prev_size: int = None,
+                 shape: int,
+                 prev_shape: int = None,
                  bias: bool = True,
                  symmetric: bool = True,
                  actv_fn: callable = F.relu,
@@ -31,8 +31,8 @@ class Linear(nn.Module):
         factory_kwargs = {'device': device, 'dtype': dtype}
         super(Linear, self).__init__()
 
-        self.size = size
-        self.prev_size = prev_size
+        self.shape = shape
+        self.prev_shape = prev_shape
         self.symmetric = symmetric
         self.actv_fn = actv_fn
         self.gamma = gamma
@@ -51,14 +51,14 @@ class Linear(nn.Module):
             self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
         
         # Initialise weights if not input layer
-        if prev_size is not None:
-            self.weight_td = Parameter(torch.empty((prev_size, size), **factory_kwargs))
+        if prev_shape is not None:
+            self.weight_td = Parameter(torch.empty((prev_shape, shape), **factory_kwargs))
             if bias:
-                self.bias = Parameter(torch.empty(prev_size, **factory_kwargs))
+                self.bias = Parameter(torch.empty(prev_shape, **factory_kwargs))
             else:
                 self.register_parameter('bias', None)
             if not symmetric:
-                self.weight_bu = Parameter(torch.empty((size, prev_size), **factory_kwargs))
+                self.weight_bu = Parameter(torch.empty((shape, prev_shape), **factory_kwargs))
             else:
                 self.register_parameter('weight_bu', None)
             self.reset_parameters()
@@ -80,8 +80,8 @@ class Linear(nn.Module):
             
     def init_state(self, batch_size):
         return {
-            'x': torch.zeros((batch_size, self.size), device=self.device, requires_grad=True),
-            'e': torch.zeros((batch_size, self.size), device=self.device, requires_grad=True),
+            'x': torch.zeros((batch_size, self.shape), device=self.device, requires_grad=True),
+            'e': torch.zeros((batch_size, self.shape), device=self.device, requires_grad=True),
         }
 
     def to(self, *args, **kwargs):

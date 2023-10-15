@@ -74,7 +74,7 @@ class Conv2d(nn.Module):
 
     # Returns a prediction of the state in the previous layer
     def predict(self, state):
-        return self.conv_td(self.actv_fn(state['x']))
+        return self.conv_td(self.actv_fn(state['x'].detach()))
     
     # propogates error from layer below, return an update for x
     def propagate(self, e_below):
@@ -93,16 +93,12 @@ class Conv2d(nn.Module):
     # Recalculates prediction-error between state and top-down prediction of it
     # With simulated annealing
     def update_e(self, state, pred=None, temp=None):
-        with torch.no_grad():
-            if pred is not None:
-                state['pred'] = pred
-            else:
-                state['pred'] = state['x']
-            state['e'] = state['x'] - state['pred']
+        if pred is not None:
+            state['e'] = state['x'].detach() - pred
 
-            if temp is not None:
-                eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
-                state['e'] += eps
+        if temp is not None:
+            eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
+            state['e'] += eps
         
     def update_grad(self, state, e_below):
         if state['e'].norm() > 0:

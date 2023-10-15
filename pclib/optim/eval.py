@@ -12,7 +12,7 @@ def topk_accuracy(output, target, k=1):
         return accuracy
 
 def track_vfe(model, x, y=None, steps=100, plot_Es=False):
-    assert len(x.shape) == 2, f"Invalid shape {x.shape}, input and targets must be pre-processed."
+    # assert len(x.shape) == 2, f"Invalid shape {x.shape}, input and targets must be pre-processed."
     state = model.init_state(x, y)
     vfes = []
     E = [[] for _ in range(len(model.layers))]
@@ -39,7 +39,8 @@ def accuracy(model, dataset, batch_size=1024, steps=100):
         dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=False)
         correct = 0
         for x, y in dataloader:
-            x = x.flatten(start_dim=1)
+            if type(model.layers[-1].shape) == int:
+                x = x.flatten(start_dim=1)
             pred = model.classify(x, steps)
             correct += (pred == y).sum().item()
         acc = correct/len(dataset)
