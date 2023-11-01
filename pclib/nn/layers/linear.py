@@ -80,8 +80,8 @@ class Linear(nn.Module):
             
     def init_state(self, batch_size):
         return {
-            'x': torch.zeros((batch_size, self.shape), device=self.device, requires_grad=True),
-            'e': torch.zeros((batch_size, self.shape), device=self.device, requires_grad=True),
+            'x': torch.zeros((batch_size, self.shape), device=self.device),
+            'e': torch.zeros((batch_size, self.shape), device=self.device),
         }
 
     def to(self, *args, **kwargs):
@@ -96,14 +96,6 @@ class Linear(nn.Module):
     def propagate(self, e_below):
         weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
         return F.linear(e_below, weight_bu, None)
-    
-    def update_x(self, state, e_below=None):
-        # If not input layer, propagate error from layer below
-        if e_below is not None:
-            update = self.propagate(e_below)
-            state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
-        # This update will be zero if top layer
-        state['x'] += self.gamma * self.beta * (-state['e'])
         
     # Recalculates prediction-error between state and top-down prediction of it
     # With simulated annealing
@@ -119,6 +111,14 @@ class Linear(nn.Module):
         if temp is not None:
             eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
             state['e'] += eps
+    
+    def update_x(self, state, e_below=None):
+        # If not input layer, propagate error from layer below
+        if e_below is not None:
+            update = self.propagate(e_below)
+            state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
+        # This update will be zero if top layer
+        state['x'] += self.gamma * self.beta * (-state['e'])
         
     def assert_grad(self, state, e_below):
         with torch.no_grad():

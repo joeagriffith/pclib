@@ -39,23 +39,25 @@ class PCLinearClassifier(nn.Module):
 
     def step(self, state, obs=None, y=None, temp=None):
 
-        # Update Xs
-        for i, layer in enumerate(self.layers):
-            e_below = state[i-1]['e'] if i > 0 else None
-            layer.update_x(state[i], e_below)
-        
-        # Pin input and output Xs if provided
-        if obs is not None:
-            state[-1]['x'] = obs.clone().detach()
-        if y is not None:
-            state[0]['x'] = y.clone().detach()
-
         # Update Es, Top-down so we can collect predictions as we descend
         for i, layer in reversed(list(enumerate(self.layers))):
             if i < len(self.layers) - 1: # don't update top e (no prediction)
                 layer.update_e(state[i], pred, temp=temp)
             if i > 0: # Bottom layer can't predict
                 pred = layer.predict(state[i])
+
+        # Update Xs
+        with torch.no_grad():
+            for i, layer in enumerate(self.layers):
+                e_below = state[i-1]['e'] if i > 0 else None
+                layer.update_x(state[i], e_below)
+        
+        # Pin input and output Xs if provided
+        if obs is not None:
+            state[-1]['x'] = obs.clone()
+        if y is not None:
+            state[0]['x'] = y.clone()
+
 
     # Initialises xs in state using 1 sweep of top-down predictions
     def _init_xs(self, state, obs=None, y=None):
