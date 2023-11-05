@@ -37,6 +37,18 @@ class PCLinearClassifier(nn.Module):
         self.steps = steps
         self.device = device
 
+    def vfe(self, state, batch_reduction='mean', layer_reduction='sum'):
+        if layer_reduction == 'sum':
+            vfe = sum([state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state])
+        elif layer_reduction =='mean':
+            vfe = sum([state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state])
+        if batch_reduction == 'sum':
+            vfe = vfe.sum()
+        elif batch_reduction == 'mean':
+            vfe = vfe.mean()
+
+        return vfe
+
     def step(self, state, obs=None, y=None, temp=None):
 
         # Update Es, Top-down so we can collect predictions as we descend

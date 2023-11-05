@@ -118,23 +118,26 @@ class Linear(nn.Module):
             update = self.propagate(e_below)
             state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
         # This update will be zero if top layer
-        state['x'] += self.gamma * self.beta * (-state['e'])
+        else:
+            state['x'] += self.gamma * (-state['e'])
         
-    def assert_grad(self, state, e_below):
+    def assert_grad(self, state, e_below=None):
         with torch.no_grad():
-            b_size = e_below.shape[0]
-            true_weight_td_grad = -(e_below.T @ self.actv_fn(state['x'])) / b_size
-            assert(torch.eq(F.normalize(self.weight_td.grad, dim=(0,1)), F.normalize(true_weight_td_grad, dim=(0,1))).all(), f"true: {true_weight_td_grad}, backprop: {self.weight_td.grad}")
-            assert(torch.eq(self.weight_td.grad.norm(dim=(0,1)), true_weight_td_grad.norm(dim=(0,1))).all(), f"true: {true_weight_td_grad.norm(dim=(0,1))}, backprop: {self.weight_td.grad.norm(dim=(0,1))}")
-            assert(torch.eq(self.weight_td.grad, true_weight_td_grad).all(), f"true: {true_weight_td_grad}, backprop: {self.weight_td.grad}")
-            if self.bias is not None:
-                true_bias_grad = -e_below.mean(dim=0)
-                assert(torch.eq(F.normalize(self.bias.grad, dim=0), F.normalize(true_bias_grad, dim=0)).all(), f"true: {true_bias_grad}, backprop: {self.bias.grad}")
-                assert(torch.eq(self.bias.grad.norm(), true_bias_grad.norm()).all(), f"true: {true_bias_grad.norm()}, backprop: {self.bias.grad.norm()}")
-                assert(torch.eq(self.bias.grad, true_bias_grad).all(), f"true: {true_bias_grad}, backprop: {self.bias.grad}")
-            if not self.symmetric:
-                true_weight_bu_grad = -(self.actv_fn(state['x']).T @ e_below) / b_size
-                assert(torch.eq(F.normalize(self.weight_bu.grad, dim=(0,1)), F.normalize(true_weight_bu_grad, dim=(0,1))).all(), f"true: {true_weight_bu_grad}, backprop: {self.weight_bu.grad}")
-                assert(torch.eq(self.weight_bu.grad.norm(dim=(0,1)), true_weight_bu_grad.norm(dim=(0,1))).all(), f"true: {true_weight_bu_grad.norm(dim=(0,1))}, backprop: {self.weight_bu.grad.norm(dim=(0,1))}")
-                assert(torch.eq(self.weight_bu.grad, true_weight_bu_grad).all())
-            return True
+            assert (e_below is None) == (self.prev_shape is None), "e_below must be None iff prev_shape is None"
+            if e_below is not None:
+                b_size = e_below.shape[0]
+                true_weight_td_grad = -(e_below.T @ self.actv_fn(state['x'])) / b_size
+                assert(torch.eq(F.normalize(self.weight_td.grad, dim=(0,1)), F.normalize(true_weight_td_grad, dim=(0,1))).all(), f"true: {true_weight_td_grad}, backprop: {self.weight_td.grad}")
+                assert(torch.eq(self.weight_td.grad.norm(dim=(0,1)), true_weight_td_grad.norm(dim=(0,1))).all(), f"true: {true_weight_td_grad.norm(dim=(0,1))}, backprop: {self.weight_td.grad.norm(dim=(0,1))}")
+                assert(torch.eq(self.weight_td.grad, true_weight_td_grad).all(), f"true: {true_weight_td_grad}, backprop: {self.weight_td.grad}")
+                if self.bias is not None:
+                    true_bias_grad = -e_below.mean(dim=0)
+                    assert(torch.eq(F.normalize(self.bias.grad, dim=0), F.normalize(true_bias_grad, dim=0)).all(), f"true: {true_bias_grad}, backprop: {self.bias.grad}")
+                    assert(torch.eq(self.bias.grad.norm(), true_bias_grad.norm()).all(), f"true: {true_bias_grad.norm()}, backprop: {self.bias.grad.norm()}")
+                    assert(torch.eq(self.bias.grad, true_bias_grad).all(), f"true: {true_bias_grad}, backprop: {self.bias.grad}")
+                if not self.symmetric:
+                    true_weight_bu_grad = -(self.actv_fn(state['x']).T @ e_below) / b_size
+                    assert(torch.eq(F.normalize(self.weight_bu.grad, dim=(0,1)), F.normalize(true_weight_bu_grad, dim=(0,1))).all(), f"true: {true_weight_bu_grad}, backprop: {self.weight_bu.grad}")
+                    assert(torch.eq(self.weight_bu.grad.norm(dim=(0,1)), true_weight_bu_grad.norm(dim=(0,1))).all(), f"true: {true_weight_bu_grad.norm(dim=(0,1))}, backprop: {self.weight_bu.grad.norm(dim=(0,1))}")
+                    assert(torch.eq(self.weight_bu.grad, true_weight_bu_grad).all())
+        return True

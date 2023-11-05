@@ -112,14 +112,8 @@ def train(
             # A negative phase pass, increases VFE for negative data
             if neg_coeff is not None and neg_coeff > 0:
                 # Forward pass
-                with torch.no_grad():
-                    out, neg_state = model(x, y=false_y)
-
-                # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
-                # for i, layer in enumerate(model.layers):
-                #     if i > 0:
-                #         layer.update_grad(neg_state[i], -neg_coeff * neg_state[i-1]['e'])
-                loss = -neg_coeff * vfe(neg_state)
+                out, neg_state = model(x, y=false_y)
+                loss = -neg_coeff * model.vfe(neg_state)
                 loss.backward()
                 
             # Parameter Update (Grad Descent)
@@ -130,10 +124,10 @@ def train(
                     layer.weight_var.data = torch.clamp(layer.weight_var.data, min=0.01)
 
             # Track batch statistics
+            epoch_stats['train_vfe'].append(model.vfe(state).item())
             for i, layer in enumerate(model.layers):
                 epoch_stats['R_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                 epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
-                epoch_stats['train_vfe'].append(vfe(state).item())
                 if layer.prev_shape is not None:
                     epoch_stats['WeightTD_means'][i-1].append(layer.weight_td.mean().item())
                     epoch_stats['WeightTD_stds'][i-1].append(layer.weight_td.std().item())
@@ -172,7 +166,6 @@ def train(
         for i, layer in enumerate(model.layers):
             stats['R_norms'][i].append(torch.tensor(epoch_stats['R_norms'][i]).mean().item())
             stats['E_mags'][i].append(torch.tensor(epoch_stats['E_mags'][i]).mean().item())
-            stats['train_vfe'].append(torch.tensor(epoch_stats['train_vfe']).mean().item())
             if layer.prev_shape is not None:
                 stats['WeightTD_means'][i-1].append(torch.tensor(epoch_stats['WeightTD_means'][i-1]).mean().item())
                 stats['WeightTD_stds'][i-1].append(torch.tensor(epoch_stats['WeightTD_stds'][i-1]).mean().item())
@@ -185,6 +178,7 @@ def train(
             if isinstance(layer, PrecisionWeighted) and i < len(stats['WeightVar_means']):
                 stats['WeightVar_means'][i].append(torch.tensor(epoch_stats['WeightVar_means'][i]).mean().item())
                 stats['WeightVar_stds'][i].append(torch.tensor(epoch_stats['WeightVar_stds'][i]).mean().item())
+        stats['train_vfe'].append(torch.tensor(epoch_stats['train_vfe']).mean().item())
         stats['val_acc'].append(val_acc)
         stats['val_vfe'].append(val_vfe)
     return step, stats
