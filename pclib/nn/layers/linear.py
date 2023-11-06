@@ -116,7 +116,7 @@ class Linear(nn.Module):
         # If not input layer, propagate error from layer below
         if e_below is not None:
             update = self.propagate(e_below)
-            state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
+            state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']) - 0.2 * state['x'])
         # This update will be zero if top layer
         else:
             state['x'] += self.gamma * (-state['e'])

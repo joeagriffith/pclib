@@ -1,2 +1,4 @@
 from pclib.nn.models.pclinear_classifier import PCLinearClassifier
+from pclib.nn.models.pclinear_classifier_inv import PCLinearClassifierInv
+from pclib.nn.models.pclinear_classifier_sym import PCLinearClassifierSym
 from pclib.nn.models.pcconv_classifier import PCConvClassifier
