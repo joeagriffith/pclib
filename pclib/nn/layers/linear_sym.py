@@ -178,33 +178,33 @@ class LinearSym(nn.Module):
             if e_below is not None:
                 b_size = e_below.shape[0]
                 true_V_grad = -(e_below.T @ self.actv_fn(state['x'])) / b_size
-                assert(torch.eq(F.normalize(self.V.grad, dim=(0,1)), F.normalize(true_V_grad, dim=(0,1))).all(), f"true: {true_V_grad}, backprop: {self.V.grad}")
-                assert(torch.eq(self.V.grad.norm(dim=(0,1)), true_V_grad.norm(dim=(0,1))).all(), f"true: {true_V_grad.norm(dim=(0,1))}, backprop: {self.V.grad.norm(dim=(0,1))}")
-                assert(torch.eq(self.V.grad, true_V_grad).all(), f"true: {true_V_grad}, backprop: {self.V.grad}")
+                assert torch.eq(F.normalize(self.V.grad, dim=(0,1)), F.normalize(true_V_grad, dim=(0,1))).all(), f"true: {true_V_grad}, backprop: {self.V.grad}"
+                assert torch.eq(self.V.grad.norm(dim=(0,1)), true_V_grad.norm(dim=(0,1))).all(), f"true: {true_V_grad.norm(dim=(0,1))}, backprop: {self.V.grad.norm(dim=(0,1))}"
+                assert torch.eq(self.V.grad, true_V_grad).all(), f"true: {true_V_grad}, backprop: {self.V.grad}"
                 if self.V_b is not None:
                     true_V_b_grad = -e_below.mean(dim=0)
-                    assert(torch.eq(F.normalize(self.V_b.grad, dim=0), F.normalize(true_V_b_grad, dim=0)).all(), f"true: {true_V_b_grad}, backprop: {self.V_b.grad}")
-                    assert(torch.eq(self.V_b.grad.norm(), true_V_b_grad.norm()).all(), f"true: {true_V_b_grad.norm()}, backprop: {self.V_b.grad.norm()}")
-                    assert(torch.eq(self.V_b.grad, true_V_b_grad).all(), f"true: {true_V_b_grad}, backprop: {self.V_b.grad}")
+                    assert torch.eq(F.normalize(self.V_b.grad, dim=0), F.normalize(true_V_b_grad, dim=0)).all(), f"true: {true_V_b_grad}, backprop: {self.V_b.grad}"
+                    assert torch.eq(self.V_b.grad.norm(), true_V_b_grad.norm()).all(), f"true: {true_V_b_grad.norm()}, backprop: {self.V_b.grad.norm()}"
+                    assert torch.eq(self.V_b.grad, true_V_b_grad).all(), f"true: {true_V_b_grad}, backprop: {self.V_b.grad}"
                 if not self.symmetric:
                     true_V_bu_grad = -(self.actv_fn(state['x']).T @ e_below) / b_size
-                    assert(torch.eq(F.normalize(self.V_bu.grad, dim=(0,1)), F.normalize(true_V_bu_grad, dim=(0,1))).all(), f"true: {true_V_bu_grad}, backprop: {self.V_bu.grad}")
-                    assert(torch.eq(self.V_bu.grad.norm(dim=(0,1)), true_V_bu_grad.norm(dim=(0,1))).all(), f"true: {true_V_bu_grad.norm(dim=(0,1))}, backprop: {self.V_bu.grad.norm(dim=(0,1))}")
-                    assert(torch.eq(self.V_bu.grad, true_V_bu_grad).all())
+                    assert torch.eq(F.normalize(self.V_bu.grad, dim=(0,1)), F.normalize(true_V_bu_grad, dim=(0,1))).all(), f"true: {true_V_bu_grad}, backprop: {self.V_bu.grad}"
+                    assert torch.eq(self.V_bu.grad.norm(dim=(0,1)), true_V_bu_grad.norm(dim=(0,1))).all(), f"true: {true_V_bu_grad.norm(dim=(0,1))}, backprop: {self.V_bu.grad.norm(dim=(0,1))}"
+                    assert torch.eq(self.V_bu.grad, true_V_bu_grad).all()
             if e_above is not None:
                 b_size = e_above.shape[0]
                 true_W_grad = -(e_above.T @ self.actv_fn(state['x'])) / b_size
-                assert(torch.eq(F.normalize(self.W.grad, dim=(0,1)), F.normalize(true_W_grad, dim=(0,1))).all(), f"true: {true_W_grad}, backprop: {self.W.grad}")
-                assert(torch.eq(self.W.grad.norm(dim=(0,1)), true_W_grad.norm(dim=(0,1))).all(), f"true: {true_W_grad.norm(dim=(0,1))}, backprop: {self.W.grad.norm(dim=(0,1))}")
-                assert(torch.eq(self.W.grad, true_W_grad).all(), f"true: {true_W_grad}, backprop: {self.W.grad}")
+                assert torch.eq(F.normalize(self.W.grad, dim=(0,1)), F.normalize(true_W_grad, dim=(0,1))).all(), f"true: {true_W_grad}, backprop: {self.W.grad}"
+                assert torch.eq(self.W.grad.norm(dim=(0,1)), true_W_grad.norm(dim=(0,1))).all(), f"true: {true_W_grad.norm(dim=(0,1))}, backprop: {self.W.grad.norm(dim=(0,1))}"
+                assert torch.eq(self.W.grad, true_W_grad).all(), f"true: {true_W_grad}, backprop: {self.W.grad}"
                 if self.W_b is not None:
                     true_W_b_grad = -e_above.mean(dim=0)
-                    assert(torch.eq(F.normalize(self.W_b.grad, dim=0), F.normalize(true_W_b_grad, dim=0)).all(), f"true: {true_W_b_grad}, backprop: {self.W_b.grad}")
-                    assert(torch.eq(self.W_b.grad.norm(), true_W_b_grad.norm()).all(), f"true: {true_W_b_grad.norm()}, backprop: {self.W_b.grad.norm()}")
-                    assert(torch.eq(self.W_b.grad, true_W_b_grad).all(), f"true: {true_W_b_grad}, backprop: {self.W_b.grad}")
+                    assert torch.eq(F.normalize(self.W_b.grad, dim=0), F.normalize(true_W_b_grad, dim=0)).all(), f"true: {true_W_b_grad}, backprop: {self.W_b.grad}"
+                    assert torch.eq(self.W_b.grad.norm(), true_W_b_grad.norm()).all(), f"true: {true_W_b_grad.norm()}, backprop: {self.W_b.grad.norm()}"
+                    assert torch.eq(self.W_b.grad, true_W_b_grad).all(), f"true: {true_W_b_grad}, backprop: {self.W_b.grad}"
                 if not self.symmetric:
                     true_W_bu_grad = -(self.actv_fn(state['x']).T @ e_above) / b_size
-                    assert(torch.eq(F.normalize(self.W_bu.grad, dim=(0,1)), F.normalize(true_W_bu_grad, dim=(0,1))).all(), f"true: {true_W_bu_grad}, backprop: {self.W_bu.grad}")
-                    assert(torch.eq(self.W_bu.grad.norm(dim=(0,1)), true_W_bu_grad.norm(dim=(0,1))).all(), f"true: {true_W_bu_grad.norm(dim=(0,1))}, backprop: {self.W_bu.grad.norm(dim=(0,1))}")
-                    assert(torch.eq(self.W_bu.grad, true_W_bu_grad).all(), f"true: {true_W_bu_grad}, backprop: {self.W_bu.grad}")
+                    assert torch.eq(F.normalize(self.W_bu.grad, dim=(0,1)), F.normalize(true_W_bu_grad, dim=(0,1))).all(), f"true: {true_W_bu_grad}, backprop: {self.W_bu.grad}"
+                    assert torch.eq(self.W_bu.grad.norm(dim=(0,1)), true_W_bu_grad.norm(dim=(0,1))).all(), f"true: {true_W_bu_grad.norm(dim=(0,1))}, backprop: {self.W_bu.grad.norm(dim=(0,1))}"
+                    assert torch.eq(self.W_bu.grad, true_W_bu_grad).all(), f"true: {true_W_bu_grad}, backprop: {self.W_bu.grad}"
         return True
