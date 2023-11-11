@@ -7,7 +7,7 @@ from torch.nn.parameter import Parameter
 from typing import Optional
 
 # Whittington & Bogacz 2017
-class LinearSym(nn.Module):
+class FCSym(nn.Module):
     __constants__ = ['shape', 'prev_shape', 'next_shape']
     shape: int
     prev_shape: Optional[int]
@@ -34,7 +34,7 @@ class LinearSym(nn.Module):
                  ) -> None:
 
         factory_kwargs = {'device': device, 'dtype': dtype}
-        super(LinearSym, self).__init__()
+        super(FCSym, self).__init__()
 
         self.shape = shape
         self.prev_shape = prev_shape

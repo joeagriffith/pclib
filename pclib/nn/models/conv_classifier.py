@@ -1,4 +1,4 @@
-from pclib.nn.layers import Conv2d, Linear
+from pclib.nn.layers import Conv2d, FC
 from pclib.utils.functional import vfe, format_y
 import torch
 import torch.nn as nn
@@ -6,14 +6,14 @@ import torch.nn.functional as F
 
 
 # Based on Whittington and Bogacz 2017
-class PCConvClassifier(nn.Module):
+class ConvClassifier(nn.Module):
     __constants__ = ['in_features', 'out_features']
     in_features: int
     num_classes: int
 
     def __init__(self, steps=20, bias=True, symmetric=True, precision_weighted=False, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
         factory_kwargs = {'bias': bias, 'device': device, 'dtype': dtype}
-        super(PCConvClassifier, self).__init__()
+        super(ConvClassifier, self).__init__()
 
         self.num_classes = 10
         self.bias = bias
@@ -23,8 +23,8 @@ class PCConvClassifier(nn.Module):
         self.beta = beta
 
         layers = []
-        layers.append(Linear(10, None, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
-        layers.append(Linear(256, 10, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+        layers.append(FC(10, None, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+        layers.append(FC(256, 10, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
         layers.append(Conv2d((128, 5, 5), (256, 1, 1), 5, 0, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
         layers.append(Conv2d((64, 7, 7), (128, 5, 5), 3, 0, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
         layers.append(Conv2d((32, 14, 14), (64, 7, 7), 3, 1, maxpool=2, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))

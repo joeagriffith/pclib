@@ -1,20 +1,20 @@
 from pclib.nn.layers import PrecisionWeighted as PrecisionWeighted
-from pclib.nn.layers import Linear
+from pclib.nn.layers import FCSym
 from pclib.utils.functional import vfe, format_y
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
-# Based on Whittington and Bogacz 2017, but with targets predicting inputs
-class PCLinearClassifierInv(nn.Module):
+# Based on Whittington and Bogacz 2017
+class FCClassifierSym(nn.Module):
     __constants__ = ['in_features', 'out_features']
     in_features: int
     num_classes: int
 
     def __init__(self, input_size, num_classes, hidden_sizes = [], steps=20, bias=True, symmetric=True, precision_weighted=False, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
         factory_kwargs = {'bias': bias, 'symmetric': symmetric, 'device': device, 'dtype': dtype}
-        super(PCLinearClassifierInv, self).__init__()
+        super(FCClassifierSym, self).__init__()
 
         self.in_features = input_size
         self.num_classes = num_classes
@@ -25,13 +25,14 @@ class PCLinearClassifierInv(nn.Module):
         self.beta = beta
 
         layers = []
-        prev_size = None
-        for size in [input_size] + hidden_sizes + [num_classes]:
+        sizes = [num_classes] + hidden_sizes + [input_size]
+        for i, size in enumerate(sizes):
+            prev_size = sizes[i-1] if i > 0 else None
+            next_size = sizes[i+1] if i < len(sizes) - 1 else None
             if precision_weighted:
                 layers.append(PrecisionWeighted(size, prev_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
             else:
-                layers.append(Linear(size, prev_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
-            prev_size = size
+                layers.append(FCSym(size, prev_size, next_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
 
         self.layers = nn.ModuleList(layers)
         self.steps = steps
@@ -39,9 +40,9 @@ class PCLinearClassifierInv(nn.Module):
 
     def vfe(self, state, batch_reduction='mean', layer_reduction='sum'):
         if layer_reduction == 'sum':
-            vfe = sum([state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state])
+            vfe = sum([state_i['e_l'].square().sum(dim=[i for i in range(1, state_i['e_l'].dim())]) for state_i in state]) + sum([state_i['e_u'].square().sum(dim=[i for i in range(1, state_i['e_u'].dim())]) for state_i in state])
         elif layer_reduction =='mean':
-            vfe = sum([state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state])
+            vfe = sum([state_i['e_l'].square().mean(dim=[i for i in range(1, state_i['e_l'].dim())]) for state_i in state]) + sum([state_i['e_u'].square().mean(dim=[i for i in range(1, state_i['e_u'].dim())]) for state_i in state])
         if batch_reduction == 'sum':
             vfe = vfe.sum()
         elif batch_reduction == 'mean':
@@ -52,41 +53,41 @@ class PCLinearClassifierInv(nn.Module):
     def step(self, state, obs=None, y=None, temp=None):
 
         # Update Es, Top-down so we can collect predictions as we descend
-        for i, layer in reversed(list(enumerate(self.layers))):
-            if i < len(self.layers) - 1: # don't update top e (no prediction)
-                layer.update_e(state[i], pred, temp=temp)
-            if i > 0: # Bottom layer can't predict
-                pred = layer.predict(state[i])
+        for i, layer in enumerate(self.layers):
+            bu_pred = self.layers[i-1].predict_up(state[i-1]) if i > 0 else None
+            td_pred = self.layers[i+1].predict_down(state[i+1]) if i < len(self.layers) - 1 else None
+            layer.update_e(state[i], bu_pred, td_pred, temp=temp)
 
         # Update Xs
         with torch.no_grad():
             for i, layer in enumerate(self.layers):
-                e_below = state[i-1]['e'] if i > 0 else None
-                layer.update_x(state[i], e_below)
+                e_below = state[i-1]['e_u'] if i > 0 else None
+                e_above = state[i+1]['e_l'] if i < len(self.layers) - 1 else None
+                layer.update_x(state[i], e_below, e_above)
         
         # Pin input and output Xs if provided
         if obs is not None:
-            state[0]['x'] = obs.clone()
+            state[-1]['x'] = obs.clone()
         if y is not None:
-            state[-1]['x'] = y.clone()
+            state[0]['x'] = y.clone()
 
 
     # Initialises xs in state using 1 sweep of top-down predictions
     def _init_xs(self, state, obs=None, y=None):
-        if y is not None:
+        if obs is not None:
             for i, layer in reversed(list(enumerate(self.layers))):
                 if i == len(self.layers) - 1: # last layer
-                    state[i]['x'] = y.clone()
+                    state[i]['x'] = obs.clone()
                 if i > 0:
-                    state[i-1]['x'] = layer.predict(state[i])
-            if obs is not None:
-                state[0]['x'] = obs.clone()
-        elif obs is not None:
+                    state[i-1]['x'] = layer.predict_down(state[i])
+            if y is not None:
+                state[0]['x'] = y.clone()
+        elif y is not None:
             for i, layer in enumerate(self.layers):
                 if i == 0:
-                    state[0]['x'] = obs.clone()
+                    state[0]['x'] = y.clone()
                 elif i < len(self.layers) - 1:
-                    state[i]['x'] = layer.propagate(state[i-1]['x'])
+                    state[i]['x'] = layer.propagate_up(state[i-1]['x'])
 
     def init_state(self, obs=None, y=None):
         with torch.no_grad():
@@ -108,7 +109,7 @@ class PCLinearClassifierInv(nn.Module):
         return self
 
     def get_output(self, state):
-        return state[-1]['x']
+        return state[0]['x']
 
     def calc_temp(self, step_i, steps):
         return 1 - (step_i / steps)
@@ -127,13 +128,11 @@ class PCLinearClassifierInv(nn.Module):
             
         return out, state
     
-    def generate(self, y, steps=None):
-        y = format_y(y, self.num_classes)
-        _, state = self.forward(y=y, steps=steps)
-        return state[0]['x']
-    
     def classify(self, obs, state=None, steps=None):
         assert len(obs.shape) == 2, f"Input must be 2D, got {len(obs.shape)}D"
+
+        if steps is None:
+            steps = self.steps
 
         vfes = torch.zeros(obs.shape[0], self.num_classes, device=self.device)
         for target in range(self.num_classes):

@@ -6,8 +6,7 @@ from torch import Tensor
 from torch.nn.parameter import Parameter
 from typing import Optional
 
-# Whittington & Bogacz 2017
-class Linear(nn.Module):
+class FC(nn.Module):
     __constants__ = ['size', 'prev_size']
     shape: int
     prev_shape: Optional[int]
@@ -29,7 +28,7 @@ class Linear(nn.Module):
                  ) -> None:
 
         factory_kwargs = {'device': device, 'dtype': dtype}
-        super(Linear, self).__init__()
+        super(FC, self).__init__()
 
         self.shape = shape
         self.prev_shape = prev_shape
@@ -116,7 +115,7 @@ class Linear(nn.Module):
         # If not input layer, propagate error from layer below
         if e_below is not None:
             update = self.propagate(e_below)
-            state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']) - 0.2 * state['x'])
+            state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
         # This update will be zero if top layer
         else:
             state['x'] += self.gamma * (-state['e'])
