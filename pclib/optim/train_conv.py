@@ -56,7 +56,6 @@ def train_conv(
         }
 
     for epoch in range(num_epochs):
-
         train_data.apply_transform()
 
         # Track batches, indexed: [layer][batch]
@@ -74,6 +73,7 @@ def train_conv(
             "train_vfe": [],
         }
         
+
         model.train()
         loop = tqdm(train_loader, total=len(train_loader), leave=False)    
         if epoch > 0:
@@ -129,10 +129,10 @@ def train_conv(
                     layer.weight_var.data = torch.clamp(layer.weight_var.data, min=0.01)
 
             # Track batch statistics
+            epoch_stats['train_vfe'].append(vfe(state).item())
             for i, layer in enumerate(model.layers):
                 epoch_stats['R_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                 epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
-                epoch_stats['train_vfe'].append(vfe(state).item())
                 # if layer.prev_shape is not None:
                 #     epoch_stats['WeightTD_means'][i-1].append(layer.conv_td.weight.mean().item())
                 #     epoch_stats['WeightTD_stds'][i-1].append(layer.conv_td.weight.std().item())
@@ -148,30 +148,27 @@ def train_conv(
 
 
         # Validation pass
-        with torch.no_grad():
-            val_correct = 0
-            val_vfe = 0
-            for images, target in val_loader:
-                if flatten:
-                    x = images.flatten(start_dim=1)
-                else:
-                    x = images
-                # x = images.flatten(start_dim=1)
+        val_correct = 0
+        val_vfe = 0
+        for images, target in val_loader:
+            if flatten:
+                x = images.flatten(start_dim=1)
+            else:
+                x = images
+            # x = images.flatten(start_dim=1)
 
-                # Forward pass
-                out, val_state = model(x)
-                val_vfe += vfe(val_state, batch_reduction='sum').item()
-                val_correct += (out.argmax(dim=1) == target).sum().item()
+            # Forward pass
+            out, val_state = model(x)
+            val_vfe += vfe(val_state, batch_reduction='sum').item()
+            val_correct += (out.argmax(dim=1) == target).sum().item()
 
-            val_acc = val_correct / len(val_data)
-            val_vfe /= len(val_data)
-
+        val_acc = val_correct / len(val_data)
+        val_vfe /= len(val_data)
 
         # Track epoch statistics
         for i, layer in enumerate(model.layers):
             stats['R_norms'][i].append(torch.tensor(epoch_stats['R_norms'][i]).mean().item())
             stats['E_mags'][i].append(torch.tensor(epoch_stats['E_mags'][i]).mean().item())
-            stats['train_vfe'].append(torch.tensor(epoch_stats['train_vfe']).mean().item())
             # if layer.prev_shape is not None:
             #     stats['WeightTD_means'][i-1].append(torch.tensor(epoch_stats['WeightTD_means'][i-1]).mean().item())
             #     stats['WeightTD_stds'][i-1].append(torch.tensor(epoch_stats['WeightTD_stds'][i-1]).mean().item())
@@ -184,6 +181,7 @@ def train_conv(
             # if isinstance(layer, PrecisionWeighted) and i < len(stats['WeightVar_means']):
             #     stats['WeightVar_means'][i].append(torch.tensor(epoch_stats['WeightVar_means'][i]).mean().item())
             #     stats['WeightVar_stds'][i].append(torch.tensor(epoch_stats['WeightVar_stds'][i]).mean().item())
+        stats['train_vfe'].append(torch.tensor(epoch_stats['train_vfe']).mean().item())
         stats['val_acc'].append(val_acc)
         stats['val_vfe'].append(val_vfe)
     return step, stats

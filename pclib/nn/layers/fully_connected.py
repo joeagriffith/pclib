@@ -101,10 +101,7 @@ class FC(nn.Module):
     def update_e(self, state, pred=None, temp=None):
         if pred is not None:
             if pred.dim() == 4:
-                if pred.shape[2] == 1 and pred.shape[3] == 1:
-                    pred = pred.squeeze(-1).squeeze(-1)
-                else:
-                    raise ValueError("Prediction must be 2D, or 4D with 1x1 spatial dimensions")
+                pred = pred.flatten(1)
             state['e'] = state['x'].detach() - pred
 
         if temp is not None:
