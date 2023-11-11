@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# Based on Whittington and Bogacz 2017, but with targets predicting inputs
+# Based on Whittington and Bogacz 2017
 class FCClassifierInv(nn.Module):
     __constants__ = ['in_features', 'out_features']
     in_features: int
@@ -26,7 +26,7 @@ class FCClassifierInv(nn.Module):
 
         layers = []
         prev_size = None
-        for size in [input_size] + hidden_sizes + [num_classes]:
+        for size in [num_classes] + hidden_sizes + [input_size]:
             if precision_weighted:
                 layers.append(PrecisionWeighted(size, prev_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
             else:
@@ -66,25 +66,25 @@ class FCClassifierInv(nn.Module):
         
         # Pin input and output Xs if provided
         if obs is not None:
-            state[0]['x'] = obs.clone()
+            state[-1]['x'] = obs.clone()
         if y is not None:
-            state[-1]['x'] = y.clone()
+            state[0]['x'] = y.clone()
 
 
     # Initialises xs in state using 1 sweep of top-down predictions
     def _init_xs(self, state, obs=None, y=None):
-        if y is not None:
+        if obs is not None:
             for i, layer in reversed(list(enumerate(self.layers))):
                 if i == len(self.layers) - 1: # last layer
-                    state[i]['x'] = y.clone()
+                    state[i]['x'] = obs.clone()
                 if i > 0:
                     state[i-1]['x'] = layer.predict(state[i])
-            if obs is not None:
-                state[0]['x'] = obs.clone()
-        elif obs is not None:
+            if y is not None:
+                state[0]['x'] = y.clone()
+        elif y is not None:
             for i, layer in enumerate(self.layers):
                 if i == 0:
-                    state[0]['x'] = obs.clone()
+                    state[0]['x'] = y.clone()
                 elif i < len(self.layers) - 1:
                     state[i]['x'] = layer.propagate(state[i-1]['x'])
 
@@ -108,7 +108,7 @@ class FCClassifierInv(nn.Module):
         return self
 
     def get_output(self, state):
-        return state[-1]['x']
+        return state[0]['x']
 
     def calc_temp(self, step_i, steps):
         return 1 - (step_i / steps)
@@ -127,13 +127,11 @@ class FCClassifierInv(nn.Module):
             
         return out, state
     
-    def generate(self, y, steps=None):
-        y = format_y(y, self.num_classes)
-        _, state = self.forward(y=y, steps=steps)
-        return state[0]['x']
-    
     def classify(self, obs, state=None, steps=None):
         assert len(obs.shape) == 2, f"Input must be 2D, got {len(obs.shape)}D"
+
+        if steps is None:
+            steps = self.steps
 
         vfes = torch.zeros(obs.shape[0], self.num_classes, device=self.device)
         for target in range(self.num_classes):
