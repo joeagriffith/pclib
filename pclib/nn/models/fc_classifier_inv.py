@@ -85,7 +85,7 @@ class FCClassifierInv(nn.Module):
             for i, layer in enumerate(self.layers):
                 if i == 0:
                     state[0]['x'] = y.clone()
-                elif i < len(self.layers) - 1:
+                else:
                     state[i]['x'] = layer.propagate(state[i-1]['x'])
 
     def init_state(self, obs=None, y=None):

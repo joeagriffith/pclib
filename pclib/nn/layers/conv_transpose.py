@@ -7,7 +7,7 @@ from torch.nn.parameter import Parameter
 from typing import Optional
 
 # Whittington & Bogacz 2017
-class Conv2d(nn.Module):
+class ConvTranspose2d(nn.Module):
     __constants__ = ['shape', 'prev_shape']
     shape: int
     prev_shape: Optional[int]
@@ -19,7 +19,7 @@ class Conv2d(nn.Module):
                  stride: int = 1,
                  padding = 'same',
                  bias: bool = True,
-                 maxpool=1,
+                 upsample=1,
                  actv_fn: callable = F.tanh,
                  d_actv_fn: callable = None,
                  gamma: float = 0.1,
@@ -31,7 +31,7 @@ class Conv2d(nn.Module):
         assert stride == 1, "Stride != 1 not yet supported."
 
         factory_kwargs = {'device': device, 'dtype': dtype}
-        super(Conv2d, self).__init__()
+        super(ConvTranspose2d, self).__init__()
 
         self.shape = shape
         # self.prev_shape = prev_shape
@@ -54,8 +54,8 @@ class Conv2d(nn.Module):
         # Initialise weights if not input layer
         if prev_channels is not None:
             self.conv_td = nn.Sequential(
-                nn.Conv2d(shape[0], prev_channels, kernel_size, padding=padding, stride=stride, bias=bias, **factory_kwargs),
-                nn.MaxPool2d(kernel_size=maxpool),
+                nn.Upsample(scale_factor=upsample),
+                nn.ConvTranspose2d(shape[0], prev_channels, kernel_size, stride=stride, padding=padding, bias=bias, **factory_kwargs),
             )
             # self.conv_bu = nn.Sequential(
             #     nn.Upsample(scale_factor=maxpool),
