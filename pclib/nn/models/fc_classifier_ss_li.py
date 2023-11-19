@@ -1,5 +1,5 @@
 from pclib.nn.layers import PrecisionWeighted as PrecisionWeighted
-from pclib.nn.layers import FC
+from pclib.nn.layers import FCLI
 from pclib.utils.functional import vfe, format_y
 import torch
 import torch.nn as nn
@@ -7,14 +7,14 @@ import torch.nn.functional as F
 
 
 # Based on Whittington and Bogacz 2017, but with targets predicting inputs
-class FCClassifierSS(nn.Module):
+class FCClassifierSSLI(nn.Module):
     __constants__ = ['in_features', 'out_features']
     in_features: int
     num_classes: int
 
     def __init__(self, input_size, num_classes, hidden_sizes = [], steps=20, bias=True, symmetric=True, lat_inhib=False, precision_weighted=False, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
         factory_kwargs = {'bias': bias, 'symmetric': symmetric, 'device': device, 'dtype': dtype}
-        super(FCClassifierSS, self).__init__()
+        super(FCClassifierSSLI, self).__init__()
 
         self.in_features = input_size
         self.num_classes = num_classes
@@ -30,7 +30,7 @@ class FCClassifierSS(nn.Module):
             if precision_weighted:
                 layers.append(PrecisionWeighted(size, prev_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
             else:
-                layers.append(FC(size, prev_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+                layers.append(FCLI(size, prev_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
             prev_size = size
         
         self.classifier = nn.Sequential(

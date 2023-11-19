@@ -11,11 +11,12 @@ def topk_accuracy(output, target, k=1):
         accuracy = correct * (100 / batch_size)
         return accuracy
 
-def track_vfe(model, x, y=None, steps=100, plot_Es=False):
+def track_vfe(model, x=None, y=None, steps=100, plot_Es=False, plot_Xs=False):
     # assert len(x.shape) == 2, f"Invalid shape {x.shape}, input and targets must be pre-processed."
     state = model.init_state(x, y)
     vfes = []
     E = [[] for _ in range(len(model.layers))]
+    X = [[] for _ in range(len(model.layers))]
     for step_i in range(steps):
         with torch.no_grad():
             temp = model.calc_temp(step_i, steps)
@@ -23,6 +24,7 @@ def track_vfe(model, x, y=None, steps=100, plot_Es=False):
             vfes.append(model.vfe(state).item())
             for i in range(len(model.layers)):
                 E[i].append(state[i]['e'].square().sum(dim=1).mean().item())
+                X[i].append(state[i]['x'].square().sum(dim=1).mean().item())
         
     plt.plot(vfes, label='VFE')
 
@@ -31,6 +33,14 @@ def track_vfe(model, x, y=None, steps=100, plot_Es=False):
             plt.plot(E[i], label=f'layer {i} E')
     plt.legend()
     plt.show()
+
+    if plot_Xs:
+        for i in range(len(model.layers)):
+            plt.plot(X[i], label=f'layer {i} X')
+    plt.legend()
+    plt.show()
+
+    return vfes, E, X
         
 def track_vfe_sym(model, x, y=None, steps=100, plot_Es=False):
     # assert len(x.shape) == 2, f"Invalid shape {x.shape}, input and targets must be pre-processed."

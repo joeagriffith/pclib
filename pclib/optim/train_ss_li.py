@@ -116,6 +116,8 @@ def train(
             # Calculate grads for pc layers and classifier
             model.zero_grad()
             vfe(state).backward()
+            # for i, layer in enumerate(model.layers):
+            #     layer.weight_lat.grad = F.relu(state[i]['x'].t() @ state[i]['x']) / b_size
             if c_optim is not None:
                 loss_fn(out, targets).backward()
 
@@ -131,13 +133,14 @@ def train(
             # A negative phase pass, increases VFE for negative data
             if neg_coeff is not None and neg_coeff > 0:
                 # Forward pass
-                raise(NotImplementedError)
+                raise(NotImplementedError) # MOVE vfe and corr trackers up from below
                 
             # Parameter Update (Grad Descent)
             pc_optimiser.step()
             if c_optim is not None:
                 c_optimiser.step()
             for layer in model.layers:
+                # Isn't this already done by pc_optimiser.step()?
                 if isinstance(layer, PrecisionWeighted):
                     layer.weight_var.data -= pc_lr * layer.weight_var.grad
                     layer.weight_var.data = torch.clamp(layer.weight_var.data, min=0.01)

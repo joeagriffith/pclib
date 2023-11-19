@@ -6,15 +6,14 @@ from tqdm import tqdm
 
 from pclib.optim.eval import topk_accuracy
 from pclib.nn.layers import PrecisionWeighted
-from pclib.utils.functional import vfe, format_y, calc_corr
+from pclib.utils.functional import vfe, format_y
 
 def train(
     model, 
     train_data,
     val_data,
     num_epochs,
-    pc_lr = 3e-4,
-    c_lr = 3e-4,
+    lr = 3e-4,
     batch_size=1,
     reg_coeff = 1e-2,
     flatten=True,
@@ -23,30 +22,17 @@ def train(
     step=0, 
     stats=None,
     device="cpu",
-    pc_optim='AdamW',
-    c_optim='AdamW',
+    optim='AdamW',
 ):
-    assert pc_optim in ['AdamW', 'Adam', 'SGD', 'RMSprop'], f"Invalid optimiser {pc_optim}"
-    if pc_optim == 'AdamW':
-        pc_optimiser = torch.optim.AdamW(model.layers.parameters(), lr=pc_lr, weight_decay=reg_coeff)
-    elif pc_optim == 'Adam':
-        pc_optimiser = torch.optim.Adam(model.layers.parameters(), lr=pc_lr, weight_decay=reg_coeff)
-    elif pc_optim == 'SGD':
-        pc_optimiser = torch.optim.SGD(model.layers.parameters(), lr=pc_lr, weight_decay=reg_coeff, momentum=0.9)
-    elif pc_optim == 'RMSprop':
-        pc_optimiser = torch.optim.RMSprop(model.layers.parameters(), lr=pc_lr, weight_decay=reg_coeff, momentum=0.9)
-    
-    assert c_optim in [None, 'AdamW', 'Adam', 'SGD', 'RMSprop'], f"Invalid optimiser {c_optim}"
-    if c_optim == 'AdamW':
-        c_optimiser = torch.optim.AdamW(model.classifier.parameters(), lr=c_lr, weight_decay=reg_coeff)
-    elif c_optim == 'Adam':
-        c_optimiser = torch.optim.Adam(model.classifier.parameters(), lr=c_lr, weight_decay=reg_coeff)
-    elif c_optim == 'SGD':
-        c_optimiser = torch.optim.SGD(model.classifier.parameters(), lr=c_lr, weight_decay=reg_coeff, momentum=0.9)
-    elif c_optim == 'RMSprop':
-        c_optimiser = torch.optim.RMSprop(model.classifier.parameters(), lr=c_lr, weight_decay=reg_coeff, momentum=0.9)
-
-    loss_fn = F.cross_entropy
+    assert optim in ['AdamW', 'Adam', 'SGD', 'RMSprop'], f"Invalid optimiser {optim}"
+    if optim == 'AdamW':
+        optimiser = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=reg_coeff)
+    elif optim == 'Adam':
+        optimiser = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=reg_coeff)
+    elif optim == 'SGD':
+        optimiser = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=reg_coeff, momentum=0.9)
+    elif optim == 'RMSprop':
+        optimiser = torch.optim.RMSprop(model.parameters(), lr=lr, weight_decay=reg_coeff, momentum=0.9)
 
     train_loader = train_data if isinstance(train_data, DataLoader) else DataLoader(train_data, batch_size, shuffle=True)
     val_loader = val_data if isinstance(val_data, DataLoader) else DataLoader(val_data, batch_size, shuffle=False)
@@ -65,7 +51,6 @@ def train(
             "WeightVar_means": [[] for _ in range(len(model.layers)-1)],
             "WeightVar_stds": [[] for _ in range(len(model.layers)-1)],
             "train_vfe": [],
-            "train_corr": [],
             "val_acc": [],
             "val_vfe": [],
         }
@@ -88,7 +73,6 @@ def train(
             "WeightVar_means": [[] for _ in range(len(model.layers)-1)],
             "WeightVar_stds": [[] for _ in range(len(model.layers)-1)],
             "train_vfe": [],
-            "train_corr": [],
         }
         
         model.train()
@@ -106,43 +90,43 @@ def train(
                 x = images.flatten(start_dim=1)
             else:
                 x = images
+            y = format_y(targets, model.num_classes)
+            false_targets = (targets + torch.randint_like(targets, low=1, high=model.num_classes)) % model.num_classes
+            false_y = format_y(false_targets, model.num_classes)
             b_size = x.shape[0]
             step += b_size
 
             # Forward pass
             # with torch.no_grad():
-            out, state = model(x)
+            out, state = model(x, y=y)
 
-            # Calculate grads for pc layers and classifier
+            # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
             model.zero_grad()
             vfe(state).backward()
-            if c_optim is not None:
-                loss_fn(out, targets).backward()
+            for i, layer in enumerate(model.layers):
+                layer.weight_lat.grad = state[i]['x'].t() @ state[i]['x'] / b_size
 
             # Assert grads
             # for i, layer in enumerate(model.layers):
             #     if i > 0:
             #         layer.assert_grad(state[i], state[i-1]['e'])                
 
-            # Track batch statistics
-            epoch_stats['train_vfe'].append(model.vfe(state).item())
-            epoch_stats['train_corr'].append(calc_corr(state).item())
-
             # A negative phase pass, increases VFE for negative data
             if neg_coeff is not None and neg_coeff > 0:
                 # Forward pass
-                raise(NotImplementedError)
+                out, neg_state = model(x, y=false_y)
+                loss = -neg_coeff * model.vfe(neg_state)
+                loss.backward()
                 
             # Parameter Update (Grad Descent)
-            pc_optimiser.step()
-            if c_optim is not None:
-                c_optimiser.step()
+            optimiser.step()
             for layer in model.layers:
                 if isinstance(layer, PrecisionWeighted):
-                    layer.weight_var.data -= pc_lr * layer.weight_var.grad
+                    layer.weight_var.data -= lr * layer.weight_var.grad
                     layer.weight_var.data = torch.clamp(layer.weight_var.data, min=0.01)
 
             # Track batch statistics
+            epoch_stats['train_vfe'].append(model.vfe(state).item())
             for i, layer in enumerate(model.layers):
                 epoch_stats['R_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                 epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
@@ -197,7 +181,6 @@ def train(
                 stats['WeightVar_means'][i].append(torch.tensor(epoch_stats['WeightVar_means'][i]).mean().item())
                 stats['WeightVar_stds'][i].append(torch.tensor(epoch_stats['WeightVar_stds'][i]).mean().item())
         stats['train_vfe'].append(torch.tensor(epoch_stats['train_vfe']).mean().item())
-        stats['train_corr'].append(torch.tensor(epoch_stats['train_corr']).mean().item())
         stats['val_acc'].append(val_acc)
         stats['val_vfe'].append(val_vfe)
     return step, stats
