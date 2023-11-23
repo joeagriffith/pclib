@@ -1,5 +1,5 @@
 from pclib.nn.layers import PrecisionWeighted as PrecisionWeighted
-from pclib.nn.layers import FCLI
+from pclib.nn.layers import FCLI, FC
 from pclib.utils.functional import vfe, format_y
 import torch
 import torch.nn as nn
@@ -25,8 +25,9 @@ class FCClassifierSSLI(nn.Module):
         self.beta = beta
 
         layers = []
-        prev_size = None
-        for size in [input_size] + hidden_sizes:
+        layers.append(FC(input_size, None, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+        prev_size = input_size
+        for size in hidden_sizes:
             if precision_weighted:
                 layers.append(PrecisionWeighted(size, prev_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
             else:

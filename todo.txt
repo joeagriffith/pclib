@@ -1,0 +1,7 @@
+- correct layer initialisation, (in_features, out_features)
+
+- use inheritance to reduce code
+
+- make training more functional to reduce code
+
+- Lateral inhibition inspired by Hawkins' Hierarchical Temporal Memory

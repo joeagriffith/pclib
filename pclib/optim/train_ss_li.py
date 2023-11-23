@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from pclib.optim.eval import topk_accuracy
-from pclib.nn.layers import PrecisionWeighted
+from pclib.nn.layers import PrecisionWeighted, FCLI
 from pclib.utils.functional import vfe, format_y, calc_corr
 
 def train(
@@ -117,7 +117,8 @@ def train(
             model.zero_grad()
             vfe(state).backward()
             # for i, layer in enumerate(model.layers):
-            #     layer.weight_lat.grad = F.relu(state[i]['x'].t() @ state[i]['x']) / b_size
+            #     if isinstance(layer, FCLI):
+            #         layer.weight_lat.grad = torch.minimum(-layer.actv_fn(state[i]['x'].t()) @ layer.actv_fn(state[i]['x']), torch.zeros_like(layer.weight_lat)) / b_size
             if c_optim is not None:
                 loss_fn(out, targets).backward()
 

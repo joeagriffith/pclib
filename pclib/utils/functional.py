@@ -1,6 +1,9 @@
 import torch
 import torch.nn.functional as F
 
+def reTanh(x):
+    return x.tanh().relu()
+
 def vfe(state, batch_reduction='mean', layer_reduction='sum'):
     if layer_reduction == 'sum':
         vfe = sum([state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state])

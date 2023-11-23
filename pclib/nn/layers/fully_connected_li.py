@@ -5,7 +5,36 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn.parameter import Parameter
 from typing import Optional
-from pclib.utils.functional import my_relu
+from pclib.utils.functional import my_relu, reTanh
+
+def create_competition_matrix(z_dim, n_group, beta_scale=1.0, alpha_scale=1.0):
+    """
+    COPIED FROM: code for 'The Predictive Forward-Forward Algorithm' by Ororbia, Mali 2023
+    https://github.com/ago109/predictive-forward-forward/blob/adeb918941afaafb11bc9f1b0953dae2d7dd1f13/src/pff_rnn.py#L151
+    """
+    diag = torch.eye(z_dim)
+    V_l = None
+    g_shift = 0
+    while (z_dim - (n_group + g_shift)) >= 0:
+        if g_shift > 0:
+            left = torch.zeros([1,g_shift])
+            middle = torch.ones([1,n_group])
+            right = torch.zeros([1,z_dim - (n_group + g_shift)])
+            slice = torch.concat([left,middle,right],axis=1)
+            for n in range(n_group):
+                V_l = torch.concat([V_l,slice],axis=0)
+        else:
+            middle = torch.ones([1,n_group])
+            right = torch.zeros([1,z_dim - n_group])
+            slice = torch.concat([middle,right],axis=1)
+            for n in range(n_group):
+                if V_l is not None:
+                    V_l = torch.concat([V_l,slice],axis=0)
+                else:
+                    V_l = slice
+        g_shift += n_group
+    V_l = V_l * (1.0 - diag) * beta_scale + diag * alpha_scale
+    return V_l
 
 class FCLI(nn.Module):
     __constants__ = ['size', 'prev_size']
@@ -38,7 +67,7 @@ class FCLI(nn.Module):
         self.gamma = gamma
         self.beta = beta
         self.device = device
-        self.EI_conn_mat = (2*torch.eye(shape) - torch.ones(shape,shape)).to(device) # 1s on diag, -1 offdiag
+        self.lat_conn_mat = (create_competition_matrix(shape, 10) * (2*torch.eye(shape) - 1)).to(device)
 
 
         # Default derivative of activation function
@@ -46,13 +75,18 @@ class FCLI(nn.Module):
             self.d_actv_fn: callable = d_actv_fn
         elif actv_fn == F.relu:
             self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x))
+        elif actv_fn == F.leaky_relu:
+            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) + torch.sign(torch.minimum(x, torch.zeros_like(x))) * 0.01
+        elif actv_fn == reTanh:
+            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) * (1 - torch.tanh(x).square())
         elif actv_fn == F.sigmoid:
             self.d_actv_fn: callable = lambda x: torch.sigmoid(x) * (1 - torch.sigmoid(x))
         elif actv_fn == F.tanh:
             self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
         
         # Initialise weights
-        self.weight_lat = Parameter(torch.eye((shape), **factory_kwargs))
+        # self.weight_lat = Parameter(torch.eye((shape), **factory_kwargs) * 0.3)
+        self.weight_lat = Parameter(torch.ones((shape,shape), **factory_kwargs) * 0.15)
         if prev_shape is not None:
             self.weight_td = Parameter(torch.empty((prev_shape, shape), **factory_kwargs))
             if bias:
@@ -89,17 +123,16 @@ class FCLI(nn.Module):
 
     def to(self, *args, **kwargs):
         self.device = args[0]
-        self.EI_conn_mat = self.EI_conn_mat.to(self.device)
+        self.lat_conn_mat = self.lat_conn_mat.to(self.device)
         return super().to(*args, **kwargs)
 
     def _lateral(self, state):
         actv = self.actv_fn(state['x'])
-        lat_connectivity = F.relu(self.EI_conn_mat * self.weight_lat) # self-excitation, lateral-inhibition, and no negative weights
+        lat_connectivity = self.lat_conn_mat * F.relu(self.weight_lat) # self-excitation, lateral-inhibition, and no negative weights
         return F.linear(actv, lat_connectivity, None)
 
     # Returns a prediction of the state in the previous layer
     def predict(self, state):
-        lateral = self._lateral(state)
         return F.linear(self.actv_fn(state['x'].detach()), self.weight_td, self.bias)
     
     # propogates error from layer below, return an update for x
@@ -124,9 +157,9 @@ class FCLI(nn.Module):
         lateral = self._lateral(state)
         if e_below is not None:
             update = self.propagate(e_below)
-            state['x'] = lateral + self.gamma * (-state['e'] + update * (self.d_actv_fn(state['x'])))
+            state['x'] += self.gamma * (lateral - state['e'] + update * (self.d_actv_fn(state['x'])))
         else:
-            state['x'] += self.gamma * (-state['e'])
+            state['x'] += self.gamma * (lateral - state['e'])
         
     def assert_grad(self, state, e_below=None):
         with torch.no_grad():
