@@ -85,8 +85,8 @@ class FCLI(nn.Module):
             self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
         
         # Initialise weights
-        # self.weight_lat = Parameter(torch.eye((shape), **factory_kwargs) * 0.3)
-        self.weight_lat = Parameter(torch.ones((shape,shape), **factory_kwargs) * 0.15)
+        self.weight_lat = Parameter(torch.eye((shape), **factory_kwargs) * 1.0)
+        # self.weight_lat = Parameter(torch.ones((shape,shape), **factory_kwargs) * 0.15 + torch.eye((shape), **factory_kwargs) * 0.15)
         if prev_shape is not None:
             self.weight_td = Parameter(torch.empty((prev_shape, shape), **factory_kwargs))
             if bias:
@@ -106,7 +106,8 @@ class FCLI(nn.Module):
     def reset_parameters(self) -> None:
         if self.weight_td is not None:
             nn.init.kaiming_uniform_(self.weight_td, a=math.sqrt(5))
-            self.weight_td.data *= 0.1
+            self.weight_td.data = self.weight_td.data.abs() * 0.1
+            # self.weight_td.data *= 0.1
             if self.bias is not None:
                 fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight_td.T)
                 bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
@@ -154,12 +155,22 @@ class FCLI(nn.Module):
 
     def update_x(self, state, e_below=None):
         # If not input layer, propagate error from layer below
-        lateral = self._lateral(state)
+
+        # lateral = self._lateral(state)
+        # if e_below is not None:
+        #     update = self.propagate(e_below)
+        #     state['x'] += self.gamma * (lateral - state['e'] + update * (self.d_actv_fn(state['x'])))
+        # else:
+        #     state['x'] += self.gamma * (lateral - state['e'])
+
+        new_x = self._lateral(state)
         if e_below is not None:
             update = self.propagate(e_below)
-            state['x'] += self.gamma * (lateral - state['e'] + update * (self.d_actv_fn(state['x'])))
+            new_x += update * (self.d_actv_fn(state['x'])) - state['e']
         else:
-            state['x'] += self.gamma * (lateral - state['e'])
+            new_x += -state['e']
+        new_x = self.actv_fn(new_x)
+        state['x'] = (1-self.gamma) * state['x'] + self.gamma * new_x
         
     def assert_grad(self, state, e_below=None):
         with torch.no_grad():

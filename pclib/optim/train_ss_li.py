@@ -116,9 +116,9 @@ def train(
             # Calculate grads for pc layers and classifier
             model.zero_grad()
             vfe(state).backward()
-            # for i, layer in enumerate(model.layers):
-            #     if isinstance(layer, FCLI):
-            #         layer.weight_lat.grad = torch.minimum(-layer.actv_fn(state[i]['x'].t()) @ layer.actv_fn(state[i]['x']), torch.zeros_like(layer.weight_lat)) / b_size
+            for i, layer in enumerate(model.layers):
+                if isinstance(layer, FCLI):
+                    layer.weight_lat.grad = torch.minimum(-layer.actv_fn(state[i]['x'].t()) @ layer.actv_fn(state[i]['x']), torch.zeros_like(layer.weight_lat)) / b_size
             if c_optim is not None:
                 loss_fn(out, targets).backward()
 

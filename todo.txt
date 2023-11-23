@@ -5,3 +5,5 @@
 - make training more functional to reduce code
 
 - Lateral inhibition inspired by Hawkins' Hierarchical Temporal Memory
+
+- Dropout on each and both X, E nodes
