@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from pclib.optim.eval import topk_accuracy, evaluate_pc
-from pclib.nn.layers import PrecisionWeighted
+from pclib.nn.layers import FCPW
 from pclib.utils.functional import vfe
 
 def train(
@@ -28,7 +28,7 @@ def train(
     # Track epochs, indexed: [layer][epoch]
     if stats is None:
         stats = {
-            "R_norms": [[] for _ in range(len(model.layers))],
+            "X_norms": [[] for _ in range(len(model.layers))],
             "E_mags": [[] for _ in range(len(model.layers))],
             "WeightTD_means": [[] for _ in range(len(model.layers))],
             "WeightTD_stds": [[] for _ in range(len(model.layers))],
@@ -46,7 +46,7 @@ def train(
 
         # Track batches, indexed: [layer][batch]
         epoch_stats = {
-            "R_norms": [[] for _ in range(len(model.layers))],
+            "X_norms": [[] for _ in range(len(model.layers))],
             "E_mags": [[] for _ in range(len(model.layers))],
             "WeightTD_means": [[] for _ in range(len(model.layers))],
             "WeightTD_stds": [[] for _ in range(len(model.layers))],
@@ -97,7 +97,7 @@ def train(
                     if not layer.symmetric:
                         layer.weight_bu.grad = -(state[i]['x'].T @ (state[i]['e'] * layer.d_actv_fn(state[i]['pred']))) / b_size
 
-                if isinstance(layer, PrecisionWeighted):
+                if isinstance(layer, FCPW):
                     layer.weight_var.grad = 0.1 * -((state[i]['eps'].T @ state[i]['e']) / b_size - torch.eye(layer.weight_var.shape[0], device=device))
 
             neg_state = model.init_state(b_size, mode=init_mode)
@@ -145,12 +145,12 @@ def train(
                         layer.bias.data -= lr * layer.bias.grad
                     if not layer.symmetric:
                         layer.weight_bu.data -= lr * layer.weight_bu.grad
-                    if isinstance(layer, PrecisionWeighted):
+                    if isinstance(layer, FCPW):
                         layer.weight_var.data -= lr * layer.weight_var.grad
 
             # Track batch statistics
             for i, layer in enumerate(model.layers):
-                epoch_stats['R_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
+                epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                 epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
                 epoch_stats['WeightTD_means'][i].append(layer.weight_td.mean().item())
                 epoch_stats['WeightTD_stds'][i].append(layer.weight_td.std().item())
@@ -183,7 +183,7 @@ def train(
 
         # Track epoch statistics
         for i, layer in enumerate(model.layers):
-            stats['R_norms'][i].append(torch.tensor(epoch_stats['R_norms'][i]).mean().item())
+            stats['X_norms'][i].append(torch.tensor(epoch_stats['X_norms'][i]).mean().item())
             stats['E_mags'][i].append(torch.tensor(epoch_stats['E_mags'][i]).mean().item())
             stats['WeightTD_means'][i].append(torch.tensor(epoch_stats['WeightTD_means'][i]).mean().item())
             stats['WeightTD_stds'][i].append(torch.tensor(epoch_stats['WeightTD_stds'][i]).mean().item())

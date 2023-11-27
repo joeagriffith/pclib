@@ -1,5 +1,4 @@
-from pclib.nn.layers import PrecisionWeighted as PrecisionWeighted
-from pclib.nn.layers import FC
+from pclib.nn.layers import FC, FCPW
 from pclib.utils.functional import vfe, format_y
 import torch
 import torch.nn as nn
@@ -13,8 +12,8 @@ class FCClassifier(nn.Module):
     num_classes: int
 
     def __init__(self, input_size, num_classes, hidden_sizes = [], steps=20, bias=True, symmetric=True, precision_weighted=False, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
-        factory_kwargs = {'bias': bias, 'symmetric': symmetric, 'device': device, 'dtype': dtype}
-        super(FCClassifier, self).__init__()
+        factory_kwargs = {'has_bias': bias, 'symmetric': symmetric, 'device': device, 'dtype': dtype}
+        super().__init__()
 
         self.in_features = input_size
         self.num_classes = num_classes
@@ -23,20 +22,19 @@ class FCClassifier(nn.Module):
         self.precision_weighted = precision_weighted
         self.gamma = gamma
         self.beta = beta
-
-        layers = []
-        prev_size = None
-        for size in [input_size] + hidden_sizes + [num_classes]:
-            if precision_weighted:
-                layers.append(PrecisionWeighted(size, prev_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
-            else:
-                layers.append(FC(size, prev_size, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
-            prev_size = size
-
-        self.layers = nn.ModuleList(layers)
         self.steps = steps
         self.device = device
 
+        layers = []
+        in_features = None
+        for out_features in [input_size] + hidden_sizes + [num_classes]:
+            if precision_weighted:
+                layers.append(FCPW(in_features, out_features, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+            else:
+                layers.append(FC(in_features, out_features, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
+            in_features = out_features
+        self.layers = nn.ModuleList(layers)
+    
     def vfe(self, state, batch_reduction='mean', layer_reduction='sum'):
         if layer_reduction == 'sum':
             vfe = sum([state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state])
@@ -48,6 +46,13 @@ class FCClassifier(nn.Module):
             vfe = vfe.mean()
 
         return vfe
+
+    # Pin input and output Xs if provided
+    def pin(self, state, obs=None, y=None):
+        if obs is not None:
+            state[0]['x'] = obs.clone()
+        if y is not None:
+            state[-1]['x'] = y.clone()
 
     def step(self, state, obs=None, y=None, temp=None):
 
@@ -64,11 +69,7 @@ class FCClassifier(nn.Module):
                 e_below = state[i-1]['e'] if i > 0 else None
                 layer.update_x(state[i], e_below)
         
-        # Pin input and output Xs if provided
-        if obs is not None:
-            state[0]['x'] = obs.clone()
-        if y is not None:
-            state[-1]['x'] = y.clone()
+        self.pin(state, obs, y)
 
 
     # Initialises xs in state using 1 sweep of top-down predictions
@@ -132,15 +133,17 @@ class FCClassifier(nn.Module):
         _, state = self.forward(y=y, steps=steps)
         return state[0]['x']
     
-    def classify(self, obs, state=None, steps=None):
+    def classify(self, obs, steps=None):
         assert len(obs.shape) == 2, f"Input must be 2D, got {len(obs.shape)}D"
+    
+        if steps is None:
+            steps = self.steps
 
         vfes = torch.zeros(obs.shape[0], self.num_classes, device=self.device)
         for target in range(self.num_classes):
             targets = torch.full((obs.shape[0],), target, device=self.device, dtype=torch.long)
             y = format_y(targets, self.num_classes)
             _, state = self.forward(obs, y, steps)
-            vfes[:, target] = vfe(state, batch_reduction=None)
+            vfes[:, target] = self.vfe(state, batch_reduction=None)
         
         return vfes.argmin(dim=1)
-

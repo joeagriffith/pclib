@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-from pclib.nn.layers import PrecisionWeighted
 
 def plot_stats(stats, model):
     extra_rows = 0
@@ -15,7 +14,7 @@ def plot_stats(stats, model):
         height += 2
     fig, axs = plt.subplots(2 + extra_rows, 2, figsize=(8, height))
     for i in range(len(model.layers)):
-        axs.flat[0].plot(stats['R_norms'][i], label=f"Layer {i}")
+        axs.flat[0].plot(stats['X_norms'][i], label=f"Layer {i}")
         axs.flat[1].plot(stats['E_mags'][i], label=f"Layer {i}")
         if i < len(stats['WeightTD_means']):
             axs.flat[2].plot(stats['WeightTD_means'][i], label=f"Layer {i+1}")

@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from pclib.optim.eval import topk_accuracy
-from pclib.nn.layers import PrecisionWeighted
+from pclib.nn.layers import FCPW
 from pclib.utils.functional import vfe, format_y
 
 def train(
@@ -98,7 +98,7 @@ def train(
             # Parameter Update (Grad Descent)
             optimiser.step()
             for layer in model.layers:
-                if isinstance(layer, PrecisionWeighted):
+                if isinstance(layer, FCPW):
                     layer.weight_var.data -= lr * layer.weight_var.grad
                     layer.weight_var.data = torch.clamp(layer.weight_var.data, min=0.01)
 

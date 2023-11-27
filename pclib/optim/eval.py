@@ -67,12 +67,12 @@ def track_vfe_sym(model, x, y=None, steps=100, plot_Es=False):
     plt.show()
 
 
-def accuracy(model, dataset, batch_size=1024, steps=100):
+def accuracy(model, dataset, batch_size=1024, steps=100, flatten=True):
     with torch.no_grad():
         dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=False)
         correct = 0
         for x, y in dataloader:
-            if type(model.layers[-1].shape) == int:
+            if flatten:
                 x = x.flatten(start_dim=1)
             pred = model.classify(x, steps)
             correct += (pred == y).sum().item()

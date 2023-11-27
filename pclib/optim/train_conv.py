@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from pclib.optim.eval import topk_accuracy
-from pclib.nn.layers import PrecisionWeighted
+from pclib.nn.layers import FCPW
 from pclib.utils.functional import vfe, format_y
 
 def train_conv(
@@ -40,7 +40,7 @@ def train_conv(
     # Track epochs, indexed: [layer][epoch]
     if stats is None:
         stats = {
-            "R_norms": [[] for _ in range(len(model.layers))],
+            "X_norms": [[] for _ in range(len(model.layers))],
             "E_mags": [[] for _ in range(len(model.layers))],
             "WeightTD_means": [[] for _ in range(len(model.layers)-1)],
             "WeightTD_stds": [[] for _ in range(len(model.layers)-1)],
@@ -60,7 +60,7 @@ def train_conv(
 
         # Track batches, indexed: [layer][batch]
         epoch_stats = {
-            "R_norms": [[] for _ in range(len(model.layers))],
+            "X_norms": [[] for _ in range(len(model.layers))],
             "E_mags": [[] for _ in range(len(model.layers))],
             "WeightTD_means": [[] for _ in range(len(model.layers)-1)],
             "WeightTD_stds": [[] for _ in range(len(model.layers)-1)],
@@ -124,16 +124,17 @@ def train_conv(
             # Parameter Update (Grad Descent)
             optimiser.step()
             for layer in model.layers:
-                if isinstance(layer, PrecisionWeighted):
+                if isinstance(layer, FCPW):
+                    raise NotImplementedError
                     layer.weight_var.data -= lr * layer.weight_var.grad
                     layer.weight_var.data = torch.clamp(layer.weight_var.data, min=0.01)
 
             # Track batch statistics
             epoch_stats['train_vfe'].append(vfe(state).item())
             for i, layer in enumerate(model.layers):
-                epoch_stats['R_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
+                epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                 epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
-                # if layer.prev_shape is not None:
+                # if layer.in_features is not None:
                 #     epoch_stats['WeightTD_means'][i-1].append(layer.conv_td.weight.mean().item())
                 #     epoch_stats['WeightTD_stds'][i-1].append(layer.conv_td.weight.std().item())
                 #     if not model.layers[i].symmetric:
@@ -167,9 +168,9 @@ def train_conv(
 
         # Track epoch statistics
         for i, layer in enumerate(model.layers):
-            stats['R_norms'][i].append(torch.tensor(epoch_stats['R_norms'][i]).mean().item())
+            stats['X_norms'][i].append(torch.tensor(epoch_stats['X_norms'][i]).mean().item())
             stats['E_mags'][i].append(torch.tensor(epoch_stats['E_mags'][i]).mean().item())
-            # if layer.prev_shape is not None:
+            # if layer.in_features is not None:
             #     stats['WeightTD_means'][i-1].append(torch.tensor(epoch_stats['WeightTD_means'][i-1]).mean().item())
             #     stats['WeightTD_stds'][i-1].append(torch.tensor(epoch_stats['WeightTD_stds'][i-1]).mean().item())
             #     if not layer.symmetric:

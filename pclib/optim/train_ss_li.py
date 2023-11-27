@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from pclib.optim.eval import topk_accuracy
-from pclib.nn.layers import PrecisionWeighted, FCLI
+from pclib.nn.layers import FCPW, FCLI
 from pclib.utils.functional import vfe, format_y, calc_corr
 
 def train(
@@ -54,7 +54,7 @@ def train(
     # Track epochs, indexed: [layer][epoch]
     if stats is None:
         stats = {
-            "R_norms": [[] for _ in range(len(model.layers))],
+            "X_norms": [[] for _ in range(len(model.layers))],
             "E_mags": [[] for _ in range(len(model.layers))],
             "WeightTD_means": [[] for _ in range(len(model.layers)-1)],
             "WeightTD_stds": [[] for _ in range(len(model.layers)-1)],
@@ -77,7 +77,7 @@ def train(
 
         # Track batches, indexed: [layer][batch]
         epoch_stats = {
-            "R_norms": [[] for _ in range(len(model.layers))],
+            "X_norms": [[] for _ in range(len(model.layers))],
             "E_mags": [[] for _ in range(len(model.layers))],
             "WeightTD_means": [[] for _ in range(len(model.layers)-1)],
             "WeightTD_stds": [[] for _ in range(len(model.layers)-1)],
@@ -142,15 +142,15 @@ def train(
                 c_optimiser.step()
             for layer in model.layers:
                 # Isn't this already done by pc_optimiser.step()?
-                if isinstance(layer, PrecisionWeighted):
+                if isinstance(layer, FCPW):
                     layer.weight_var.data -= pc_lr * layer.weight_var.grad
                     layer.weight_var.data = torch.clamp(layer.weight_var.data, min=0.01)
 
             # Track batch statistics
             for i, layer in enumerate(model.layers):
-                epoch_stats['R_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
+                epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                 epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
-                if layer.prev_shape is not None:
+                if layer.in_features is not None:
                     epoch_stats['WeightTD_means'][i-1].append(layer.weight_td.mean().item())
                     epoch_stats['WeightTD_stds'][i-1].append(layer.weight_td.std().item())
                     if not model.layers[i].symmetric:
@@ -159,7 +159,7 @@ def train(
                     if model.layers[i].bias is not None:
                         epoch_stats['Bias_means'][i-1].append(layer.bias.mean().item())
                         epoch_stats['Bias_stds'][i-1].append(layer.bias.std().item())
-                if isinstance(layer, PrecisionWeighted) and i < len(epoch_stats['WeightVar_means']):
+                if isinstance(layer, FCPW) and i < len(epoch_stats['WeightVar_means']):
                     epoch_stats['WeightVar_means'][i].append(layer.weight_var.mean().item())
                     epoch_stats['WeightVar_stds'][i].append(layer.weight_var.std().item())
 
@@ -186,9 +186,9 @@ def train(
 
         # Track epoch statistics
         for i, layer in enumerate(model.layers):
-            stats['R_norms'][i].append(torch.tensor(epoch_stats['R_norms'][i]).mean().item())
+            stats['X_norms'][i].append(torch.tensor(epoch_stats['X_norms'][i]).mean().item())
             stats['E_mags'][i].append(torch.tensor(epoch_stats['E_mags'][i]).mean().item())
-            if layer.prev_shape is not None:
+            if layer.in_features is not None:
                 stats['WeightTD_means'][i-1].append(torch.tensor(epoch_stats['WeightTD_means'][i-1]).mean().item())
                 stats['WeightTD_stds'][i-1].append(torch.tensor(epoch_stats['WeightTD_stds'][i-1]).mean().item())
                 if not layer.symmetric:
@@ -197,7 +197,7 @@ def train(
                 if layer.bias is not None:
                     stats['Bias_means'][i-1].append(torch.tensor(epoch_stats['Bias_means'][i-1]).mean().item())
                     stats['Bias_stds'][i-1].append(torch.tensor(epoch_stats['Bias_stds'][i-1]).mean().item())
-            if isinstance(layer, PrecisionWeighted) and i < len(stats['WeightVar_means']):
+            if isinstance(layer, FCPW) and i < len(stats['WeightVar_means']):
                 stats['WeightVar_means'][i].append(torch.tensor(epoch_stats['WeightVar_means'][i]).mean().item())
                 stats['WeightVar_stds'][i].append(torch.tensor(epoch_stats['WeightVar_stds'][i]).mean().item())
         stats['train_vfe'].append(torch.tensor(epoch_stats['train_vfe']).mean().item())
