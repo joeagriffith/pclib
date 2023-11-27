@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn.parameter import Parameter
 from typing import Optional
+from pclib.utils.functional import reTanh
 
 class FC(nn.Module):
     __constants__ = ['size', 'prev_size']
@@ -44,6 +45,8 @@ class FC(nn.Module):
             self.d_actv_fn: callable = d_actv_fn
         elif actv_fn == F.relu:
             self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x))
+        elif actv_fn == reTanh:
+            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) * (1 - torch.tanh(x).square())
         elif actv_fn == F.sigmoid:
             self.d_actv_fn: callable = lambda x: torch.sigmoid(x) * (1 - torch.sigmoid(x))
         elif actv_fn == F.tanh:

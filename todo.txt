@@ -7,3 +7,5 @@
 - Lateral inhibition inspired by Hawkins' Hierarchical Temporal Memory
 
 - Dropout on each and both X, E nodes
+
+- Noise X nodes (also?), not just E nodes
