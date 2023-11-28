@@ -1,8 +1,4 @@
-- correct layer initialisation, (in_features, out_features)
-
-- use inheritance to reduce code
-
-- make training more functional to reduce code
+- Compare hardcoded grad calculations vs backward()
 
 - Lateral inhibition inspired by Hawkins' Hierarchical Temporal Memory
 

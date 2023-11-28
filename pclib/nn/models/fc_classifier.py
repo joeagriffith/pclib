@@ -133,6 +133,11 @@ class FCClassifier(nn.Module):
         out = self.get_output(state)
             
         return out, state
+
+    def assert_grads(model, state):
+        for i, layer in enumerate(model.layers):
+            if i > 0:
+                layer.assert_grad(state[i], state[i-1]['e'])                
     
     def generate(self, y, steps=None):
         y = format_y(y, self.num_classes)
@@ -376,6 +381,12 @@ class FCClassifierInvSym(FCClassifierInv):
                     state[0]['x'] = y.clone()
                 else:
                     state[i]['x'] = layer.propagate_up(state[i-1]['x'])
+
+    def assert_grads(model, state):
+        for i, layer in enumerate(model.layers):
+            e_m_1 = state[i-1]['e'] if i > 0 else None
+            e_p_1 = state[i+1]['e'] if i < len(model.layers) - 1 else None
+            layer.assert_grad(state[i], e_m_1, e_p_1)
 
 # Based on Whittington and Bogacz 2017
 class FCClassifierInvSS(FCClassifierInv):
