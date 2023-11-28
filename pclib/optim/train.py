@@ -88,7 +88,6 @@ def train(
     step=0, 
     stats=None,
     minimal_stats=False,
-    supervised=True,
     assert_grads=False,
     optim='AdamW',
 ):
