@@ -1,5 +1,5 @@
 from pclib.nn.layers import Conv2d, ConvTranspose2d, FC, Conv2dSkip
-from pclib.utils.functional import vfe, format_y
+from pclib.utils.functional import format_y
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

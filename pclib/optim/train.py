@@ -3,10 +3,11 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from torchviz import make_dot
 
 from pclib.optim.eval import topk_accuracy
 from pclib.nn.layers import FCPW, FCLI
-from pclib.utils.functional import format_y
+from pclib.utils.functional import format_y, calc_corr
 
 def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW'):
     assert optimiser in ['AdamW', 'Adam', 'SGD', 'RMSprop'], f"Invalid optimiser {optimiser}"
@@ -33,12 +34,14 @@ def init_stats(model, minimal=False):
             "WeightVar_means": [[] for _ in range(len(model.layers)-1)],
             "WeightVar_stds": [[] for _ in range(len(model.layers)-1)],
             "train_vfe": [],
-            "val_acc": [],
+            "train_corr": [],
             "val_vfe": [],
+            "val_acc": [],
         }
     else:
         stats = {
             "train_vfe": [],
+            "train_corr": [],
             "val_vfe": [],
             "val_acc": [],
         }
@@ -56,6 +59,7 @@ def neg_pass(model, x, targets, neg_coeff):
 
 def val_pass(model, val_loader, flatten=True):
     with torch.no_grad():
+        model.eval()
         val_correct = 0
         val_vfe = 0
         for images, target in val_loader:
@@ -89,8 +93,14 @@ def train(
     stats=None,
     minimal_stats=False,
     assert_grads=False,
+    grad_mode='auto',
     optim='AdamW',
 ):
+    assert grad_mode in ['auto', 'manual'], f"Invalid grad_mode {grad_mode}, must be 'auto' or 'manual'"
+    if grad_mode == 'manual':
+        assert(assert_grads == False), "assert_grads must be False when grad_mode is 'manual'"
+
+
     optimiser = get_optimiser(model.parameters(), lr, reg_coeff, optim)
     if hasattr(model, 'classifier'):
         c_optimiser = get_optimiser(model.classifier.parameters(), c_lr, reg_coeff, optim)
@@ -114,7 +124,7 @@ def train(
         epoch_stats = init_stats(model, minimal_stats)
         
         model.train()
-        loop = tqdm(train_loader, total=len(train_loader), leave=False)    
+        loop = tqdm(enumerate(train_loader), total=len(train_loader), leave=False)    
         if epoch > 0:
             loop.set_description(f"Epoch [{epoch}/{num_epochs}]")
             loop.set_postfix(
@@ -123,7 +133,7 @@ def train(
                 val_acc = stats['val_acc'][-1],
             )
 
-        for images, targets in loop:
+        for batch_i, (images, targets) in loop:
             if flatten:
                 x = images.flatten(start_dim=1)
             else:
@@ -132,15 +142,34 @@ def train(
             b_size = x.shape[0]
             step += b_size
 
-            # Forward pass and gradient calculation
-            try:
-                out, state = model(x, y=y)
-            # catch typeerror if model is not supervised
-            except TypeError:
-                out, state = model(x)
+            if grad_mode == 'manual':
+                with torch.no_grad():
+                    # Forward pass and gradient calculation
+                    try:
+                        out, state = model(x, y=y)
+                    # catch typeerror if model is not supervised
+                    except TypeError:
+                        out, state = model(x)
+                model.zero_grad()
+                for i, layer in enumerate(model.layers):
+                    if i == 0:
+                        continue
+                    e_below = state[i-1]['e']
+                    layer.update_grad(state[i], e_below)
+            else:
+                # Forward pass and gradient calculation
+                try:
+                    out, state = model(x, y=y)
+                # catch typeerror if model is not supervised
+                except TypeError:
+                    out, state = model(x)
 
-            model.zero_grad()
-            model.vfe(state).backward()
+                model.zero_grad()
+                vfe = model.vfe(state)
+                # Plots computation graph for vfe, for debugging
+                if epoch == 0 and batch_i == 9:
+                    make_dot(vfe).render("vfe", format="png")
+                vfe.backward()
 
             for i, layer in enumerate(model.layers):
                 if isinstance(layer, FCLI):
@@ -151,17 +180,18 @@ def train(
 
             if assert_grads: model.assert_grads(state)
 
-            # A negative phase pass, increases VFE for negative data
-            if neg_coeff is not None and neg_coeff > 0: neg_pass(model, x, targets, neg_coeff)
-                
             # Parameter Update (Grad Descent)
             optimiser.step()
-            if c_optimiser is not None:
+            if c_optimiser is not None and grad_mode=='auto':
                 loss_fn(out, targets).backward()
                 c_optimiser.step()
 
+            # A negative phase pass, increases VFE for negative data
+            if neg_coeff is not None and neg_coeff > 0: neg_pass(model, x, targets, neg_coeff)
+
             # Track batch statistics
             epoch_stats['train_vfe'].append(model.vfe(state).item())
+            epoch_stats['train_corr'].append(calc_corr(state).item())
             if not minimal_stats:
                 for i, layer in enumerate(model.layers):
                     epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
@@ -182,6 +212,10 @@ def train(
         val_vfe, val_acc = val_pass(model, val_loader)
 
         # Track epoch statistics
+        stats['train_vfe'].append(torch.tensor(epoch_stats['train_vfe']).mean().item())
+        stats['train_corr'].append(torch.tensor(epoch_stats['train_corr']).mean().item())
+        stats['val_acc'].append(val_acc)
+        stats['val_vfe'].append(val_vfe)
         if not minimal_stats:
             for i, layer in enumerate(model.layers):
                 stats['X_norms'][i].append(torch.tensor(epoch_stats['X_norms'][i]).mean().item())
@@ -198,7 +232,4 @@ def train(
                 if isinstance(layer, FCPW) and i < len(stats['WeightVar_means']):
                     stats['WeightVar_means'][i].append(torch.tensor(epoch_stats['WeightVar_means'][i]).mean().item())
                     stats['WeightVar_stds'][i].append(torch.tensor(epoch_stats['WeightVar_stds'][i]).mean().item())
-        stats['train_vfe'].append(torch.tensor(epoch_stats['train_vfe']).mean().item())
-        stats['val_acc'].append(val_acc)
-        stats['val_vfe'].append(val_vfe)
     return step, stats

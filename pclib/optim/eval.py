@@ -1,6 +1,5 @@
 import torch
 import matplotlib.pyplot as plt
-from pclib.utils.functional import vfe
 
 def topk_accuracy(output, target, k=1):
     """Computes the precision for the specified values of k"""

@@ -1,5 +1,5 @@
 from pclib.nn.layers import FC, FCPW, FCLI, FCSym
-from pclib.utils.functional import vfe, format_y
+from pclib.utils.functional import format_y
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -41,11 +41,15 @@ class FCClassifier(nn.Module):
         self.layers = nn.ModuleList(layers)
     
 
-    def vfe(self, state, batch_reduction='mean', layer_reduction='sum'):
-        if layer_reduction == 'sum':
-            vfe = sum([state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state])
-        elif layer_reduction =='mean':
-            vfe = sum([state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state])
+    def vfe(self, state, batch_reduction='mean', unit_reduction='sum'):
+        # Reduce units
+        if unit_reduction == 'sum':
+            vfe = [state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+        elif unit_reduction =='mean':
+            vfe = [state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+        # Reduce layers
+        vfe = sum(vfe)
+        # Reduce batches
         if batch_reduction == 'sum':
             vfe = vfe.sum()
         elif batch_reduction == 'mean':

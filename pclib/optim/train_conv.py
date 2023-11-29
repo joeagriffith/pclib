@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from pclib.optim.eval import topk_accuracy
 from pclib.nn.layers import FCPW
-from pclib.utils.functional import vfe, format_y
+from pclib.utils.functional import format_y
 
 def train_conv(
     model, 
