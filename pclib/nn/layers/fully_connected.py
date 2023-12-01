@@ -173,7 +173,7 @@ class FC(nn.Module):
             eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
             state['e'] += eps
     
-    def update_x(self, state, e_below=None):
+    def update_x(self, state, e_below=None, temp=None):
         """
         | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x)).
@@ -188,6 +188,10 @@ class FC(nn.Module):
             state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
         else:
             state['x'] += self.gamma * (-state['e'])
+
+        if temp is not None:
+            eps = torch.randn_like(state['x'].detach(), device=self.device) * temp
+            state['x'] += eps
 
     def update_grad(self, state, e_below=None):
         """

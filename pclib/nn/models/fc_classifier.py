@@ -80,7 +80,7 @@ class FCClassifier(nn.Module):
 
         Args:
             | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
-            | batch_reduction (str): How to reduce over batches ['sum', 'mean']
+            | batch_reduction (str): How to reduce over batches ['sum', 'mean', None]
             | unit_reduction (str): How to reduce over units ['sum', 'mean']
 
         Returns:
@@ -139,7 +139,7 @@ class FCClassifier(nn.Module):
         with torch.no_grad():
             for i, layer in enumerate(self.layers):
                 e_below = state[i-1]['e'] if i > 0 else None
-                layer.update_x(state[i], e_below)
+                layer.update_x(state[i], e_below, temp=temp)
         
         self.pin(state, obs, y)
 
@@ -925,4 +925,3 @@ class FCClassifierInvSS(FCClassifierInv):
         | Not implemented as one cannot generate an input without a target, and this model does not pin targets.
         """
         raise NotImplementedError("Generate not implemented for FCClassifierInvSS")
-    
