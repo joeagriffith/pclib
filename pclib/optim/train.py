@@ -10,6 +10,18 @@ from pclib.nn.layers import FCPW, FCLI
 from pclib.utils.functional import format_y, calc_corr
 
 def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW'):
+    """
+    | Builds an optimiser from the specified arguments
+
+    Args:
+        | parameters (list): list of PyTorch parameters to optimiser. Usually model.parameters()
+        | lr (float): learning rate
+        | weight_decay (float): weight decay
+        | optimiser (str): optimiser to use. ['AdamW', 'Adam', 'SGD', 'RMSprop']
+    
+    Returns:
+        | optimiser (torch.optim): optimiser
+    """
     assert optimiser in ['AdamW', 'Adam', 'SGD', 'RMSprop'], f"Invalid optimiser {optimiser}"
     if optimiser == 'AdamW':
         return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay)
@@ -21,6 +33,16 @@ def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW'):
         return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, momentum=0.9)
 
 def init_stats(model, minimal=False):
+    """
+    | Initialises a dictionary to store statistics
+    
+    Args:
+        | model (nn.Module): model to track statistics for
+        | minimal (bool): if True, only track minimal statistics (train_vfe, train_corr, val_vfe, val_acc)
+    
+    Returns:
+        | stats (dict): dictionary to store statistics
+    """
     if not minimal:
         stats = {
             "X_norms": [[] for _ in range(len(model.layers))],
@@ -48,6 +70,17 @@ def init_stats(model, minimal=False):
     return stats
 
 def neg_pass(model, x, targets, neg_coeff):
+    """
+    | Calculates incorrect ys and performs inference on them.
+    | Then multiply vfe by -neg_coeff and backpropagate to increase vfe for negative data.
+
+    Args:
+        | model (nn.Module): model to train
+        | x (torch.Tensor): input data
+        | targets (torch.Tensor): targets
+        | neg_coeff (float): coefficient to multiply vfe by. 1.0 for balanced positive and negative passes. Must be positive.
+    """
+    assert neg_coeff > 0, f"neg_coeff must be positive, got {neg_coeff}"
     false_targets = (targets + torch.randint_like(targets, low=1, high=model.num_classes)) % model.num_classes
     false_y = format_y(false_targets, model.num_classes)
 
@@ -58,6 +91,18 @@ def neg_pass(model, x, targets, neg_coeff):
 
 
 def val_pass(model, val_loader, flatten=True):
+    """
+    | Performs a validation pass on the model
+
+    Args:
+        | model (nn.Module): model to validate
+        | val_loader (DataLoader): validation data
+        | flatten (bool): if True, flatten input data
+
+    Returns:
+        | val_vfe (float): average VFE for the validation data
+        | val_acc (float): accuracy for the validation data
+    """
     with torch.no_grad():
         model.eval()
         val_correct = 0
@@ -96,6 +141,34 @@ def train(
     grad_mode='auto',
     optim='AdamW',
 ):
+    """
+    | Trains a model with the specified parameters
+    | Can train any model, supervised or unsupervised, standard, symmetric or inverted.
+
+    Args:
+        | model (nn.Module): model to train
+        | train_data (Dataset or DataLoader): training data
+        | val_data (Dataset or DataLoader): validation data
+        | num_epochs (int): number of epochs to train for
+        | lr (float): learning rate
+        | c_lr (float): learning rate for classifier. Ignored if model has no classifier.
+        | batch_size (int): batch size
+        | reg_coeff (float): weight decay. Also used for optimising classifier.
+        | flatten (bool): if True, flatten input data
+        | neg_coeff (float): coefficient to multiply vfe by during negative pass. 1.0 for balanced positive and negative passes. Must be positive.
+        | step (int): step number, used for logging
+        | stats (dict): dictionary to store statistics
+        | minimal_stats (bool): if True, only track minimal statistics (train_vfe, train_corr, val_vfe, val_acc)
+        | assert_grads (bool): if True, assert that gradients are close to manual gradients. Must be false if grad_mode is 'manual'.
+        | grad_mode (str): gradient mode. ['auto', 'manual']
+        | optim (str): optimiser to use. ['AdamW', 'Adam', 'SGD', 'RMSprop']
+
+    Returns:
+        | step (int): step number
+        | stats (dict): dictionary of statistics
+    """
+
+
     assert grad_mode in ['auto', 'manual'], f"Invalid grad_mode {grad_mode}, must be 'auto' or 'manual'"
     if grad_mode == 'manual':
         assert(assert_grads == False), "assert_grads must be False when grad_mode is 'manual'"
