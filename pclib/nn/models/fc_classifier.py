@@ -86,7 +86,7 @@ class FCClassifier(nn.Module):
         Returns:
             | vfe (torch.Tensor): VFE of the model (scalar)
         """
-        # Reduce units
+        # Reduce units for each layer
         if unit_reduction == 'sum':
             vfe = [state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
         elif unit_reduction =='mean':
@@ -129,19 +129,29 @@ class FCClassifier(nn.Module):
             | temp (Optional[float]): Temperature to use for update
 
         """
-        for i, layer in reversed(list(enumerate(self.layers))):
-            if i < len(self.layers) - 1: # don't update top e (no prediction)
-                layer.update_e(state[i], pred, temp=temp)
-            if i > 0: # Bottom layer can't predict
-                pred = layer.predict(state[i])
+        # for i, layer in reversed(list(enumerate(self.layers))):
+        #     if i < len(self.layers) - 1: # don't update top e (no prediction)
+        #         layer.update_e(state[i], pred, temp=temp)
+        #     if i > 0: # Bottom layer can't predict
+        #         pred = layer.predict(state[i])
 
-        # Update Xs
-        with torch.no_grad():
-            for i, layer in enumerate(self.layers):
-                e_below = state[i-1]['e'] if i > 0 else None
-                layer.update_x(state[i], e_below, temp=temp)
+        # # Update Xs
+        # with torch.no_grad():
+        #     for i, layer in enumerate(self.layers):
+        #         e_below = state[i-1]['e'] if i > 0 else None
+        #         layer.update_x(state[i], e_below, temp=temp)
         
-        self.pin(state, obs, y)
+        # self.pin(state, obs, y)
+
+        for i, layer in enumerate(self.layers):
+            e_below = state[i-1]['e'] if i > 0 else None
+            if i > 0 or obs is None: # Don't update bottom x if obs is given
+                if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
+                    with torch.no_grad():
+                        layer.update_x(state[i], e_below, temp=temp)
+            if i < len(self.layers) - 1:
+                pred = self.layers[i+1].predict(state[i+1])
+                layer.update_e(state[i], pred, temp=temp)
 
 
     def _init_xs(self, state, obs=None, y=None):
@@ -159,16 +169,16 @@ class FCClassifier(nn.Module):
             for i, layer in reversed(list(enumerate(self.layers))):
                 if i == len(self.layers) - 1: # last layer
                     state[i]['x'] = y.clone()
-                if i > 0:
-                    state[i-1]['x'] = layer.predict(state[i])
+                # else:
+                #     state[i-1]['x'] = layer.predict(state[i])
             if obs is not None:
                 state[0]['x'] = obs.clone()
         elif obs is not None:
             for i, layer in enumerate(self.layers):
                 if i == 0:
                     state[0]['x'] = obs.clone()
-                else:
-                    state[i]['x'] = layer.propagate(state[i-1]['x'])
+                # else:
+                #     state[i]['x'] = layer.propagate(state[i-1]['x'])
 
     def init_state(self, obs=None, y=None):
         """

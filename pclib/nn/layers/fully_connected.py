@@ -190,8 +190,19 @@ class FC(nn.Module):
             state['x'] += self.gamma * (-state['e'])
 
         if temp is not None:
-            eps = torch.randn_like(state['x'].detach(), device=self.device) * temp
+            eps = torch.randn_like(state['x'].detach(), device=self.device) * temp * 0.034
             state['x'] += eps
+
+        # new_x = state['x'].detach()
+        # if e_below is not None:
+        #     update = self.propagate(e_below)
+        #     new_x += update * (self.d_actv_fn(state['x'])) - state['e']
+        # else:
+        #     new_x += -state['e']
+        # if temp is not None:
+        #     eps = torch.randn_like(new_x, device=self.device) * .034 * temp
+        #     new_x += eps
+        # state['x'] = (1-self.gamma) * state['x'] + self.gamma * self.actv_fn(new_x)
 
     def update_grad(self, state, e_below=None):
         """
@@ -380,7 +391,7 @@ class FCLI(FC):
         lat_connectivity = self.lat_conn_mat * F.relu(self.weight_lat) # self-excitation, lateral-inhibition, and no negative weights
         return F.linear(self.actv_fn(state['x']), lat_connectivity, None)
         
-    def update_x(self, state, e_below=None):
+    def update_x(self, state, e_below=None, temp=None):
         """
         | Calculates a new_x and then interpolates between the current state['x'] and new_x, updating state['x'] inplace.
         | This uses the lateral connectivity to produce a target value, rather than an incremental update.
@@ -395,6 +406,9 @@ class FCLI(FC):
             new_x += update * (self.d_actv_fn(state['x'])) - state['e']
         else:
             new_x += -state['e']
+        if temp is not None:
+            eps = torch.randn_like(new_x, device=self.device) * .034 * temp
+            new_x += eps
         state['x'] = (1-self.gamma) * state['x'] + self.gamma * self.actv_fn(new_x)
         
     def assert_grad(self, state, e_below=None):
