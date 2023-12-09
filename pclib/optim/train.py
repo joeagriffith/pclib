@@ -246,15 +246,17 @@ def train(
 
             for i, layer in enumerate(model.layers):
                 if isinstance(layer, FCLI):
-                    layer.weight_lat.grad = state[i]['x'].t() @ state[i]['x'] / b_size
+                    layer.weight_lat.grad = -state[i]['x'].t() @ state[i]['x'] / b_size
                     # push lat weights towards identity matrix
-                    (layer.weight_lat - torch.eye(layer.weight_lat.shape[0], device=layer.weight_lat.device)).norm().backward()
+                    (reg_coeff * (layer.weight_lat - torch.eye(layer.weight_lat.shape[0], device=layer.weight_lat.device)).norm()).backward()
                     # Apply grad update here so optimiser doesn't add weight decay
-                    layer.weight_lat.data -= lr * reg_coeff * layer.weight_lat.grad
+                    layer.weight_lat.grad -= layer.weight_lat.grad.diag().diag()
+                    layer.weight_lat.data -= lr * layer.weight_lat.grad
                     layer.weight_lat.grad = None
                 elif isinstance(layer, FCPW): # updating data directly as we don't want weight decay
                     layer.weight_var.data -= lr * layer.weight_var.grad
                     layer.weight_var.data = torch.clamp(layer.weight_var.data, min=0.01)
+                    layer.weight_var.grad = None
 
             if assert_grads: model.assert_grads(state)
 
