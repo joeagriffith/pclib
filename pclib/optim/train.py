@@ -90,7 +90,7 @@ def neg_pass(model, x, targets, neg_coeff):
     loss.backward()
 
 
-def val_pass(model, val_loader, flatten=True):
+def val_pass(model, val_loader, flatten=True, allow_grads=False):
     """
     | Performs a validation pass on the model
 
@@ -103,7 +103,7 @@ def val_pass(model, val_loader, flatten=True):
         | val_vfe (float): average VFE for the validation data
         | val_acc (float): accuracy for the validation data
     """
-    with torch.no_grad():
+    with torch.set_grad_enabled(allow_grads):
         model.eval()
         val_correct = 0
         val_vfe = 0
@@ -112,7 +112,6 @@ def val_pass(model, val_loader, flatten=True):
                 x = images.flatten(start_dim=1)
             else:
                 x = images
-            # x = images.flatten(start_dim=1)
 
             # Forward pass
             out, val_state = model(x)
@@ -137,7 +136,9 @@ def train(
     step=0, 
     stats=None,
     minimal_stats=False,
+    track_corr=False,
     assert_grads=False,
+    val_grads=False,
     grad_mode='auto',
     optim='AdamW',
 ):
@@ -208,10 +209,15 @@ def train(
                     val_acc = stats['val_acc'][-1],
                 )
             else:
-                loop.set_postfix(
-                    train_VFE = stats['train_vfe'][-1],
-                    train_corr = stats['train_corr'][-1],
-                )
+                if track_corr:
+                    loop.set_postfix(
+                        train_VFE = stats['train_vfe'][-1],
+                        train_corr = stats['train_corr'][-1],
+                    )
+                else:
+                    loop.set_postfix(
+                        train_VFE = stats['train_vfe'][-1],
+                    )
 
         for batch_i, (images, targets) in loop:
             if flatten:
@@ -247,9 +253,9 @@ def train(
                 model.zero_grad()
                 vfe = model.vfe(state)
                 # Plots computation graph for vfe, for debugging
-                if epoch == 0 and batch_i == 9:
-                    make_dot(vfe).render("vfe", format="png")
-                vfe.backward()
+                # if epoch == 0 and batch_i == 9:
+                #     make_dot(vfe).render("vfe", format="png")
+                # vfe.backward()
 
             for i, layer in enumerate(model.layers):
                 if isinstance(layer, FCLI):
@@ -283,7 +289,8 @@ def train(
 
             # Track batch statistics
             epoch_stats['train_vfe'].append(model.vfe(state).item())
-            epoch_stats['train_corr'].append(calc_corr(state).item())
+            if track_corr:
+                epoch_stats['train_corr'].append(calc_corr(state).item())
             if not minimal_stats:
                 for i, layer in enumerate(model.layers):
                     epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
@@ -303,10 +310,11 @@ def train(
 
         # Track epoch statistics
         stats['train_vfe'].append(torch.tensor(epoch_stats['train_vfe']).mean().item())
-        stats['train_corr'].append(torch.tensor(epoch_stats['train_corr']).mean().item())
+        if track_corr:
+            stats['train_corr'].append(torch.tensor(epoch_stats['train_corr']).mean().item())
 
         if val_data is not None:
-            val_vfe, val_acc = val_pass(model, val_loader)
+            val_vfe, val_acc = val_pass(model, val_loader, flatten, val_grads)
             stats['val_acc'].append(val_acc)
             stats['val_vfe'].append(val_vfe)
 

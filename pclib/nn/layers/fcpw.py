@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.nn.Parameter as Parameter
+from torch.nn import Parameter
 from torch import Tensor
 from typing import Optional
 import math

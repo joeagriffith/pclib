@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from torch.nn.parameter import Parameter
+from torch.nn import Parameter
 from typing import Optional
 from pclib.utils.functional import reTanh
 
@@ -136,6 +136,7 @@ class FC(nn.Module):
         Returns:
             | pred (torch.Tensor): Prediction of state['x'] in the layer below.
         """
+
         return F.linear(self.actv_fn(state['x'].detach()), self.weight_td, self.bias)
     
     def propagate(self, e_below):

@@ -1,8 +1,9 @@
-from pclib.nn.layers import FC, FCPW, FCLI, FCSym
-from pclib.utils.functional import format_y
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from pclib.nn.layers import FC, FCPW
+from pclib.utils.functional import format_y
 
 
 class FCClassifier(nn.Module):

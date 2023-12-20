@@ -1,13 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.nn.Parameter as Parameter
-from torch import Tensor
-from typing import Optional
-import math
 
 from pclib.nn.layers import FC
-from pclib.utils import reTanh
+from pclib.utils.functional import reTanh
 
 class FCLI(FC):
     """
