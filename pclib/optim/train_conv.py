@@ -100,8 +100,9 @@ def train_conv(
             out, state = model(x, y=y)
 
             # Calculate grads, different equations for each implementation, top_down is f(Wr) or Wf(r)
-            model.zero_grad()
-            vfe(state).backward()
+            # Grads calculated in last step
+            # model.zero_grad()
+            # model.vfe(state).backward()
 
             # Assert grads
             # for i, layer in enumerate(model.layers):
@@ -118,7 +119,7 @@ def train_conv(
                 # for i, layer in enumerate(model.layers):
                 #     if i > 0:
                 #         layer.update_grad(neg_state[i], -neg_coeff * neg_state[i-1]['e'])
-                loss = -neg_coeff * vfe(neg_state)
+                loss = -neg_coeff * model.vfe(neg_state)
                 loss.backward()
                 
             # Parameter Update (Grad Descent)
@@ -130,7 +131,7 @@ def train_conv(
                     layer.weight_var.data = torch.clamp(layer.weight_var.data, min=0.01)
 
             # Track batch statistics
-            epoch_stats['train_vfe'].append(vfe(state).item())
+            epoch_stats['train_vfe'].append(model.vfe(state).item())
             for i, layer in enumerate(model.layers):
                 epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                 epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
@@ -160,7 +161,7 @@ def train_conv(
 
             # Forward pass
             out, val_state = model(x)
-            val_vfe += vfe(val_state, batch_reduction='sum').item()
+            val_vfe += model.vfe(val_state, batch_reduction='sum').item()
             val_correct += (out.argmax(dim=1) == target).sum().item()
 
         val_acc = val_correct / len(val_data)

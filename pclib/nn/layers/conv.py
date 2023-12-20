@@ -19,13 +19,13 @@ class Conv2d(nn.Module):
                  kernel_size: int = 3,
                  stride: int = 1,
                  padding = 'same',
-                 bias: bool = True,
                  upsample=1,
                  maxpool=1,
+                 has_bias: bool = True,
+                 symmetric: bool = True,
                  actv_fn: callable = F.tanh,
                  d_actv_fn: callable = None,
                  gamma: float = 0.1,
-                 beta: float = 1.0,
                  device=torch.device('cpu'),
                  dtype=None
                  ) -> None:
@@ -38,14 +38,13 @@ class Conv2d(nn.Module):
         self.shape = shape
         self.actv_fn = actv_fn
         self.gamma = gamma
-        self.beta = beta
         self.device = device
 
         self.prev_channels = prev_channels
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
-        self.bias = bias
+        self.has_bias = has_bias
         self.upsample = upsample
         self.maxpool = maxpool
 
@@ -70,7 +69,7 @@ class Conv2d(nn.Module):
         # Initialise weights if not input layer
         if self.prev_channels is not None:
             self.conv_td = nn.Sequential(
-                nn.Conv2d(self.shape[0], self.prev_channels, self.kernel_size, padding=self.padding, stride=self.stride, bias=self.bias, **self.factory_kwargs),
+                nn.Conv2d(self.shape[0], self.prev_channels, self.kernel_size, padding=self.padding, stride=self.stride, bias=self.has_bias, **self.factory_kwargs),
                 nn.Upsample(scale_factor=self.upsample),
                 nn.MaxPool2d(kernel_size=self.maxpool),
             )
@@ -108,7 +107,7 @@ class Conv2d(nn.Module):
             eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
             state['e'] += eps
 
-    def update_x(self, state, e_below=None):
+    def update_x(self, state, _):
         state['x'] = state['x'].detach() - self.gamma * state['x'].grad
         state['x'].requires_grad = True
 
@@ -140,18 +139,33 @@ class ConvTranspose2d(Conv2d):
                  kernel_size: int = 3,
                  stride: int = 1,
                  padding = 'same',
-                 bias: bool = True,
+                 has_bias: bool = True,
                  upsample=1,
                  maxpool=1,
+                 symmetric: bool = True,
+                 precision_weighted: bool = False,
                  actv_fn: callable = F.tanh,
                  d_actv_fn: callable = None,
                  gamma: float = 0.1,
-                 beta: float = 1.0,
                  device=torch.device('cpu'),
                  dtype=None
                  ) -> None:
         
-        super().__init__(shape, prev_channels, kernel_size, stride, padding, bias, upsample, maxpool, actv_fn, d_actv_fn, gamma, beta, device, dtype)
+        super().__init__(
+            shape=shape, 
+            prev_channels=prev_channels, 
+            kernel_size=kernel_size, 
+            stride=stride, 
+            padding=padding, 
+            has_bias=has_bias, 
+            upsample=upsample, 
+            maxpool=maxpool,
+            actv_fn=actv_fn, 
+            d_actv_fn=d_actv_fn, 
+            gamma=gamma, 
+            device=device, 
+            dtype=dtype
+            )
 
 
     def init_weights(self):
@@ -160,12 +174,52 @@ class ConvTranspose2d(Conv2d):
             self.conv_td = nn.Sequential(
                 nn.MaxPool2d(kernel_size=self.maxpool),
                 nn.Upsample(scale_factor=self.upsample),
-                nn.ConvTranspose2d(self.shape[0], self.prev_channels, self.kernel_size, stride=self.stride, padding=self.padding, bias=self.bias, **self.factory_kwargs),
+                nn.ConvTranspose2d(self.shape[0], self.prev_channels, self.kernel_size, stride=self.stride, padding=self.padding, bias=self.has_bias, **self.factory_kwargs),
             )
             # self.conv_bu = nn.Sequential(
             #     nn.Upsample(scale_factor=maxpool),
             #     nn.ConvTranspose2d(prev_shape[0], shape[0], kernel_size, padding=padding, stride=stride, bias=False, **factory_kwargs),
             # )
+
+class ConvTranspose2dLI(ConvTranspose2d):
+    def __init__(self,
+
+                 shape: (int, int, int), # (channels, height, width)
+                 prev_channels: int = None,
+                 kernel_size: int = 3,
+                 stride: int = 1,
+                 padding = 'same',
+                 has_bias: bool = True,
+                 upsample=1,
+                 maxpool=1,
+                 symmetric: bool = True,
+                 precision_weighted: bool = False,
+                 actv_fn: callable = F.tanh,
+                 d_actv_fn: callable = None,
+                 gamma: float = 0.1,
+                 device=torch.device('cpu'),
+                 dtype=None
+                 ) -> None:
+        
+        super().__init__(
+            shape=shape, 
+            prev_channels=prev_channels, 
+            kernel_size=kernel_size, 
+            stride=stride, 
+            padding=padding, 
+            has_bias=has_bias, 
+            upsample=upsample, 
+            maxpool=maxpool,
+            actv_fn=actv_fn, 
+            d_actv_fn=d_actv_fn, 
+            gamma=gamma, 
+            device=device, 
+            dtype=dtype
+            )
+        
+        self.lat_conn_mat
+
+
 
 
 
@@ -181,19 +235,20 @@ class Conv2dSkip(Conv2d):
                  kernel_size: int = 3,
                  stride: int = 1,
                  padding = 'same',
-                 bias: bool = True,
+                 has_bias: bool = True,
                  maxpool=1,
+                 symmetric: bool = True,
+                 precision_weighted: bool = False,
                  actv_fn: callable = F.tanh,
                  d_actv_fn: callable = None,
                  gamma: float = 0.1,
-                 beta: float = 1.0,
                  device=torch.device('cpu'),
                  dtype=None
                  ) -> None:
         
         assert shape[0] % 2 == 0, "Number of channels must be even."
 
-        super(Conv2d, self).__init__(shape, prev_channels, kernel_size, stride, padding, bias, maxpool, actv_fn, d_actv_fn, gamma, beta, device, dtype)
+        super(Conv2d, self).__init__(shape, prev_channels, kernel_size, stride, padding, has_bias, maxpool, actv_fn, d_actv_fn, gamma, device, dtype)
 
     def init_state(self, batch_size):
         return {
