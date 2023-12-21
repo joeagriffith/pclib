@@ -46,6 +46,17 @@ class ConvClassifier(nn.Module):
         self.device = device
 
         self.init_layers()
+        self.register_buffer('epochs_trained', torch.tensor(0, dtype=torch.long))
+        self.register_buffer('min_vfe', torch.tensor(float('inf'), dtype=torch.float32))
+
+    def inc_epochs(self, n=1):
+        """
+        | Increments the number of epochs trained by n.
+
+        Args:
+            | n (int): Number of epochs to increment by
+        """
+        self.epochs_trained += n
 
     def init_layers(self):
         """
@@ -102,12 +113,12 @@ class ConvClassifier(nn.Module):
         """
         if obs is not None:
             state[0]['x'] = obs.clone()
-            # if isinstance(self.layers[0], ConvTranspose2d):
-                # state[0]['x'].requires_grad = True
+            if isinstance(self.layers[0], (ConvTranspose2d, Conv2d)):
+                state[0]['x'].requires_grad = True
         if y is not None:
             state[-1]['x'] = y.clone()
-            # if isinstance(self.layers[-1], ConvTranspose2d):
-                # state[-1]['x'].requires_grad = True
+            if isinstance(self.layers[-1], (ConvTranspose2d, Conv2d)):
+                state[-1]['x'].requires_grad = True
 
     def step(self, state, obs=None, y=None, temp=None):
         """
@@ -198,10 +209,6 @@ class ConvClassifier(nn.Module):
         #             state[i]['x'] = layer.propagate(x_below)
         for i, layer in enumerate(self.layers):
             if isinstance(layer, (Conv2d, ConvTranspose2d)):
-                if i == 0 and obs is not None:
-                    continue
-                elif i == len(self.layers) - 1 and y is not None:
-                    continue
                 state[i]['x'].requires_grad = True
 
     def init_state(self, obs=None, y=None):
@@ -276,12 +283,6 @@ class ConvClassifier(nn.Module):
         state = self.init_state(obs, y)
 
         for i in range(steps):
-            if i == 0:
-                for p in self.parameters():
-                    p.requires_grad = False
-            elif i == steps - 1:
-                for p in self.parameters():
-                    p.requires_grad = True
             temp = self.calc_temp(i, steps)
             self.step(state, obs, y, temp)
             

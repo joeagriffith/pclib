@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from pclib.nn.layers import ConvTranspose2d
+from pclib.nn.layers import ConvTranspose2d, Conv2d
 from pclib.nn.models import ConvClassifier
 
 class ConvClassifierSS(ConvClassifier):
@@ -41,6 +41,7 @@ class ConvClassifierSS(ConvClassifier):
         layers.append(ConvTranspose2d((64, 10, 10), 32, 5, padding=0, upsample=2, **self.factory_kwargs))
         layers.append(ConvTranspose2d((64, 3, 3), 64, 5, padding=0, upsample=2, **self.factory_kwargs))
         layers.append(ConvTranspose2d((128, 1, 1), 64, 3, padding=0, **self.factory_kwargs))
+
         self.layers = nn.ModuleList(layers)
 
         self.classifier = nn.Sequential(
@@ -122,6 +123,32 @@ class ConvClassifierSS(ConvClassifier):
         out = self.get_output(state)
 
         return out, state
+
+    def reconstruct(self, obs, steps=None):
+        """
+        | Initialises the state of the model using the observation.
+        | Runs inference without pinning the observation.
+        | In theory should reconstruct the observation.
+
+        Args:
+            | obs (torch.Tensor): Input data
+            | steps (Optional[int]): Number of steps to run inference for. Uses self.steps if not provided.
+        
+        Returns:
+            | out (torch.Tensor): Reconstructed observation
+            | state (list): List of layer state dicts, each containing 'x' and 'e'
+        """
+        
+        if steps is None:
+            steps = self.steps
+        
+        state = self.init_state(obs)
+
+        for i in range(steps):
+            temp = self.calc_temp(i, steps)
+            self.step(state, temp=temp)
+        
+        return state[0]['x'], state
     
     def generate(self, y, steps=None):
         """

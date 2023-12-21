@@ -124,8 +124,9 @@ class FCLI(FC):
         self.moving_avg = 0.99 * self.moving_avg + 0.01 * state['x'].mean(dim=0)
     
     def boost(self, x):
-        mult = ((self.moving_avg @ self.lat_conn_mat) / self.lat_conn_mat.sum(dim=0)) / self.moving_avg
-        return x * mult
+        return x
+        # mult = ((self.moving_avg @ self.lat_conn_mat) / self.lat_conn_mat.sum(dim=0)) / self.moving_avg
+        # return x * mult
 
 # TODO: Confirm descriptions for beta_scale and alpha_scale are correct.
 def create_competition_matrix(z_dim, n_group, beta_scale=1.0, alpha_scale=1.0):

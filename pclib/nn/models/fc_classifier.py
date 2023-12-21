@@ -56,6 +56,8 @@ class FCClassifier(nn.Module):
         self.device = device
 
         self.init_layers()
+        self.register_buffer('epochs_trained', torch.tensor(0, dtype=torch.long))
+        self.register_buffer('min_vfe', torch.tensor(float('inf'), dtype=torch.float32))
 
 
     def init_layers(self):
@@ -72,6 +74,15 @@ class FCClassifier(nn.Module):
             in_features = out_features
         self.layers = nn.ModuleList(layers)
     
+    def inc_epochs(self, n=1):
+        """
+        | Increments the number of epochs trained by n.
+        | Used by the trainer to keep track of the number of epochs trained.
+
+        Args:
+            | n (int): Number of epochs to increment by.
+        """
+        self.epochs_trained += n    
 
     def vfe(self, state, batch_reduction='mean', unit_reduction='sum'):
         """
