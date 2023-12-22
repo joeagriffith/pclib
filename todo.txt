@@ -7,3 +7,5 @@
 - Noise X nodes (also?), not just E nodes
 
 - Deffine a robust metric for measuring Sparsity and Interlayer Correlations. measure change in these metrics when using Lateral Inhibition.
+
+- Fix Initialisations. E graphs have wierd spike at start

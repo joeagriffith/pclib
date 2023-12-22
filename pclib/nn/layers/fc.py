@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Parameter
 from typing import Optional
-from pclib.utils.functional import reTanh
+from pclib.utils.functional import reTanh, identity
 
 class FC(nn.Module):
     """
@@ -73,8 +73,13 @@ class FC(nn.Module):
             self.d_actv_fn: callable = lambda x: torch.sigmoid(x) * (1 - torch.sigmoid(x))
         elif actv_fn == F.tanh:
             self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
+        elif actv_fn == identity:
+            self.d_actv_fn: callable = lambda x: torch.ones_like(x)
 
         self.init_params()
+        # self.norm = nn.LayerNorm(self.out_features)
+        # self.norm = nn.BatchNorm1d(self.out_features)
+        self.norm = nn.GroupNorm(8, self.out_features)
         
     # Declare weights if not input layer
     def init_params(self):
@@ -84,7 +89,10 @@ class FC(nn.Module):
         if self.in_features is not None:
             self.weight_td = Parameter(torch.empty((self.in_features, self.out_features), **self.factory_kwargs))
             nn.init.kaiming_uniform_(self.weight_td, a=math.sqrt(5))
-            self.weight_td.data *= 0.1
+            # nn.init.kaiming_normal_(self.weight_td, a=math.sqrt(5))
+            # nn.init.xavier_uniform_(self.weight_td)
+            # nn.init.xavier_normal_(self.weight_td)
+            
 
             if self.has_bias:
                 self.bias = Parameter(torch.empty(self.in_features, **self.factory_kwargs))
@@ -97,7 +105,6 @@ class FC(nn.Module):
             if not self.symmetric:
                 self.weight_bu = Parameter(torch.empty((self.out_features, self.in_features), **self.factory_kwargs))
                 nn.init.kaiming_uniform_(self.weight_bu, a=math.sqrt(5))
-                self.weight_bu.data *= 0.1
             else:
                 self.register_parameter('weight_bu', None)
 
@@ -193,6 +200,8 @@ class FC(nn.Module):
         if temp is not None:
             eps = torch.randn_like(state['x'].detach(), device=self.device) * temp * 0.034
             state['x'] += eps
+        
+        state['x'] = self.norm(state['x'])
 
         # new_x = state['x'].detach()
         # if e_below is not None:

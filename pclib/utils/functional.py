@@ -4,6 +4,9 @@ import torch.nn.functional as F
 def reTanh(x):
     return x.tanh().relu()
 
+def identity(x):
+    return x
+
 # Output e.g. [0.03, 0.03, 0.97] for num_classes=3 and target=2
 def format_y(targets, num_classes):
     assert len(targets.shape) == 1, f"Targets must be 1D, got {len(targets.shape)}D"
@@ -11,6 +14,7 @@ def format_y(targets, num_classes):
     baseline = torch.ones_like(targets) * 0.03
     y = baseline + (targets * 0.94)
     return y
+
 
 class CustomReLU(torch.autograd.Function):
     @staticmethod
