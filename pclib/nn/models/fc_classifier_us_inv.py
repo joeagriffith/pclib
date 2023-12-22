@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from pclib.nn.layers import FC, FCPW
 from pclib.nn.models import FCClassifierInv
 
-class FCClassifierInvSS(FCClassifierInv):
+class FCClassifierUsInv(FCClassifierInv):
     """
     | Inherits most functionality from FCClassifierInv, except it is self-supervised.
     | It learns a feature extractor (self.layers) only from observations.

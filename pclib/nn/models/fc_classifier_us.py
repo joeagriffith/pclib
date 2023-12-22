@@ -6,7 +6,7 @@ from pclib.nn.layers import FC
 from pclib.nn.models import FCClassifier
 
 # Based on Whittington and Bogacz 2017, but with targets predicting inputs
-class FCClassifierSS(FCClassifier):
+class FCClassifierUs(FCClassifier):
     """
     | A Self-Supervised version of FCClassifier.
     | It learns a feature extractor (self.layers) only from observations.

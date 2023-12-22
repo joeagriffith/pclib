@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from pclib.nn.layers import ConvTranspose2d, Conv2d
 from pclib.nn.models import ConvClassifier
 
-class ConvClassifierSS(ConvClassifier):
+class ConvClassifierUs(ConvClassifier):
     """
     | Similar to ConvClassifier, but only uses PC for convolutation Feature Extractor
     | Trains feature extractor unsupervised, then trains classifier supervised.

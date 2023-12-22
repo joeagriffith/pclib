@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from pclib.nn.layers import FCSym
 from pclib.nn.models import FCClassifierInv
 
-class FCClassifierInvSym(FCClassifierInv):
+class FCClassifierSymInv(FCClassifierInv):
     """
     | Inherits most functionality from FCClassifierInv, except it uses FCSym layers instead of FC layers.
     | In theory is functionally symmetrical. Predictions flow both ways, and same for error propagations.

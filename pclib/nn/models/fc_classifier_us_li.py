@@ -4,10 +4,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from pclib.nn.layers import FCLI, FC
-from pclib.nn.models import FCClassifierSS
+from pclib.nn.models import FCClassifierUs
 
 # Based on Whittington and Bogacz 2017, but with targets predicting inputs
-class FCClassifierSSLI(FCClassifierSS):
+class FCClassifierUsLi(FCClassifierUs):
     """
     | Inherits most functionality from FCClassifierSS, so is self-supervised.
     | However, it uses FCLI layer instead of FC layers to implement lateral inhibition.
