@@ -47,12 +47,17 @@ class FCLI(FC):
 
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__(in_features, out_features, has_bias, symmetric, actv_fn, d_actv_fn, gamma, **factory_kwargs)
-        self.lat_conn_mat = (create_competition_matrix(out_features, 10) * (2*torch.eye(out_features) - 1)).to(device)
+        self.group_size = 20
+
+        self.lat_conn_mat = (create_competition_matrix(out_features, out_features//self.group_size) * (2*torch.eye(out_features) - 1)).to(device)
         
         # Initialise weights
         self.weight_lat = nn.Parameter(torch.eye((out_features), **factory_kwargs) * 1.0)
 
         self.moving_avg = torch.ones((out_features), **factory_kwargs)
+        self.norm = nn.LayerNorm(out_features, **factory_kwargs)
+        if in_features is not None:
+            self.norm = nn.GroupNorm(out_features//self.group_size, out_features, **factory_kwargs)
 
     def to(self, *args, **kwargs):
         self.device = args[0]
@@ -86,7 +91,9 @@ class FCLI(FC):
             | new_x (torch.Tensor): 
         """
         lat_connectivity = self.lat_conn_mat * F.relu(self.weight_lat) # self-excitation, lateral-inhibition, and no negative weights
-        return F.linear(self.actv_fn(self.boost(state['x'])), lat_connectivity, None)
+        # return F.linear(self.actv_fn(self.boost(state['x'])), lat_connectivity, None)
+        return F.linear(F.relu(self.boost(state['x'])), lat_connectivity, None)
+        # return F.linear(self.boost(state['x']), lat_connectivity, None)
         
     def update_x(self, state, e_below=None, temp=None):
         """
@@ -108,6 +115,7 @@ class FCLI(FC):
             new_x += eps
         
         state['x'] = (1-self.gamma) * state['x'] + self.gamma * self.actv_fn(new_x)
+        state['x'] = self.norm(state['x'])
         
     def assert_grad(self, state, e_below=None):
         raise(NotImplementedError)
@@ -121,12 +129,13 @@ class FCLI(FC):
             | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
         """
 
+        # self.moving_avg = 0.999 * self.moving_avg + 0.001 * state['x'].mean(dim=0)
         self.moving_avg = 0.99 * self.moving_avg + 0.01 * state['x'].mean(dim=0)
     
     def boost(self, x):
-        return x
-        # mult = ((self.moving_avg @ self.lat_conn_mat) / self.lat_conn_mat.sum(dim=0)) / self.moving_avg
-        # return x * mult
+        # return x
+        mult = (self.moving_avg * F.relu(self.lat_conn_mat)).mean(dim=0)  / self.moving_avg
+        return x * mult
 
 # TODO: Confirm descriptions for beta_scale and alpha_scale are correct.
 def create_competition_matrix(z_dim, n_group, beta_scale=1.0, alpha_scale=1.0):

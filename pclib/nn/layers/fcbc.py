@@ -7,7 +7,7 @@ from torch.nn import Parameter
 from typing import Optional
 from pclib.utils.functional import reTanh, identity
 
-class FC(nn.Module):
+class FCBC(nn.Module):
     """
     | Fully connected layer with optional bias and optionally symmetric weights.
     | The layer stores its state in a dictionary with keys 'x' and 'e'.
@@ -181,7 +181,7 @@ class FC(nn.Module):
             eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
             state['e'] += eps
     
-    def update_x(self, state, e_below=None, temp=None):
+    def update_x(self, state, e_below=None, pred=None, temp=None):
         """
         | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x)).
@@ -193,27 +193,15 @@ class FC(nn.Module):
         # If not input layer, propagate error from layer below
         if e_below is not None:
             update = self.propagate(e_below)
-            state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
-        else:
-            state['x'] += self.gamma * (-state['e'])
-
+            state['x'] += self.gamma * (update * self.d_actv_fn(state['x']))
+        if pred is not None:
+            for p in pred:
+                state['x'] += self.gamma * p
         if temp is not None:
-            eps = torch.randn_like(state['x'].detach(), device=self.device) * temp * 0.034
+            eps = torch.randn_like(state['x'], device=self.device) * 0.034 * temp
             state['x'] += eps
         
         state['x'] = self.norm(state['x'])
-
-        # new_x = state['x'].detach()
-        # if e_below is not None:
-        #     update = self.propagate(e_below)
-        #     new_x += update * (self.d_actv_fn(state['x'])) - state['e']
-        # else:
-        #     new_x += -state['e']
-        # if temp is not None:
-        #     eps = torch.randn_like(new_x, device=self.device) * .034 * temp
-        #     new_x += eps
-        # state['x'] = (1-self.gamma) * state['x'] + self.gamma * self.actv_fn(new_x)
-        # state['x'] = self.norm(state['x'])
 
     def update_grad(self, state, e_below=None):
         """

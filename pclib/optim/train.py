@@ -148,7 +148,6 @@ def val_pass(model, val_loader, flatten=True, allow_grads=False):
 
 def train(
     model, 
-    model_name,
     train_data,
     val_data,
     num_epochs,
@@ -159,7 +158,7 @@ def train(
     flatten=True,
     neg_coeff=None,
     untr_coeff=None,
-    stats=None,
+    log_dir=None,
     minimal_stats=False,
     track_corr=False,
     assert_grads=False,
@@ -195,8 +194,15 @@ def train(
         | stats (dict): dictionary of statistics
     """
 
-    writer = SummaryWriter(log_dir=f"runs/logs/{model_name}")
+    if log_dir is not None:
+        writer = SummaryWriter(log_dir=log_dir)
 
+    if save_best:
+        if log_dir is not None:
+            weight_dir = log_dir.replace('logs', 'weights')
+            weight_dir = weight_dir + '.pt'
+        else:
+            raise ValueError("save_best=True requires log_dir to be specified")
 
     assert grad_mode in ['auto', 'manual'], f"Invalid grad_mode {grad_mode}, must be 'auto' or 'manual'"
     if grad_mode == 'manual':
@@ -217,6 +223,9 @@ def train(
     stats = {}
     for epoch in range(num_epochs):
 
+        # This applies the same transform to every image.
+        # Might be better to apply a different transform to each image.
+        # or atleast to each batch.
         train_data.apply_transform()
 
         # A second set of statistics for each epoch
@@ -306,6 +315,7 @@ def train(
             epoch_stats['train_vfe'].append(model.vfe(state).item())
             if track_corr:
                 epoch_stats['train_corr'].append(calc_corr(state).item())
+            
             if not minimal_stats:
                 for i, layer in enumerate(model.layers):
                     epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
@@ -325,41 +335,45 @@ def train(
 
         # Compiles statistics from each batch into a mean statistic for the epoch
         stats['train_vfe'] = torch.tensor(epoch_stats['train_vfe']).mean().item()
-        writer.add_scalar('VFE/train', stats['train_vfe'], model.epochs_trained.item())
+        if log_dir:
+            writer.add_scalar('VFE/train', stats['train_vfe'], model.epochs_trained.item())
         if track_corr:
             stats['train_corr'] = torch.tensor(epoch_stats['train_corr']).mean().item()
-            writer.add_scalar('Corr/train', stats['train_corr'], model.epochs_trained.item())
+            if log_dir:
+                writer.add_scalar('Corr/train', stats['train_corr'], model.epochs_trained.item())
 
         # Collects statistics for validation data if it exists
         if val_data is not None:
             val_vfe, val_acc = val_pass(model, val_loader, flatten, val_grads)
             stats['val_vfe'] = val_vfe.item()
             stats['val_acc'] = val_acc.item()
-            writer.add_scalar('Accuracy/val', stats['val_acc'], model.epochs_trained.item())
-            writer.add_scalar('VFE/val', stats['val_vfe'], model.epochs_trained.item())
+            if log_dir:
+                writer.add_scalar('Accuracy/val', stats['val_acc'], model.epochs_trained.item())
+                writer.add_scalar('VFE/val', stats['val_vfe'], model.epochs_trained.item())
         
         # Saves model if it has the lowest validation VFE (or training VFE if no validation data) compared to previous training
         if save_best:
             current_vfe = stats['val_vfe'] if val_data is not None else stats['train_vfe']
             if current_vfe < model.min_vfe:
-                torch.save(model.state_dict(), f"runs/weights/{model_name}.pt")
-                model.min_vfe = current_vfe
+                torch.save(model.state_dict(), weight_dir)
+                model.min_vfe = torch.tensor(current_vfe)
 
-        if not minimal_stats:
-            for i, layer in enumerate(model.layers):
-                writer.add_scalar(f'X_norms/layer_{i}', torch.tensor(epoch_stats['X_norms'][i]).mean().item(), model.epochs_trained.item())
-                writer.add_scalar(f'E_mags/layer_{i}', torch.tensor(epoch_stats['E_mags'][i]).mean().item(), model.epochs_trained.item())
-                if layer.in_features is not None:
-                    writer.add_scalar(f'WeightTD_means/layer_{i}', torch.tensor(epoch_stats['WeightTD_means'][i-1]).mean().item(), model.epochs_trained.item())
-                    writer.add_scalar(f'WeightTD_stds/layer_{i}', torch.tensor(epoch_stats['WeightTD_stds'][i-1]).mean().item(), model.epochs_trained.item())
-                    if not layer.symmetric:
-                        writer.add_scalar(f'WeightBU_means/layer_{i}', torch.tensor(epoch_stats['WeightBU_means'][i-1]).mean().item(), model.epochs_trained.item())
-                        writer.add_scalar(f'WeightBU_stds/layer_{i}', torch.tensor(epoch_stats['WeightBU_stds'][i-1]).mean().item(), model.epochs_trained.item())
-                    if layer.bias is not None:
-                        writer.add_scalar(f'Bias_means/layer_{i}', torch.tensor(epoch_stats['Bias_means'][i-1]).mean().item(), model.epochs_trained.item())
-                        writer.add_scalar(f'Bias_stds/layer_{i}', torch.tensor(epoch_stats['Bias_stds'][i-1]).mean().item(), model.epochs_trained.item())
-                if isinstance(layer, FCPW):
-                    writer.add_scalar(f'WeightVar_means/layer_{i}', torch.tensor(epoch_stats['WeightVar_means'][i]).mean().item(), model.epochs_trained.item())
-                    writer.add_scalar(f'WeightVar_stds/layer_{i}', torch.tensor(epoch_stats['WeightVar_stds'][i]).mean().item(), model.epochs_trained.item())
+        if log_dir:
+            if not minimal_stats:
+                for i, layer in enumerate(model.layers):
+                    writer.add_scalar(f'X_norms/layer_{i}', torch.tensor(epoch_stats['X_norms'][i]).mean().item(), model.epochs_trained.item())
+                    writer.add_scalar(f'E_mags/layer_{i}', torch.tensor(epoch_stats['E_mags'][i]).mean().item(), model.epochs_trained.item())
+                    if layer.in_features is not None:
+                        writer.add_scalar(f'WeightTD_means/layer_{i}', torch.tensor(epoch_stats['WeightTD_means'][i-1]).mean().item(), model.epochs_trained.item())
+                        writer.add_scalar(f'WeightTD_stds/layer_{i}', torch.tensor(epoch_stats['WeightTD_stds'][i-1]).mean().item(), model.epochs_trained.item())
+                        if not layer.symmetric:
+                            writer.add_scalar(f'WeightBU_means/layer_{i}', torch.tensor(epoch_stats['WeightBU_means'][i-1]).mean().item(), model.epochs_trained.item())
+                            writer.add_scalar(f'WeightBU_stds/layer_{i}', torch.tensor(epoch_stats['WeightBU_stds'][i-1]).mean().item(), model.epochs_trained.item())
+                        if layer.bias is not None:
+                            writer.add_scalar(f'Bias_means/layer_{i}', torch.tensor(epoch_stats['Bias_means'][i-1]).mean().item(), model.epochs_trained.item())
+                            writer.add_scalar(f'Bias_stds/layer_{i}', torch.tensor(epoch_stats['Bias_stds'][i-1]).mean().item(), model.epochs_trained.item())
+                    if isinstance(layer, FCPW):
+                        writer.add_scalar(f'WeightVar_means/layer_{i}', torch.tensor(epoch_stats['WeightVar_means'][i]).mean().item(), model.epochs_trained.item())
+                        writer.add_scalar(f'WeightVar_stds/layer_{i}', torch.tensor(epoch_stats['WeightVar_stds'][i]).mean().item(), model.epochs_trained.item())
         
         model.inc_epochs()
