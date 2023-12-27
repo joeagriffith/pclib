@@ -6,9 +6,9 @@ from torch import Tensor
 from torch.nn import Parameter
 from typing import Optional
 from pclib.utils.functional import reTanh, identity
-from pclib.nn.layers import FC
+from pclib.nn.layers import FCLI
 
-class FCBC(FC):
+class FCLIBC(FCLI):
     """
     | Fully connected layer with optional bias and optionally symmetric weights.
     | The layer stores its state in a dictionary with keys 'x' and 'e'.
@@ -51,8 +51,7 @@ class FCBC(FC):
                  ) -> None:
 
         self.factory_kwargs = {'device': device, 'dtype': dtype}
-        super().__init__(self,
-                         in_features,
+        super().__init__(in_features,
                          out_features,
                          has_bias,
                          symmetric,
@@ -63,24 +62,26 @@ class FCBC(FC):
                          dtype,
                         )   
 
-        
+        self.group_size = 20
+
     def update_x(self, state, e_below=None, pred=None, temp=None):
         """
-        | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
-        | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x)).
+        | Calculates a new_x and then interpolates between the current state['x'] and new_x, updating state['x'] inplace.
+        | This uses the lateral connectivity to produce a target value, rather than an incremental update.
 
         Args:
             | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
-            | e_below (Optional[torch.Tensor]): Error of layer below. None if input layer.
+            | e_below Optional([torch.Tensor]): Error of layer below. if None, no gradients are calculated.
         """
-        # If not input layer, propagate error from layer below
+        state['x'] = (1.0 - self.gamma) * state['x'] + self.gamma * self.lateral(state)
         if e_below is not None:
             update = self.propagate(e_below)
             state['x'] += self.gamma * (update * self.d_actv_fn(state['x']))
         if pred is not None:
             state['x'] += self.gamma * pred
+
         if temp is not None:
-            eps = torch.randn_like(state['x'], device=self.device) * 0.034 * temp
+            eps = torch.randn_like(state['x'].detach(), device=self.device) * temp * 0.034
             state['x'] += eps
         
         state['x'] = self.norm(state['x'])

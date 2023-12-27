@@ -12,3 +12,9 @@ Different Inhibition patterns
 Implement Boosting
 - Some features may end up never firing due to poor initialisation.
 - a dynamic boosting of sparsely activating features during learning may help the model learn more effective features.
+
+Selective Weight decay
+- Only perform weight decay on active neurons?
+- Reread Hawkins' theory on This
+- Basically don't perform weight decay on inactive feature extractors.
+- what is weight decay for?

@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from pclib.nn.layers import FC, FCPW
-from pclib.nn.models import FCClassifierInv
+from pclib.nn.models import FCClassifierUs
 
-class FCClassifierUsInv(FCClassifierInv):
+class FCClassifierUsInv(FCClassifierUs):
     """
     | Inherits most functionality from FCClassifierInv, except it is self-supervised.
     | It learns a feature extractor (self.layers) only from observations.
@@ -58,17 +58,45 @@ class FCClassifierUsInv(FCClassifierInv):
         self.classifier = nn.Sequential(
             nn.Linear(self.hidden_sizes[-1], 200, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
             nn.ReLU(),
-            nn.Linear(200, self.num_classes, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
+            nn.Linear(200, self.num_classes, bias=False, device=self.device, dtype=self.factory_kwargs['dtype']),
         )
-    
-    def to(self, device):
-        self.device = device
-        for layer in self.layers:
-            layer.to(device)
-        for layer in self.classifier:
-            layer.to(device)
-        return self
 
+    def pin(self, state, obs=None, y=None):
+        """
+        | Pins the input and/or target to the state if provided.
+        | Overrides FCClassifier.pin() to pin targets at bottom, and inputs at top.
+        """
+        if obs is not None:
+            state[-1]['x'] = obs.clone()
+        if y is not None:
+            state[0]['x'] = y.clone()
+            
+    def _init_xs(self, state, obs=None, y=None):
+        """
+        | Initialises xs dependant using either obs or y if provided.    
+        | Similar to FCClassifier._init_xs(), but generates predictions from obs, or propagates error from target.
+
+        Args:
+            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+            | obs (Optional[torch.Tensor]): Input data
+            | y (Optional[torch.Tensor]): Target data
+        """
+        if obs is not None:
+            for i, layer in reversed (list(enumerate(self.layers))):
+                if i == len(self.layers) - 1: # last layer
+                    state[i]['x'] = obs.clone()
+                if i > 0:
+                    state[i-1]['x'] = layer.predict(state[i])
+            if y is not None:
+                state[0]['x'] = y.clone()
+        elif y is not None:
+            for i, layer in enumerate(self.layers):
+                if i == 0:
+                    state[0]['x'] = y.clone()
+                else:
+                    state[i]['x'] = layer.propagate(state[i-1]['x'])
+
+    
     def get_output(self, state):
         """
         | Takes the output from the feature extractor (bottom layer) and passes it through the classifier.
@@ -82,50 +110,31 @@ class FCClassifierUsInv(FCClassifierInv):
         x = state[0]['x']
         out = self.classifier(x.detach())
         return out
-
-    def forward(self, obs=None, steps=None):
-        """
-        | Performs inference for the model.
-        | does not pin targets, so is self-supervised.
-        | Uses self.classifier to get output.
-
-        Args:
-            | obs (Optional[torch.Tensor]): Input data
-            | steps (Optional[int]): Number of steps to run inference for. Uses self.steps if not provided.
-
-        Returns:
-            | out (torch.Tensor): Output of the model
-            | state (list): List of layer state dicts, each containing 'x' and 'e_l' and 'e_u'
-        """
-        if steps is None:
-            steps = self.steps
-
-        state = self.init_state(obs)
-
-        for i in range(steps):
-            temp = self.calc_temp(i, steps)
-            self.step(state, obs, temp=temp)
-            
-        out = self.get_output(state)
-            
-        return out, state
     
-    def classify(self, obs, steps=None):
+
+    def reconstruct(self, obs, steps=None):
         """
-        | Performs inference on the observation and passes the output through the classifier.
-        | Returns the argmax of the classifier output.
+        | Initialises the state of the model using the observation.
+        | Runs inference without pinning the observation.
+        | In theory should reconstruct the observation.
 
         Args:
             | obs (torch.Tensor): Input data
             | steps (Optional[int]): Number of steps to run inference for. Uses self.steps if not provided.
 
         Returns:
-            | out (torch.Tensor): Argmax(dim=1) output of the classifier
+            | out (torch.Tensor): Reconstructed observation
+            | state (list): List of layer state dicts, each containing 'x' and 'e'
         """
-        return self.forward(obs, steps)[0].argmax(dim=1)
-    
-    def generate(self, y, steps=None):
-        """
-        | Not implemented as one cannot generate an input without a target, and this model does not pin targets.
-        """
-        raise NotImplementedError("Generate not implemented for FCClassifierInvSS")
+        if steps is None:
+            steps = self.steps
+        
+        state = self.init_state(obs)
+
+        for i in range(steps):
+            temp = self.calc_temp(i, steps)
+            self.step(state, temp=temp)
+        
+        out = state[-1]['x']
+
+        return out, state

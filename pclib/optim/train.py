@@ -33,7 +33,7 @@ def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW'):
     elif optimiser == 'RMSprop':
         return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, momentum=0.9)
 
-def init_stats(model, minimal=False):
+def init_stats(model, minimal=False, loss=False):
     """
     | Initialises a dictionary to store statistics
     
@@ -68,6 +68,9 @@ def init_stats(model, minimal=False):
             "val_vfe": [],
             "val_acc": [],
         }
+    if loss:
+        stats['train_loss'] = []
+        stats['val_loss'] = []
     return stats
 
 def neg_pass(model, x, targets, neg_coeff):
@@ -114,7 +117,7 @@ def untr_pass(model, x, untr_coeff):
         raise RuntimeError("Untrained pass did not update gradients")
 
 
-def val_pass(model, val_loader, flatten=True, allow_grads=False):
+def val_pass(model, val_loader, flatten=True, allow_grads=False, loss=False):
     """
     | Performs a validation pass on the model
 
@@ -129,8 +132,9 @@ def val_pass(model, val_loader, flatten=True, allow_grads=False):
     """
     with torch.set_grad_enabled(allow_grads):
         model.eval()
-        val_correct = torch.tensor(0.0).to(model.device)
-        val_vfe = torch.tensor(0.0).to(model.device)
+        acc = torch.tensor(0.0).to(model.device)
+        vfe = torch.tensor(0.0).to(model.device)
+        loss = torch.tensor(0.0).to(model.device)
         for images, target in val_loader:
             if flatten:
                 x = images.flatten(start_dim=1)
@@ -138,13 +142,16 @@ def val_pass(model, val_loader, flatten=True, allow_grads=False):
                 x = images
 
             # Forward pass
-            out, val_state = model(x)
-            val_vfe += model.vfe(val_state, batch_reduction='sum')
-            val_correct += (out.argmax(dim=1) == target).sum()
+            out, state = model(x)
+            if loss:
+                loss += F.cross_entropy(out, target)
+            vfe += model.vfe(state, batch_reduction='sum')
+            acc += (out.argmax(dim=1) == target).sum()
 
-        val_acc = val_correct / len(val_loader.dataset)
-        val_vfe /= len(val_loader.dataset)
-    return val_vfe, val_acc
+        acc /= len(val_loader.dataset)
+        vfe /= len(val_loader.dataset)
+        loss /= len(val_loader.dataset)
+    return {'vfe': vfe, 'acc': acc, 'loss': loss}
 
 def train(
     model, 
@@ -193,9 +200,35 @@ def train(
         | step (int): step number
         | stats (dict): dictionary of statistics
     """
+    optimiser = get_optimiser(model.parameters(), lr, reg_coeff, optim)
+    if hasattr(model, 'classifier'):
+        c_optimiser = get_optimiser(model.classifier.parameters(), c_lr, reg_coeff, optim)
+        loss_fn = F.cross_entropy
+    else:
+        c_optimiser = None
+
+    train_params = {
+        'num_epochs': num_epochs,
+        'lr': lr,
+        'c_lr': c_lr,
+        'batch_size': batch_size,
+        'reg_coeff': reg_coeff,
+        'flatten': flatten,
+        'neg_coeff': neg_coeff,
+        'untr_coeff': untr_coeff,
+        'log_dir': log_dir,
+        'grad_mode': grad_mode,
+        'optim': optim,
+    }
 
     if log_dir is not None:
         writer = SummaryWriter(log_dir=log_dir)
+        writer.add_text('model', str(model).replace('\n', '<br/>').replace(' ', '&nbsp;'))
+        writer.add_text('modules', '\n'.join([str(module) for module in model.modules()]).replace('\n', '<br/>').replace(' ', '&nbsp;'))
+        writer.add_text('train_params', str(train_params).replace(',', '<br/>').replace('{', '').replace('}', '').replace(' ', '&nbsp;').replace("'", ''), model.epochs_trained.item())
+        writer.add_text('optimiser', str(optimiser).replace('\n', '<br/>').replace(' ', '&nbsp;'), model.epochs_trained.item())
+        if c_optimiser is not None:
+            writer.add_text('c_optimiser', str(c_optimiser).replace('\n', '<br/>').replace(' ', '&nbsp;'), model.epochs_trained.item())
 
     if save_best:
         if log_dir is not None:
@@ -209,12 +242,6 @@ def train(
         assert(assert_grads == False), "assert_grads must be False when grad_mode is 'manual'"
 
 
-    optimiser = get_optimiser(model.parameters(), lr, reg_coeff, optim)
-    if hasattr(model, 'classifier'):
-        c_optimiser = get_optimiser(model.classifier.parameters(), c_lr, reg_coeff, optim)
-        loss_fn = F.cross_entropy
-    else:
-        c_optimiser = None
 
     train_loader = train_data if isinstance(train_data, DataLoader) else DataLoader(train_data, batch_size, shuffle=True)
     if val_data is not None:
@@ -307,7 +334,8 @@ def train(
             # Parameter Update (Grad Descent)
             optimiser.step()
             if c_optimiser is not None and grad_mode=='auto':
-                loss_fn(out, targets).backward()
+                train_loss = loss_fn(out, targets)
+                train_loss.backward()
                 c_optimiser.step()
 
 
@@ -344,9 +372,12 @@ def train(
 
         # Collects statistics for validation data if it exists
         if val_data is not None:
-            val_vfe, val_acc = val_pass(model, val_loader, flatten, val_grads)
-            stats['val_vfe'] = val_vfe.item()
-            stats['val_acc'] = val_acc.item()
+            val_results = val_pass(model, val_loader, flatten, val_grads, c_optimiser is not None)
+            stats['val_vfe'] = val_results['vfe'].item()
+            stats['val_acc'] = val_results['acc'].item()
+            if c_optimiser is not None:
+                stats['val_loss'] = val_results['loss'].item()
+
             if log_dir:
                 writer.add_scalar('Accuracy/val', stats['val_acc'], model.epochs_trained.item())
                 writer.add_scalar('VFE/val', stats['val_vfe'], model.epochs_trained.item())

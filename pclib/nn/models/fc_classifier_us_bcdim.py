@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from pclib.nn.layers import FCBC
+from pclib.nn.layers import FCBCDIM
 from pclib.nn.models import FCClassifierUs
 
 # Based on Whittington and Bogacz 2017, but with targets predicting inputs
-class FCClassifierUsBc(FCClassifierUs):
+class FCClassifierUsBcDim(FCClassifierUs):
     """
     | A Self-Supervised version of FCClassifier.
     | It learns a feature extractor (self.layers) only from observations.
@@ -52,18 +52,14 @@ class FCClassifierUsBc(FCClassifierUs):
                 raise NotImplementedError
                 # layers.append(FCPW(in_features, out_features, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
             else:
-                layers.append(FCBC(in_features, out_features, device=self.device, **self.factory_kwargs))
+                layers.append(FCBCDIM(in_features, out_features, device=self.device, **self.factory_kwargs))
             in_features = out_features
         self.layers = nn.ModuleList(layers)
         
         self.classifier = nn.Sequential(
-            nn.Linear(self.hidden_sizes[-1], 128, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
+            nn.Linear(self.hidden_sizes[-1], 200, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
             nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(128, 64, device=self.device, dtype=self.factory_kwargs['dtype']),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(64, self.num_classes, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
+            nn.Linear(200, self.num_classes, bias=False, device=self.device, dtype=self.factory_kwargs['dtype']),
         )
 
     def step(self, state, obs=None, y=None, temp=None):

@@ -59,7 +59,7 @@ class FCClassifierUsDp(FCClassifierUs):
         self.classifier = nn.Sequential(
             nn.Linear(self.hidden_sizes[-1], 200, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
             nn.ReLU(),
-            nn.Linear(200, self.num_classes, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
+            nn.Linear(200, self.num_classes, bias=False, device=self.device, dtype=self.factory_kwargs['dtype']),
         )
 
     def _init_xs(self, state, obs=None, y=None):

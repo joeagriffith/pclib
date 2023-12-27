@@ -104,18 +104,31 @@ class FCLI(FC):
             | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
             | e_below Optional([torch.Tensor]): Error of layer below. if None, no gradients are calculated.
         """
-        new_x = self.lateral(state)
+        state['x'] = (1.0 - self.gamma) * state['x'] + self.gamma * self.lateral(state)
         if e_below is not None:
             update = self.propagate(e_below)
-            new_x += update * (self.d_actv_fn(state['x'])) - state['e']
+            state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
         else:
-            new_x += -state['e']
+            state['x'] += self.gamma * (-state['e'])
+
         if temp is not None:
-            eps = torch.randn_like(new_x, device=self.device) * .034 * temp
-            new_x += eps
+            eps = torch.randn_like(state['x'].detach(), device=self.device) * temp * 0.034
+            state['x'] += eps
         
-        state['x'] = (1-self.gamma) * state['x'] + self.gamma * self.actv_fn(new_x)
         state['x'] = self.norm(state['x'])
+
+        # new_x = self.lateral(state)
+        # if e_below is not None:
+        #     update = self.propagate(e_below)
+        #     new_x += update * (self.d_actv_fn(state['x'])) - state['e']
+        # else:
+        #     new_x += -state['e']
+        # if temp is not None:
+        #     eps = torch.randn_like(new_x, device=self.device) * .034 * temp
+        #     new_x += eps
+        
+        # state['x'] = (1-self.gamma) * state['x'] + self.gamma * self.actv_fn(new_x)
+        # state['x'] = self.norm(state['x'])
         
     def assert_grad(self, state, e_below=None):
         raise(NotImplementedError)
