@@ -116,8 +116,7 @@ def untr_pass(model, x, untr_coeff):
     if (grad_before == grad_after).all():
         raise RuntimeError("Untrained pass did not update gradients")
 
-
-def val_pass(model, val_loader, flatten=True, allow_grads=False, loss=False):
+def val_pass(model, val_loader, flatten=True, allow_grads=False, return_loss=False):
     """
     | Performs a validation pass on the model
 
@@ -143,8 +142,8 @@ def val_pass(model, val_loader, flatten=True, allow_grads=False, loss=False):
 
             # Forward pass
             out, state = model(x)
-            if loss:
-                loss += F.cross_entropy(out, target)
+            if return_loss:
+                loss += F.cross_entropy(out, target, reduction='sum')
             vfe += model.vfe(state, batch_reduction='sum')
             acc += (out.argmax(dim=1) == target).sum()
 
@@ -201,7 +200,7 @@ def train(
         | stats (dict): dictionary of statistics
     """
     optimiser = get_optimiser(model.parameters(), lr, reg_coeff, optim)
-    if hasattr(model, 'classifier'):
+    if hasattr(model, 'classifier') and c_lr > 0:
         c_optimiser = get_optimiser(model.classifier.parameters(), c_lr, reg_coeff, optim)
         loss_fn = F.cross_entropy
     else:
@@ -257,7 +256,7 @@ def train(
 
         # A second set of statistics for each epoch
         # Later aggregated into stats
-        epoch_stats = init_stats(model, minimal_stats)
+        epoch_stats = init_stats(model, minimal_stats, c_optimiser is not None)
         
         model.train()
         loop = tqdm(train_loader, total=len(train_loader), leave=False)    
@@ -265,7 +264,7 @@ def train(
         loop.set_description(f"Epoch [{epoch}/{num_epochs}]")
         loop.set_postfix(stats)
 
-        for images, targets in loop:
+        for batch_i, (images, targets) in enumerate(loop):
             if flatten:
                 x = images.flatten(start_dim=1)
             else:
@@ -274,13 +273,13 @@ def train(
             b_size = x.shape[0]
 
             if grad_mode == 'manual':
-                with torch.no_grad():
+                # with torch.no_grad():
                     # Forward pass and gradient calculation
-                    try:
-                        out, state = model(x, y=y)
-                    # catch typeerror if model is not supervised
-                    except TypeError:
-                        out, state = model(x)
+                try:
+                    out, state = model(x, y=y)
+                # catch typeerror if model is not supervised
+                except TypeError:
+                    out, state = model(x)
                 model.zero_grad()
                 for i, layer in enumerate(model.layers):
                     if i == 0:
@@ -299,8 +298,8 @@ def train(
                 vfe = model.vfe(state)
                 vfe.backward()
 
-                # # Plots computation graph for vfe, for debugging
-                # if epoch == 0 and batch_i == 9:
+                # Plots computation graph for vfe, for debugging
+                # if epoch == 0 and batch_i == 0:
                 #     make_dot(vfe).render("vfe", format="png")
 
 
@@ -333,10 +332,11 @@ def train(
 
             # Parameter Update (Grad Descent)
             optimiser.step()
-            if c_optimiser is not None and grad_mode=='auto':
+            if c_optimiser is not None:# and grad_mode=='auto':
                 train_loss = loss_fn(out, targets)
                 train_loss.backward()
                 c_optimiser.step()
+                epoch_stats['train_loss'].append(train_loss.item())
 
 
             # Track batch statistics
@@ -369,6 +369,10 @@ def train(
             stats['train_corr'] = torch.tensor(epoch_stats['train_corr']).mean().item()
             if log_dir:
                 writer.add_scalar('Corr/train', stats['train_corr'], model.epochs_trained.item())
+        if c_optimiser is not None:
+            stats['train_loss'] = torch.tensor(epoch_stats['train_loss']).mean().item()
+            if log_dir:
+                writer.add_scalar('Loss/train', stats['train_loss'], model.epochs_trained.item())
 
         # Collects statistics for validation data if it exists
         if val_data is not None:

@@ -1,4 +1,4 @@
-from pclib.nn.layers import Conv2d, ConvTranspose2d, FC
+from pclib.nn.layers import Conv2d, FC
 from pclib.utils.functional import format_y
 import torch
 import torch.nn as nn
@@ -63,11 +63,13 @@ class ConvClassifier(nn.Module):
         | Initialises the layers of the network.
         """
         layers = []
-        layers.append(ConvTranspose2d((1, 28, 28), None, **self.factory_kwargs))
-        layers.append(ConvTranspose2d((32, 24, 24), 1, 5, padding=0, **self.factory_kwargs))
-        layers.append(ConvTranspose2d((64, 10, 10), 32, 5, padding=0, upsample=2, **self.factory_kwargs))
-        layers.append(ConvTranspose2d((64, 3, 3), 64, 5, padding=0, upsample=2, **self.factory_kwargs))
-        layers.append(FC(64*3*3, 128, **self.factory_kwargs))
+        layers.append(Conv2d(None, (1, 32, 32),         maxpool=2, **self.factory_kwargs))
+        layers.append(Conv2d((1, 32, 32), (32, 16, 16), maxpool=2, **self.factory_kwargs))
+        layers.append(Conv2d((32, 16, 16), (64, 8, 8),  maxpool=2, **self.factory_kwargs))
+        layers.append(Conv2d((64, 8, 8), (64, 4, 4),    maxpool=2, **self.factory_kwargs))
+        layers.append(Conv2d((64, 4, 4), (64, 2, 2),    maxpool=2, **self.factory_kwargs))
+        layers.append(Conv2d((64, 2, 2), (64, 1, 1),    maxpool=2, **self.factory_kwargs))
+        layers.append(FC(64, 128, **self.factory_kwargs))
         layers.append(FC(128, 10, **self.factory_kwargs))
         self.layers = nn.ModuleList(layers)
 
@@ -113,12 +115,8 @@ class ConvClassifier(nn.Module):
         """
         if obs is not None:
             state[0]['x'] = obs.clone()
-            if isinstance(self.layers[0], (ConvTranspose2d, Conv2d)):
-                state[0]['x'].requires_grad = True
         if y is not None:
             state[-1]['x'] = y.clone()
-            if isinstance(self.layers[-1], (ConvTranspose2d, Conv2d)):
-                state[-1]['x'].requires_grad = True
 
     def step(self, state, obs=None, y=None, temp=None):
         """
@@ -132,39 +130,20 @@ class ConvClassifier(nn.Module):
             | temp (Optional[float]): Temperature for the softmax function
 
         """
-        self.zero_grad()
-
-        for i, layer in reversed(list(enumerate(self.layers))):
-            if i < len(self.layers) - 1: # don't update top e (no prediction)
-                layer.update_e(state[i], pred, temp=temp)
-            if i > 0: # Bottom layer can't predict
-                pred = layer.predict(state[i])
-                if isinstance(layer, FC) and isinstance(self.layers[i-1], (Conv2d, ConvTranspose2d)):
-                    shape = self.layers[i-1].shape
-                    pred = pred.reshape(pred.shape[0], shape[0], shape[1], shape[2])
-                elif isinstance(layer, (Conv2d, ConvTranspose2d)) and isinstance(self.layers[i-1], FC):
-                    pred = pred.flatten(1)
-
-        self.vfe(state).backward(retain_graph=True)
-        # for i, layer in enumerate(self.layers):
-        #     if isinstance(layer, (Conv2d, ConvTranspose2d)):
-        #         if i == 0 and obs is not None:
-        #             continue
-        #         elif i == len(self.layers) - 1 and y is not None:
-        #             continue
-        #         state[i]['x'].grad = -2 * (torch.)
-
         for i, layer in enumerate(self.layers):
-            e_below = state[i-1]['e'] if i > 0 else None
-            if isinstance(layer, FC) and isinstance(self.layers[i-1], (ConvTranspose2d, Conv2d)) and i > 0:
-                e_below = e_below.flatten(1)
+            # Update layer's x if not pinned
             if i == 0 and obs is not None:
-                continue
-            elif i == len(self.layers) - 1 and y is not None:
-                continue
-            layer.update_x(state[i], e_below)
-
-        self.pin(state, obs, y)
+                pass
+            elif i == len(self.layers) - 1:
+                pass
+            else:
+                e_below = state[i-1]['e'] if i > 0 else None
+                layer.update_x(state[i], e_below, temp=temp)
+                
+            # Update layer's e if not top layer
+            if i < len(self.layers) - 1: # don't update top e (no prediction)
+                pred = self.layers[i+1].predict(state[i+1])
+                layer.update_e(state[i], pred, temp=temp)
 
     def _init_xs(self, state, obs=None, y=None):
         """
@@ -183,9 +162,9 @@ class ConvClassifier(nn.Module):
                     state[i]['x'] = y.clone()
                 if i > 0:
                     pred = layer.predict(state[i])
-                    if isinstance(layer, FC) and isinstance(self.layers[i-1], (ConvTranspose2d, Conv2d)):
+                    if isinstance(layer, FC) and isinstance(self.layers[i-1], Conv2dV2):
                         shape = self.layers[i-1].shape
-                        pred = pred.reshape(pred.shape[0], shape[0], shape[1], shape[2])
+                        pred = pred.view(pred.shape[0], shape[0], shape[1], shape[2])
                     state[i-1]['x'] = pred.detach()
             if obs is not None:
                 state[0]['x'] = obs.clone()
@@ -195,21 +174,8 @@ class ConvClassifier(nn.Module):
                 if i == 0:
                     state[0]['x'] = obs.clone()
                 else:
-                    state[i]['x'] = 0.01 * torch.randn_like(state[i]['x']).to(self.device)
-
-        # elif obs is not None:
-        #     raise(NotImplementedError, "Initialising xs from obs not implemented, because propagate dont work.")
-        #     for i, layer in enumerate(self.layers):
-        #         if i == 0:
-        #             state[0]['x'] = obs.clone()
-        #         else:
-        #             x_below = state[i-1]['x']
-        #             if isinstance(layer, FC) and isinstance(self.layers[i-1], ConvTranspose2d):
-        #                 x_below = x_below.flatten(1)
-        #             state[i]['x'] = layer.propagate(x_below)
-        for i, layer in enumerate(self.layers):
-            if isinstance(layer, (Conv2d, ConvTranspose2d)):
-                state[i]['x'].requires_grad = True
+                    x_below = state[i-1]['x']
+                    state[i]['x'] = layer.propagate(x_below)
 
     def init_state(self, obs=None, y=None):
         """

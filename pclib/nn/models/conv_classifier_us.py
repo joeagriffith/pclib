@@ -1,14 +1,18 @@
+from pclib.nn.layers import Conv2d, FC
+from pclib.nn.models import ConvClassifier
+from pclib.utils.functional import format_y
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.grad import conv2d_input, conv2d_weight
 
-from pclib.nn.layers import ConvTranspose2d, Conv2d
-from pclib.nn.models import ConvClassifier
-
+# Based on Whittington and Bogacz 2017
 class ConvClassifierUs(ConvClassifier):
     """
-    | Similar to ConvClassifier, but only uses PC for convolutation Feature Extractor
-    | Trains feature extractor unsupervised, then trains classifier supervised.
+    | Similar to the FCClassifier, except uses convolutions instead of fully connected layers.
+    | Currently calculates X updates using .backward() on the VFE, which is slow.
+    | May be possible to speed up by calculating X updates manually, but requires complex indexing to minimise floating point operations.
+    | This network is not currently customisable, but requires altering the init_layers() code to change the architecture.
 
     Args:
         | steps (int): Number of steps to run the network for.
@@ -20,73 +24,63 @@ class ConvClassifierUs(ConvClassifier):
         | gamma (float): step size for x updates
         | device (torch.device): Device to run the network on.
         | dtype (torch.dtype): Data type to use for network parameters.
-
+    
     Attributes:
         | num_classes (int): Number of classes in the dataset.
         | steps (int): Number of steps to run the network for.
         | device (torch.device): Device to run the network on.
         | factory_kwargs (dict): Keyword arguments for the layers.
         | layers (torch.nn.ModuleList): List of layers in the network.
+
     """
     def __init__(self, steps=20, bias=True, symmetric=True, precision_weighted=False, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, device=torch.device('cpu'), dtype=None):
-        super().__init__(steps=steps, bias=bias, symmetric=symmetric, precision_weighted=precision_weighted, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, device=device, dtype=dtype)
+        super().__init__(
+            steps=steps,
+            bias=bias,
+            symmetric=symmetric,
+            precision_weighted=precision_weighted,
+            actv_fn=actv_fn,
+            d_actv_fn=d_actv_fn,
+            gamma=gamma,
+            device=device,
+            dtype=dtype,
+        )
 
     def init_layers(self):
         """
-        | Initialises self.layers with the layers of the network.
+        | Initialises the layers of the network.
         """
         layers = []
-        layers.append(ConvTranspose2d((1, 28, 28), None, **self.factory_kwargs))
-        layers.append(ConvTranspose2d((32, 24, 24), 1, 5, padding=0, **self.factory_kwargs))
-        layers.append(ConvTranspose2d((64, 10, 10), 32, 5, padding=0, upsample=2, **self.factory_kwargs))
-        layers.append(ConvTranspose2d((64, 3, 3), 64, 5, padding=0, upsample=2, **self.factory_kwargs))
-        layers.append(ConvTranspose2d((128, 1, 1), 64, 3, padding=0, **self.factory_kwargs))
-
+        layers.append(Conv2d(None, (1, 32, 32),                  **self.factory_kwargs))
+        layers.append(Conv2d((1, 32, 32), (32, 16, 16), 5, 2, 2, **self.factory_kwargs))
+        layers.append(Conv2d((32, 16, 16), (64, 8, 8),  3, 2, 1, **self.factory_kwargs))
+        layers.append(Conv2d((64, 8, 8), (64, 4, 4),    3, 2, 1, **self.factory_kwargs))
+        layers.append(Conv2d((64, 4, 4), (64, 2, 2),    3, 2, 1, **self.factory_kwargs))
+        layers.append(Conv2d((64, 2, 2), (64, 1, 1),    3, 2, 1, **self.factory_kwargs))
         self.layers = nn.ModuleList(layers)
 
         self.classifier = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(128, 200, bias=True, device=self.device),
+            nn.Linear(self.layers[-1].shape[0], 256, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
             nn.ReLU(),
-            nn.Linear(200, 10, bias=True, device=self.device),
+            nn.Dropout(0.5),
+            nn.Linear(256, 128, device=self.device, dtype=self.factory_kwargs['dtype']),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(128, self.num_classes, bias=True, device=self.device, dtype=self.factory_kwargs['dtype'])
         )
 
-    def to(self, device):
-        """
-        | Moves the network to the device.
 
-        Args:
-            | device (torch.device): Device to move the network to.
-        """
+    def to(self, device):
         self.device = device
         for layer in self.layers:
             layer.to(device)
         for layer in self.classifier:
             layer.to(device)
         return self
-    
-    def _init_xs(self, state, obs=None, y=None):
-        """
-        | Initialise xs with gaussian noise.
-        | Cannot initialise from y as model is unsupervised
-        """
-        y = None
-        for i, layer in enumerate(self.layers):
-            if i == 0:
-                state[0]['x'] = obs.clone()
-            else:
-                state[i]['x'] = 0.01 * torch.randn_like(state[i]['x']).to(self.device)
-        for i, layer in enumerate(self.layers):
-            if i == 0 and obs is not None:
-                continue
-            state[i]['x'].requires_grad = True
-
-        self.pin(state, obs, y)
 
     def get_output(self, state):
         """
         | Returns the output of the network.
-        | Does this by passing the top layer through the classifier.
 
         Args:
             | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
@@ -94,35 +88,50 @@ class ConvClassifierUs(ConvClassifier):
         Returns:
             | out (torch.Tensor): Output of the network
         """
-        return self.classifier(state[-1]['x'].detach())
-
+        x = state[-1]['x']
+        out = self.classifier(x.detach().flatten(1))
+        return out
+        
 
     def forward(self, obs=None, steps=None):
         """
-        | Performs inference for the model.
-        | uses self.classifier to get output.
-        | Doesn't pin targets, so is self-supervised.
+        | Performs inference for the network.
 
         Args:
             | obs (Optional[torch.Tensor]): Input data
-            | steps (Optional[int]): Number of steps to run inference for. Uses self.steps if not provided.
-
+            | y (Optional[torch.Tensor]): Target data
+            | steps (Optional[int]): Number of steps to run inference for
+        
         Returns:
-            | out (torch.Tensor): Output of the model
-            | state (list): List of layer state dicts, each containing 'x' and 'e'
+            | out (torch.Tensor): Output of the network
+            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
         """
         if steps is None:
             steps = self.steps
-        
+
         state = self.init_state(obs)
 
         for i in range(steps):
             temp = self.calc_temp(i, steps)
-            self.step(state, obs, temp=temp)
-
+            self.step(state, obs, temp)
+            
         out = self.get_output(state)
-
+            
         return out, state
+
+    def classify(self, obs, steps=None):
+        """
+        | Classifies the input obs.
+
+        Args:
+            | obs (torch.Tensor): Input data
+            | steps (Optional[int]): Number of steps to run inference for
+        
+        Returns:
+            | out (torch.Tensor): Predicted class
+        """
+        return self.forward(obs, steps)[0].argmax(dim=1)
+
 
     def reconstruct(self, obs, steps=None):
         """
@@ -133,12 +142,11 @@ class ConvClassifierUs(ConvClassifier):
         Args:
             | obs (torch.Tensor): Input data
             | steps (Optional[int]): Number of steps to run inference for. Uses self.steps if not provided.
-        
+
         Returns:
             | out (torch.Tensor): Reconstructed observation
             | state (list): List of layer state dicts, each containing 'x' and 'e'
         """
-        
         if steps is None:
             steps = self.steps
         
@@ -148,14 +156,14 @@ class ConvClassifierUs(ConvClassifier):
             temp = self.calc_temp(i, steps)
             self.step(state, temp=temp)
         
-        return state[0]['x'], state
+        out = state[0]['x']
+
+        return out, state
+
     
     def generate(self, y, steps=None):
         """
-        | Generates an image from the target y.
-        | Not implemented, as model is unsupervised.
+        | Not implemented as one cannot generate an input without a target, and this model does not pin targets.
         """
-        raise NotImplementedError
+        raise(NotImplementedError)
 
-    def classify(self, obs, state=None, steps=None):
-        return self.forward(obs)[0].argmax(dim=1)

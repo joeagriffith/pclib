@@ -171,6 +171,8 @@ class FC(nn.Module):
         Returns:
             | update (torch.Tensor): Update signal for state['x'].
         """
+        if e_below.dim() == 4:
+            e_below = e_below.flatten(1)
         weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
         return F.linear(e_below, weight_bu, None)
         
@@ -207,6 +209,8 @@ class FC(nn.Module):
         """
         # If not input layer, propagate error from layer below
         if e_below is not None:
+            if e_below.dim() == 4:
+                e_below = e_below.flatten(1)
             update = self.propagate(e_below)
             state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
         else:
@@ -241,6 +245,8 @@ class FC(nn.Module):
         """
         if e_below is not None:
             b_size = e_below.shape[0]
+            if e_below.dim() == 4:
+                e_below = e_below.flatten(1)
             self.weight_td.grad = 2*-(e_below.T @ self.actv_fn(state['x'])) / b_size
             if self.bias is not None:
                 self.bias.grad = 2*-e_below.mean(dim=0)
@@ -269,6 +275,7 @@ class FC(nn.Module):
                     \nrel_diff_max: {((manual_weight_td_grad - self.weight_td.grad).abs() / manual_weight_td_grad.abs()).max()} \
                     \nmax_diff: {(manual_weight_td_grad - self.weight_td.grad).abs().max()} \
                     \n(bak, man, diff): {[(self.weight_td.grad[i, j].item(), manual_weight_td_grad[i, j].item(), (self.weight_td.grad[i, j] - manual_weight_td_grad[i, j]).abs().item()) for i, j in (isclose==False).nonzero()[:5]]}"
+
 
                 if self.bias is not None:
                     manual_bias_grad = 2*-e_below.mean(dim=0)

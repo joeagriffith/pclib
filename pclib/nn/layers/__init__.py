@@ -6,5 +6,5 @@ from pclib.nn.layers.fcli import FCLI
 from pclib.nn.layers.fclibc import FCLIBC
 from pclib.nn.layers.fcsym import FCSym
 from pclib.nn.layers.fcpw import FCPW
-from pclib.nn.layers.conv import Conv2d, ConvTranspose2d, Conv2dSkip
-from pclib.nn.layers.convV2 import Conv2dV2
+from pclib.nn.layers.conv import Conv2d
+from pclib.nn.layers.convbc import Conv2dBc
