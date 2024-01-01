@@ -161,6 +161,7 @@ class FCClassifier(nn.Module):
                 if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
                     with torch.no_grad():
                         layer.update_x(state[i], e_below, temp=temp)
+        for i, layer in enumerate(self.layers):
             if i < len(self.layers) - 1:
                 pred = self.layers[i+1].predict(state[i+1])
                 layer.update_e(state[i], pred, temp=temp)
@@ -183,7 +184,7 @@ class FCClassifier(nn.Module):
                     state[i]['x'] = y.clone()
                 else:
                     state[i-1]['x'] = layer.predict(state[i])
-                    state[i-1]['x'] = self.layers[i-1].actv_fn(state[i-1]['x'])
+                    state[i-1]['x'] = self.layers[i-1].actv_fn(state[i-1]['x'].detach())
             if obs is not None:
                 state[0]['x'] = obs.clone()
         elif obs is not None:
@@ -191,7 +192,7 @@ class FCClassifier(nn.Module):
                 if i == 0:
                     state[0]['x'] = obs.clone()
                 else:
-                    state[i]['x'] = layer.actv_fn(layer.propagate(state[i-1]['x']))
+                    state[i]['x'] = layer.actv_fn(layer.propagate(state[i-1]['x'].detach()))
 
 
     def init_state(self, obs=None, y=None):

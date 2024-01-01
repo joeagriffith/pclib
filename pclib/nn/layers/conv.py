@@ -64,14 +64,34 @@ class Conv2d(nn.Module):
         
         self.init_weights()
         self.norm = nn.LayerNorm(self.shape)
+
+    def __str__(self):
+        base_str = super().__str__()
+
+        custom_info = "\n  (params): \n" + \
+            f"    prev_shape: {self.prev_shape}\n" + \
+            f"    shape: {self.shape}\n" + \
+            f"    actv_fn: {self.actv_fn}\n" + \
+            f"    gamma: {self.gamma}\n" + \
+            f"    kernel_size: {self.kernel_size}\n" + \
+            f"    stride: {self.stride}\n" + \
+            f"    padding: {self.padding}\n" + \
+            f"    has_bias: {self.has_bias}\n" + \
+            f"    maxpool: {self.maxpool}\n"
+        
+        string = base_str[:base_str.find('\n')] + custom_info + base_str[base_str.find('\n'):]
+        
+        return string
         
     def init_weights(self):
         # Initialise weights if not input layer
         if self.prev_shape is not None:
             self.conv = nn.Sequential(
-                nn.Conv2d(self.prev_shape[0], self.shape[0], self.kernel_size, padding=self.padding, stride=self.stride, bias=self.has_bias, **self.factory_kwargs),
+                nn.Conv2d(self.prev_shape[0], self.shape[0], self.kernel_size, padding=self.padding, stride=self.stride, bias=False, **self.factory_kwargs),
                 nn.MaxPool2d(kernel_size=self.maxpool),
             )
+            if self.has_bias:
+                self.bias = Parameter(torch.zeros(self.prev_shape, device=self.device, requires_grad=True))
             # self.conv_bu = nn.Sequential(
             #     nn.Upsample(scale_factor=maxpool),
             #     nn.ConvTranspose2d(prev_shape[0], shape[0], kernel_size, padding=padding, stride=stride, bias=False, **factory_kwargs),
@@ -79,7 +99,7 @@ class Conv2d(nn.Module):
 
     def init_state(self, batch_size):
         return {
-            'x': torch.zeros((batch_size, self.shape[0], self.shape[1], self.shape[2]), device=self.device, requires_grad=True),
+            'x': torch.zeros((batch_size, self.shape[0], self.shape[1], self.shape[2]), device=self.device),
             'e': torch.zeros((batch_size, self.shape[0], self.shape[1], self.shape[2]), device=self.device),
         }
 
@@ -89,9 +109,13 @@ class Conv2d(nn.Module):
 
     # Returns a prediction of the state in the previous layer
     def predict(self, state):
-        x = F.interpolate(state['x'].detach(), scale_factor=self.maxpool, mode='nearest')
+        # x = F.interpolate(state['x'].detach(), scale_factor=self.maxpool, mode='nearest')
+        x = F.interpolate(self.actv_fn(state['x'].detach()), scale_factor=self.maxpool, mode='nearest')
         prev_shape = (x.shape[0], self.prev_shape[0], self.prev_shape[1], self.prev_shape[2])
-        return conv2d_input(prev_shape, self.conv[0].weight, x, stride=self.stride, padding=self.padding, dilation=1, groups=1)
+        pred = conv2d_input(prev_shape, self.conv[0].weight, x, stride=self.stride, padding=self.padding, dilation=1, groups=1)
+        if self.has_bias:
+            pred += self.bias
+        return pred
     
     # propagates error from layer below, return an update for x
     def propagate(self, e_below):
@@ -117,8 +141,9 @@ class Conv2d(nn.Module):
                 e_below = e_below.unsqueeze(-1).unsqueeze(-1)
             update = self.propagate(e_below)
             state['x'] += self.gamma * (update * self.d_actv_fn(state['x']))
+            # state['x'] += self.gamma * update
 
-        state['x'] += self.gamma * (-state['e'])
+        state['x'] += self.gamma * -state['e']
         
         if temp is not None:
             eps = torch.randn_like(state['x'], device=self.device) * 0.034 * temp
@@ -126,19 +151,6 @@ class Conv2d(nn.Module):
         
         state['x'] = self.norm(state['x'])
 
-    # def update_x(self, state, e_below=None, pred=None, temp=None):
-    #     if e_below is not None:
-    #         if e_below.dim() == 2:
-    #             e_below = e_below.unsqueeze(-1).unsqueeze(-1)
-    #         update = self.propagate(e_below)
-    #         state['x'] += self.gamma * (update * self.d_actv_fn(state['x']))
-    #         if pred is not None:
-    #             state['x'] += self.gamma * pred
-    #         if temp is not None:
-    #             eps = torch.randn_like(state['x'], device=self.device) * 0.034 * temp
-    #             state['x'] += eps
-            
-    #         state['x'] = self.norm(state['x'])
 
     def update_grad(self, state, e_below=None):
         """
@@ -146,9 +158,9 @@ class Conv2d(nn.Module):
         """
         if e_below is not None:
             b_size = e_below.shape[0]
-            x = F.interpolate(state['x'], scale_factor=self.maxpool, mode='nearest')
+            x = F.interpolate(self.actv_fn(state['x']), scale_factor=self.maxpool, mode='nearest')
             self.conv[0].weight.grad = 2*-conv2d_weight(e_below, self.conv[0].weight.shape, x, stride=self.stride, padding=self.padding, dilation=1, groups=1) / b_size
             # I dont trust this
             # Might need separate bias for prediction. this is for error prop
             if self.has_bias:
-                self.conv[0].bias.grad = 2*-x.sum(dim=(0,2,3)) / b_size
+                self.bias.grad = 2*-e_below.mean(0)

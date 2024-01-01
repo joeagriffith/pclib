@@ -65,20 +65,6 @@ class FCLI(FC):
         self.moving_avg = self.moving_avg.to(self.device)
         return super().to(*args, **kwargs)
 
-    # Calculates a prediction of state['x'] in the layer below
-    def predict(self, state):
-        """
-        | Almost identical to FC.predict(), but doesn't apply the activation function to state['x'] before calculating the prediction.
-        | This is because the activation function is applied to state['x'] in the update_x() function.
-
-        Args:
-            | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
-
-        Returns:
-            | pred (torch.Tensor): Prediction of state['x'] in the layer below.
-        """
-        return F.linear(state['x'].detach(), self.weight_td, self.bias)
-
     def lateral(self, state):
         """
         | Calculates the lateral update signal for state['x'].
@@ -107,14 +93,15 @@ class FCLI(FC):
         state['x'] = (1.0 - self.gamma) * state['x'] + self.gamma * self.lateral(state)
         if e_below is not None:
             update = self.propagate(e_below)
-            state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
-        else:
-            state['x'] += self.gamma * (-state['e'])
+            state['x'] += self.gamma * (update * self.d_actv_fn(state['x']))
+
+        state['x'] += self.gamma * -state['e']
 
         if temp is not None:
             eps = torch.randn_like(state['x'].detach(), device=self.device) * temp * 0.034
             state['x'] += eps
         
+        # state['x'] = self.norm(self.actv_fn(state['x']))
         state['x'] = self.norm(state['x'])
 
         # new_x = self.lateral(state)

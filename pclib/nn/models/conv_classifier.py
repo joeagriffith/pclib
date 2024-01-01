@@ -134,7 +134,7 @@ class ConvClassifier(nn.Module):
             # Update layer's x if not pinned
             if i == 0 and obs is not None:
                 pass
-            elif i == len(self.layers) - 1:
+            elif i == len(self.layers) - 1 and y is not None:
                 pass
             else:
                 e_below = state[i-1]['e'] if i > 0 else None
@@ -159,20 +159,20 @@ class ConvClassifier(nn.Module):
         if y is not None:
             for i, layer in reversed(list(enumerate(self.layers))):
                 if i == len(self.layers) - 1: # last layer
-                    state[i]['x'] = y.clone()
+                    state[i]['x'] = y.detach()
                 if i > 0:
                     pred = layer.predict(state[i])
-                    if isinstance(layer, FC) and isinstance(self.layers[i-1], Conv2dV2):
+                    if isinstance(layer, FC) and isinstance(self.layers[i-1], Conv2d):
                         shape = self.layers[i-1].shape
                         pred = pred.view(pred.shape[0], shape[0], shape[1], shape[2])
                     state[i-1]['x'] = pred.detach()
             if obs is not None:
-                state[0]['x'] = obs.clone()
+                state[0]['x'] = obs.detach()
 
         elif obs is not None:
             for i, layer in enumerate(self.layers):
                 if i == 0:
-                    state[0]['x'] = obs.clone()
+                    state[0]['x'] = obs.detach()
                 else:
                     x_below = state[i-1]['x']
                     state[i]['x'] = layer.propagate(x_below)

@@ -7,4 +7,5 @@ from pclib.nn.layers.fclibc import FCLIBC
 from pclib.nn.layers.fcsym import FCSym
 from pclib.nn.layers.fcpw import FCPW
 from pclib.nn.layers.conv import Conv2d
+from pclib.nn.layers.convli import Conv2dLi
 from pclib.nn.layers.convbc import Conv2dBc

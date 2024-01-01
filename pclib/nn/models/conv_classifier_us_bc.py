@@ -39,17 +39,17 @@ class ConvClassifierUsBc(ConvClassifierUs):
 
     def __init__(self, steps=20, bias=True, symmetric=True, precision_weighted=False, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, device=torch.device('cpu'), dtype=None):
         self.factory_kwargs = {'actv_fn': actv_fn, 'd_actv_fn': d_actv_fn, 'gamma': gamma, 'has_bias': bias, 'symmetric': symmetric, 'dtype': dtype}
-        super().__init__()
-
-        self.num_classes = 10
-        self.precision_weighted = precision_weighted
-        self.steps = steps
-        self.device = device
-
-        self.init_layers()
-        self.register_buffer('epochs_trained', torch.tensor(0, dtype=torch.long))
-        self.register_buffer('min_vfe', torch.tensor(float('inf'), dtype=torch.float32))
-
+        super().__init__(
+            steps=steps,
+            bias=bias,
+            symmetric=symmetric,
+            precision_weighted=precision_weighted,
+            actv_fn=actv_fn,
+            d_actv_fn=d_actv_fn,
+            gamma=gamma,
+            device=device,
+            dtype=dtype
+        )
 
     def init_layers(self):
         """

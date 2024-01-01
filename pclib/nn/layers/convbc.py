@@ -48,7 +48,7 @@ class Conv2dBc(Conv2d):
         )
         
     def update_x(self, state, e_below=None, pred=None, temp=None):
-        state['x'] = state['x'].detach()
+        state['x'] = (1 - self.gamma) * state['x'].detach()
         if e_below is not None:
             if e_below.dim() == 2:
                 e_below = e_below.unsqueeze(-1).unsqueeze(-1)

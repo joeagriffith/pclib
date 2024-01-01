@@ -7,7 +7,7 @@ from torchviz import make_dot
 from torch.utils.tensorboard import SummaryWriter
 
 from pclib.optim.eval import topk_accuracy
-from pclib.nn.layers import FCPW, FCLI
+from pclib.nn.layers import FCPW, FCLI, Conv2dLi
 from pclib.utils.functional import format_y, calc_corr
 
 def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW'):
@@ -296,11 +296,11 @@ def train(
 
                 model.zero_grad()
                 vfe = model.vfe(state)
-                vfe.backward()
-
                 # Plots computation graph for vfe, for debugging
                 # if epoch == 0 and batch_i == 0:
                 #     make_dot(vfe).render("vfe", format="png")
+                vfe.backward()
+
 
 
             for i, layer in enumerate(model.layers):
@@ -385,6 +385,8 @@ def train(
             if log_dir:
                 writer.add_scalar('Accuracy/val', stats['val_acc'], model.epochs_trained.item())
                 writer.add_scalar('VFE/val', stats['val_vfe'], model.epochs_trained.item())
+                if c_optimiser is not None:
+                    writer.add_scalar('Loss/val', stats['val_loss'], model.epochs_trained.item())
         
         # Saves model if it has the lowest validation VFE (or training VFE if no validation data) compared to previous training
         if save_best:

@@ -62,8 +62,6 @@ class FCLIBC(FCLI):
                          dtype,
                         )   
 
-        self.group_size = 20
-
     def update_x(self, state, e_below=None, pred=None, temp=None):
         """
         | Calculates a new_x and then interpolates between the current state['x'] and new_x, updating state['x'] inplace.

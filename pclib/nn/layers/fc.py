@@ -78,6 +78,9 @@ class FC(nn.Module):
 
         self.init_params()
         self.norm = nn.LayerNorm(self.out_features)
+        if self.in_features is not None:
+            self.norm2 = nn.LayerNorm(self.in_features)
+        self.norm3 = nn.LayerNorm(self.out_features)
         # self.norm = nn.BatchNorm1d(self.out_features)
         # self.norm = nn.GroupNorm(8, self.out_features)
 
@@ -158,7 +161,6 @@ class FC(nn.Module):
         Returns:
             | pred (torch.Tensor): Prediction of state['x'] in the layer below.
         """
-
         return F.linear(self.actv_fn(state['x'].detach()), self.weight_td, self.bias)
     
     def propagate(self, e_below):
@@ -208,30 +210,31 @@ class FC(nn.Module):
             | e_below (Optional[torch.Tensor]): Error of layer below. None if input layer.
         """
         # If not input layer, propagate error from layer below
-        if e_below is not None:
-            if e_below.dim() == 4:
-                e_below = e_below.flatten(1)
-            update = self.propagate(e_below)
-            state['x'] += self.gamma * (-state['e'] + update * self.d_actv_fn(state['x']))
-        else:
-            state['x'] += self.gamma * (-state['e'])
+        with torch.no_grad():
+            if e_below is not None:
+                if e_below.dim() == 4:
+                    e_below = e_below.flatten(1)
+                update = self.propagate(e_below)
+                # state['x'] += self.gamma * (update * self.d_actv_fn(state['x']))
+                state['x'] += self.gamma * update
 
-        if temp is not None:
-            eps = torch.randn_like(state['x'].detach(), device=self.device) * temp * 0.034
-            state['x'] += eps
-        
-        state['x'] = self.norm(state['x'])
+            state['x'] += self.gamma * -state['e']
+
+            if temp is not None:
+                eps = torch.randn_like(state['x'], device=self.device) * temp * 0.034
+                state['x'] += eps
+            
+            state['x'] = self.norm(self.actv_fn(state['x'].detach()))
 
         # new_x = state['x'].detach()
         # if e_below is not None:
         #     update = self.propagate(e_below)
-        #     new_x += update * (self.d_actv_fn(state['x'])) - state['e']
-        # else:
-        #     new_x += -state['e']
+        #     new_x += update * (self.d_actv_fn(state['x']))
+        # new_x += -state['e']
         # if temp is not None:
         #     eps = torch.randn_like(new_x, device=self.device) * .034 * temp
         #     new_x += eps
-        # state['x'] = (1-self.gamma) * state['x'] + self.gamma * self.actv_fn(new_x)
+        # state['x'] = (1-self.gamma) * state['x'] + self.gamma * new_x
         # state['x'] = self.norm(state['x'])
 
     def update_grad(self, state, e_below=None):
@@ -248,10 +251,12 @@ class FC(nn.Module):
             if e_below.dim() == 4:
                 e_below = e_below.flatten(1)
             self.weight_td.grad = 2*-(e_below.T @ self.actv_fn(state['x'])) / b_size
+            # self.weight_td.grad = 2*-(e_below.T @ state['x']) / b_size
             if self.bias is not None:
                 self.bias.grad = 2*-e_below.mean(dim=0)
             if not self.symmetric:
                 self.weight_bu.grad = 2*-(self.actv_fn(state['x']).T @ e_below) / b_size
+                # self.weight_bu.grad = 2*-(state['x'].T @ e_below) / b_size
         
     def assert_grad(self, state, e_below=None):
         """
