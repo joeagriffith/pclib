@@ -54,6 +54,7 @@ class FCLI(FC):
         # Initialise weights
         self.weight_lat = nn.Parameter(torch.eye((out_features), **factory_kwargs) * 1.0)
 
+        # Normalize moving_avg??!?! and on each update
         self.moving_avg = torch.ones((out_features), **factory_kwargs)
         self.norm = nn.LayerNorm(out_features, **factory_kwargs)
         if in_features is not None:

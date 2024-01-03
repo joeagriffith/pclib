@@ -6,8 +6,9 @@ from torch import Tensor
 from torch.nn import Parameter
 from typing import Optional
 from pclib.utils.functional import reTanh, identity
+from pclib.nn.layers import FC
 
-class FCDP(nn.Module):
+class FCDP(FC):
     """
     | Fully connected layer with optional bias and optionally symmetric weights.
     | The layer stores its state in a dictionary with keys 'x' and 'e'.
@@ -30,13 +31,6 @@ class FCDP(nn.Module):
         | weight_bu (torch.Tensor): Weights for bottom-up predictions (if symmetric=False).
         | bias (torch.Tensor): Bias term (if has_bias=True).
     """
-    __constants__ = ['in_features', 'out_features']
-    in_features: Optional[int]
-    out_features: int
-    weight_td: Optional[Tensor]
-    weight_bu: Optional[Tensor]
-    bias: Optional[Tensor]
-
     def __init__(self,
                  in_features: int,
                  out_features: int,
@@ -49,36 +43,34 @@ class FCDP(nn.Module):
                  dtype=None
                  ) -> None:
 
-        self.factory_kwargs = {'device': device, 'dtype': dtype}
-        super().__init__()
-
-        self.in_features = in_features
-        self.out_features = out_features
-        self.has_bias = has_bias
-        self.symmetric = symmetric
-        self.actv_fn = actv_fn
-        self.gamma = gamma
-        self.device = device
-
-        # Automatically set d_actv_fn if not provided
-        if d_actv_fn is not None:
-            self.d_actv_fn: callable = d_actv_fn
-        elif actv_fn == F.relu:
-            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x))
-        elif actv_fn == F.leaky_relu:
-            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) + torch.sign(torch.minimum(x, torch.zeros_like(x))) * 0.01
-        elif actv_fn == reTanh:
-            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) * (1 - torch.tanh(x).square())
-        elif actv_fn == F.sigmoid:
-            self.d_actv_fn: callable = lambda x: torch.sigmoid(x) * (1 - torch.sigmoid(x))
-        elif actv_fn == F.tanh:
-            self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
-        elif actv_fn == identity:
-            self.d_actv_fn: callable = lambda x: torch.ones_like(x)
+        super().__init__(
+            in_features,
+            out_features,
+            has_bias,
+            symmetric,
+            actv_fn,
+            d_actv_fn,
+            gamma,
+            device,
+            dtype
+        )
 
         self.init_params()
-        self.norm = nn.LayerNorm(self.out_features)
-        # self.norm = nn.GroupNorm(10, self.out_features)
+        self.out_sign_correct = torch.cat([torch.ones(self.out_features, device=self.device), -torch.ones(self.out_features, device=self.device)], dim=0)
+        if self.in_features is not None:
+            self.in_sign_correct = torch.cat([torch.ones(self.in_features, device=self.device), -torch.ones(self.in_features, device=self.device)], dim=0)
+
+    def to(self, device):
+        """
+        | Moves layer to device and updates device attribute.
+
+        Args:
+            | device (torch.device): Device to move to.
+        """
+        super().to(device)
+        self.out_sign_correct = self.out_sign_correct.to(device)
+        if self.in_features is not None:
+            self.in_sign_correct = self.in_sign_correct.to(device)
         
     # Declare weights if not input layer
     def init_params(self):
@@ -125,40 +117,9 @@ class FCDP(nn.Module):
         """
         return {
             'x': torch.zeros((batch_size, self.out_features), device=self.device),
-            'pPE': torch.zeros((batch_size, self.out_features), device=self.device),
-            'nPE': torch.zeros((batch_size, self.out_features), device=self.device),
+            'e': torch.zeros((batch_size, self.out_features*2), device=self.device),
         }
-
-    def to(self, *args, **kwargs):
-        self.device = args[0]
-        return super().to(*args, **kwargs)
-
-    def predict(self, state):
-        """
-        | Calculates a prediction of state['x'] in the layer below.
-
-        Args:
-            | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
-        
-        Returns:
-            | pred (torch.Tensor): Prediction of state['x'] in the layer below.
-        """
-        return F.linear(self.actv_fn(state['x'].detach()), self.weight_td, self.bias)
     
-    def propagate(self, ppe_below, npe_below):
-        """
-        | Propagates error from layer below, returning an update signal for state['x'].
-
-        Args:
-            | e_below (torch.Tensor): Error signal from layer below.
-
-        Returns:
-            | update (torch.Tensor): Update signal for state['x'].
-        """
-        weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
-        e = torch.cat([ppe_below, npe_below], dim=1)
-        return F.linear(e, weight_bu, None)
-        
     # Recalculates prediction-error (state['e']) between state['x'] and a top-down prediction of it
     # With simulated annealing
     def update_e(self, state, pred=None, temp=None):
@@ -175,17 +136,14 @@ class FCDP(nn.Module):
         if pred is not None:
             if pred.dim() == 4:
                 pred = pred.flatten(1)
-            state['pPE'] = state['x'].detach() - pred[:, :self.out_features]
-            state['nPE'] = pred[:, self.out_features:] - state['x'].detach()
-            
+            x = torch.cat([state['x'].detach(), state['x'].detach()], dim=1)
+            state['e'] = (x - pred) * self.out_sign_correct
 
         if temp is not None:
-            eps = torch.randn_like(state['pPE'].detach(), device=self.device) * 0.034 * temp
-            eps = torch.randn_like(state['nPE'].detach(), device=self.device) * 0.034 * temp
-            state['pPE'] += eps
-            state['nPE'] += eps
+            eps = torch.randn_like(state['e'].detach(), device=self.device) * temp * 0.034
+            state['e'] += eps
     
-    def update_x(self, state, ppe_below=None, npe_below=None, temp=None):
+    def update_x(self, state, e_below=None, temp=None):
         """
         | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x)).
@@ -195,96 +153,20 @@ class FCDP(nn.Module):
             | e_below (Optional[torch.Tensor]): Error of layer below. None if input layer.
         """
         # If not input layer, propagate error from layer below
-        if ppe_below is not None:
-            update = self.propagate(ppe_below, npe_below)
-            state['x'] += self.gamma * (state['nPE'] - state['pPE'] + update * self.d_actv_fn(state['x']))
-        else:
-            state['x'] += self.gamma * (state['nPE'] - state['pPE'])
+        with torch.no_grad():
+            if e_below is not None:
+                if e_below.dim() == 4:
+                    e_below = e_below.flatten(1)
+                e_below = e_below * self.in_sign_correct
+                update = self.propagate(e_below)
+                # saves a tiny bit of compute if d_actv_fn is identity
+                if self.actv_fn != identity:
+                    update *= self.d_actv_fn(state['x'])
+                state['x'] += self.gamma * update
 
-        if temp is not None:
-            eps = torch.randn_like(state['x'].detach(), device=self.device) * temp * 0.034
-            state['x'] += eps
-        
-        state['x'] = self.norm(state['x'])
+            e = state['e'][:, :self.out_features] - state['e'][:, self.out_features:]
+            state['x'] += self.gamma * -e
 
-        # new_x = state['x'].detach()
-        # if e_below is not None:
-        #     update = self.propagate(e_below)
-        #     new_x += update * (self.d_actv_fn(state['x'])) - state['e']
-        # else:
-        #     new_x += -state['e']
-        # if temp is not None:
-        #     eps = torch.randn_like(new_x, device=self.device) * .034 * temp
-        #     new_x += eps
-        # state['x'] = (1-self.gamma) * state['x'] + self.gamma * self.actv_fn(new_x)
-
-    def update_grad(self, state, ppe_below=None, npe_below=None):
-        """
-        | Manually calculates gradients for weight_td, weight_bu, and bias if they exist.
-        | Slightly faster than using autograd.
-
-        Args:
-            | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
-            | e_below (Optional[torch.Tensor]): Error of layer below. if None, no gradients are calculated.
-        """
-        if ppe_below is not None:
-            b_size = ppe_below.shape[0]
-            ppe_grad = 2*-(ppe_below.T @ self.actv_fn(state['x'])) / b_size
-            npe_grad = 2*(npe_below.T @ self.actv_fn(state['x'])) / b_size
-            self.weight_td.grad = torch.cat([ppe_grad, npe_grad], dim=0)
-            if self.bias is not None:
-                ppe_b_grad = 2*-ppe_below.mean(dim=0)
-                npe_b_grad = 2*npe_below.mean(dim=0)
-                self.bias.grad = torch.cat([ppe_b_grad, npe_b_grad], dim=0)
-            if not self.symmetric:
-                ppe_s_grad = 2*-(self.actv_fn(state['x']).T @ ppe_below) / b_size
-                npe_s_grad = 2*(self.actv_fn(state['x']).T @ npe_below) / b_size
-                self.weight_bu.grad = torch.cat([ppe_s_grad, npe_s_grad], dim=0)
-        
-    def assert_grad(self, state, e_below=None):
-        """
-        | Iff model is being updated with autograd, this function can be used to check whether the manual gradient calculations agree.
-        | Uses assertions and torch.isclose to compare.
-
-        Args:
-            | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
-            | e_below (Optional[torch.Tensor]): Error of layer below. if None, no gradients are calculated.
-        """
-        raise('Not implemented')
-        # with torch.no_grad():
-        #     assert (e_below is None) == (self.in_features is None), "e_below must be None iff in_features is None"
-        #     if e_below is not None:
-        #         b_size = e_below.shape[0]
-        #         manual_weight_td_grad = 2*-(e_below.T @ self.actv_fn(state['x'])) / b_size
-        #         isclose = torch.isclose(self.weight_td.grad, manual_weight_td_grad, atol=0.001, rtol=0.1)
-        #         assert isclose.all(), f" \
-        #             \nbackward: {self.weight_td.grad} \
-        #             \nmanual  : {manual_weight_td_grad}, \
-        #             \nrel_diff: {(manual_weight_td_grad - self.weight_td.grad).abs() / manual_weight_td_grad.abs()} \
-        #             \nrel_diff_max: {((manual_weight_td_grad - self.weight_td.grad).abs() / manual_weight_td_grad.abs()).max()} \
-        #             \nmax_diff: {(manual_weight_td_grad - self.weight_td.grad).abs().max()} \
-        #             \n(bak, man, diff): {[(self.weight_td.grad[i, j].item(), manual_weight_td_grad[i, j].item(), (self.weight_td.grad[i, j] - manual_weight_td_grad[i, j]).abs().item()) for i, j in (isclose==False).nonzero()[:5]]}"
-
-        #         if self.bias is not None:
-        #             manual_bias_grad = 2*-e_below.mean(dim=0)
-        #             isclose = torch.isclose(self.bias.grad, manual_bias_grad, atol=0.001, rtol=0.1)
-        #             assert isclose.all(), f" \
-        #                 \nmanual  : {manual_bias_grad}, \
-        #                 \nbackward: {self.bias.grad} \
-        #                 \nrel_diff: {(manual_bias_grad - self.bias.grad).abs() / manual_bias_grad.abs()} \
-        #                 \nrel_diff_max: {((manual_bias_grad - self.bias.grad).abs() / manual_bias_grad.abs()).max()} \
-        #                 \nmax_diff: {(manual_bias_grad - self.bias.grad).abs().max()} \
-        #                 \n(bak, man, diff): {[(self.bias.grad[i].item(), manual_bias_grad[i].item(), (self.bias.grad[i] - manual_bias_grad[i]).abs().item()) for i in (isclose==False).nonzero()[:5]]}"
-
-        #         if not self.symmetric:
-        #             manual_weight_bu_grad = 2*-(self.actv_fn(state['x']).T @ e_below) / b_size
-        #             isclose = torch.isclose(self.weight_bu.grad, manual_weight_bu_grad, atol=0.001, rtol=0.1)
-        #             assert isclose.all(), f" \
-        #                 \nmanual  : {manual_weight_bu_grad}, \
-        #                 \nbackward: {self.weight_bu.grad} \
-        #                 \nrel_diff: {(manual_weight_bu_grad - self.weight_bu.grad).abs() / manual_weight_bu_grad.abs()} \
-        #                 \nrel_diff_max: {((manual_weight_bu_grad - self.weight_bu.grad).abs() / manual_weight_bu_grad.abs()).max()} \
-        #                 \nmax_diff: {(manual_weight_bu_grad - self.weight_bu.grad).abs().max()} \
-        #                 \n(bak, man, diff): {[(self.weight_bu.grad[i, j].item(), manual_weight_bu_grad[i, j].item(), (self.weight_bu.grad[i, j] - manual_weight_bu_grad[i, j]).abs().item()) for i, j in (isclose==False).nonzero()[:5]]}"
-
-        # return True
+            if temp is not None:
+                eps = torch.randn_like(state['x'], device=self.device) * temp * 0.034
+                state['x'] += eps

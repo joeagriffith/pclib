@@ -172,6 +172,7 @@ def train(
     save_best=True,
     grad_mode='auto',
     optim='AdamW',
+    scheduler=None,
 ):
     """
     | Trains a model with the specified parameters
@@ -199,10 +200,18 @@ def train(
         | step (int): step number
         | stats (dict): dictionary of statistics
     """
+    assert scheduler in [None, 'ReduceLROnPlateau'], f"Invalid scheduler '{scheduler}', or not yet implemented"
+
     optimiser = get_optimiser(model.parameters(), lr, reg_coeff, optim)
+    if scheduler == 'ReduceLROnPlateau':
+        sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=5, verbose=True)
+
+
     if hasattr(model, 'classifier') and c_lr > 0:
         c_optimiser = get_optimiser(model.classifier.parameters(), c_lr, reg_coeff, optim)
         loss_fn = F.cross_entropy
+        if scheduler == 'ReduceLROnPlateau':
+            c_sched = torch.optim.lr_scheduler.ReduceLROnPlateau(c_optimiser, patience=5, verbose=True)
     else:
         c_optimiser = None
 
@@ -337,10 +346,11 @@ def train(
                 train_loss.backward()
                 c_optimiser.step()
                 epoch_stats['train_loss'].append(train_loss.item())
+            optimiser.step()
 
 
             # Track batch statistics
-            epoch_stats['train_vfe'].append(model.vfe(state).item())
+            epoch_stats['train_vfe'].append(model.vfe(state, batch_reduction='sum').item())
             if track_corr:
                 epoch_stats['train_corr'].append(calc_corr(state).item())
             
@@ -361,8 +371,10 @@ def train(
                         epoch_stats['WeightVar_means'][i].append(layer.weight_var.mean().item())
                         epoch_stats['WeightVar_stds'][i].append(layer.weight_var.std().item())
 
+        
+
         # Compiles statistics from each batch into a mean statistic for the epoch
-        stats['train_vfe'] = torch.tensor(epoch_stats['train_vfe']).mean().item()
+        stats['train_vfe'] = torch.tensor(epoch_stats['train_vfe']).sum().item() / len(train_loader.dataset)
         if log_dir:
             writer.add_scalar('VFE/train', stats['train_vfe'], model.epochs_trained.item())
         if track_corr:
@@ -373,6 +385,11 @@ def train(
             stats['train_loss'] = torch.tensor(epoch_stats['train_loss']).mean().item()
             if log_dir:
                 writer.add_scalar('Loss/train', stats['train_loss'], model.epochs_trained.item())
+        
+        if scheduler is not None:
+            sched.step(stats['train_vfe'])
+        if c_optimiser is not None and scheduler is not None:
+            c_sched.step(stats['train_loss'])
 
         # Collects statistics for validation data if it exists
         if val_data is not None:

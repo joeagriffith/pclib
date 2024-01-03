@@ -192,7 +192,8 @@ class FCClassifier(nn.Module):
                 if i == 0:
                     state[0]['x'] = obs.clone()
                 else:
-                    state[i]['x'] = layer.actv_fn(layer.propagate(state[i-1]['x'].detach()))
+                    pass
+                    # state[i]['x'] = layer.actv_fn(layer.propagate(state[i-1]['x'].detach()))
 
 
     def init_state(self, obs=None, y=None):

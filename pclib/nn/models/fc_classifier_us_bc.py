@@ -85,5 +85,7 @@ class FCClassifierUsBc(FCClassifierUs):
                 if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
                     with torch.no_grad():
                         layer.update_x(state[i], e_below, pred, temp=temp)
+        for i, layer in enumerate(self.layers):
+            pred = self.layers[i+1].predict(state[i+1]) if i < len(self.layers) - 1 else None
             if i < len(self.layers) - 1:
                 layer.update_e(state[i], pred, temp=temp)

@@ -6,7 +6,7 @@ from torch import Tensor
 from torch.nn import Parameter
 from torch.nn.grad import conv2d_input, conv2d_weight
 from typing import Optional, Tuple
-from pclib.utils.functional import reTanh
+from pclib.utils.functional import reTanh, identity
 
 # Whittington & Bogacz 2017
 class Conv2d(nn.Module):
@@ -61,6 +61,8 @@ class Conv2d(nn.Module):
             self.d_actv_fn: callable = lambda x: torch.sigmoid(x) * (1 - torch.sigmoid(x))
         elif actv_fn == F.tanh:
             self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
+        elif actv_fn == identity:
+            self.d_actv_fn: callable = lambda x: torch.ones_like(x)
         
         self.init_weights()
         self.norm = nn.LayerNorm(self.shape)
@@ -109,7 +111,6 @@ class Conv2d(nn.Module):
 
     # Returns a prediction of the state in the previous layer
     def predict(self, state):
-        # x = F.interpolate(state['x'].detach(), scale_factor=self.maxpool, mode='nearest')
         x = F.interpolate(self.actv_fn(state['x'].detach()), scale_factor=self.maxpool, mode='nearest')
         prev_shape = (x.shape[0], self.prev_shape[0], self.prev_shape[1], self.prev_shape[2])
         pred = conv2d_input(prev_shape, self.conv[0].weight, x, stride=self.stride, padding=self.padding, dilation=1, groups=1)
@@ -141,7 +142,6 @@ class Conv2d(nn.Module):
                 e_below = e_below.unsqueeze(-1).unsqueeze(-1)
             update = self.propagate(e_below)
             state['x'] += self.gamma * (update * self.d_actv_fn(state['x']))
-            # state['x'] += self.gamma * update
 
         state['x'] += self.gamma * -state['e']
         
@@ -149,7 +149,7 @@ class Conv2d(nn.Module):
             eps = torch.randn_like(state['x'], device=self.device) * 0.034 * temp
             state['x'] += eps
         
-        state['x'] = self.norm(state['x'])
+        # state['x'] = self.norm(state['x'])
 
 
     def update_grad(self, state, e_below=None):

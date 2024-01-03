@@ -85,11 +85,7 @@ class PreloadedDataset(Dataset):
         preloaded_dataset.transform = transform
         preloaded_dataset.images = torch.stack(data).to(device)
         preloaded_dataset.targets = torch.stack(targets).to(device)
-        if transform is not None:
-            preloaded_dataset.transformed_images = transform(torch.stack(data).to(device))
-        else:
-            preloaded_dataset.transformed_images = torch.stack(data).to(device)
-        
+        preloaded_dataset.transformed_images = transform(preloaded_dataset.images).to(device)
         return preloaded_dataset
               
             
@@ -107,6 +103,10 @@ class PreloadedDataset(Dataset):
                 self.transformed_images[low:high] = self.transform(self.images[low:high].to(device)).to(self.device)
                 low += batch_size
                 high += batch_size
+        else:
+            self.transformed_images = self.images
+
+        
         
         
     #  Now a man who needs no introduction

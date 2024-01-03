@@ -77,6 +77,10 @@ class FC(nn.Module):
             self.d_actv_fn: callable = lambda x: torch.ones_like(x)
 
         self.init_params()
+        self.norm = nn.LayerNorm(self.out_features)
+        # Normalize moving_avg??!?! and on each update
+        self.moving_avg = torch.ones((self.out_features), **self.factory_kwargs) # Normalize
+        self.moving_avg = 
 
     def __str__(self):
         base_str = super().__str__()
@@ -209,18 +213,26 @@ class FC(nn.Module):
                 if e_below.dim() == 4:
                     e_below = e_below.flatten(1)
                 update = self.propagate(e_below)
-                # saves a tiny bit of compute if d_actv_fn is identity
-                if self.actv_fn != identity:
-                    update *= self.d_actv_fn(state['x'])
-                state['x'] += self.gamma * update
+                state['x'] += self.gamma * (update * self.d_actv_fn(state['x']))
 
             state['x'] += self.gamma * -state['e']
-
-            state['x'] += self.gamma**2 * 0.1 * -state['x']
 
             if temp is not None:
                 eps = torch.randn_like(state['x'], device=self.device) * temp * 0.034
                 state['x'] += eps
+            
+            state['x'] = self.norm(self.actv_fn(state['x'].detach()))
+
+        # new_x = state['x'].detach()
+        # if e_below is not None:
+        #     update = self.propagate(e_below)
+        #     new_x += update * (self.d_actv_fn(state['x']))
+        # new_x += -state['e']
+        # if temp is not None:
+        #     eps = torch.randn_like(new_x, device=self.device) * .034 * temp
+        #     new_x += eps
+        # state['x'] = (1-self.gamma) * state['x'] + self.gamma * new_x
+        # state['x'] = self.norm(state['x'])
 
     def update_grad(self, state, e_below=None):
         """
@@ -236,10 +248,12 @@ class FC(nn.Module):
             if e_below.dim() == 4:
                 e_below = e_below.flatten(1)
             self.weight_td.grad = 2*-(e_below.T @ self.actv_fn(state['x'])) / b_size
+            # self.weight_td.grad = 2*-(e_below.T @ state['x']) / b_size
             if self.bias is not None:
                 self.bias.grad = 2*-e_below.mean(dim=0)
             if not self.symmetric:
                 self.weight_bu.grad = 2*-(self.actv_fn(state['x']).T @ e_below) / b_size
+                # self.weight_bu.grad = 2*-(state['x'].T @ e_below) / b_size
         
     def assert_grad(self, state, e_below=None):
         """

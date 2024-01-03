@@ -51,7 +51,7 @@ class FCBC(FC):
                  ) -> None:
 
         self.factory_kwargs = {'device': device, 'dtype': dtype}
-        super().__init__(self,
+        super().__init__(
                          in_features,
                          out_features,
                          has_bias,
@@ -82,5 +82,3 @@ class FCBC(FC):
         if temp is not None:
             eps = torch.randn_like(state['x'], device=self.device) * 0.034 * temp
             state['x'] += eps
-        
-        state['x'] = self.norm(state['x'])
