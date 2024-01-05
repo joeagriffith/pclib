@@ -130,6 +130,12 @@ class ConvClassifier(nn.Module):
             | temp (Optional[float]): Temperature for the softmax function
 
         """
+        preds = []
+        for i, layer in enumerate(self.layers):
+            if i == 0:
+                continue
+            preds.append(layer.predict(state[i]))
+
         for i, layer in enumerate(self.layers):
             # Update layer's x if not pinned
             if i == 0 and obs is not None:
@@ -138,12 +144,12 @@ class ConvClassifier(nn.Module):
                 pass
             else:
                 e_below = state[i-1]['e'] if i > 0 else None
-                layer.update_x(state[i], e_below, temp=temp)
+                pred_down = preds[i-1] if i > 0 else None
+                layer.update_x(state[i], e_below, pred_down, temp=temp)
                 
             # Update layer's e if not top layer
             if i < len(self.layers) - 1: # don't update top e (no prediction)
-                pred = self.layers[i+1].predict(state[i+1])
-                layer.update_e(state[i], pred, temp=temp)
+                layer.update_e(state[i], preds[i], temp=temp)
 
     def _init_xs(self, state, obs=None, y=None):
         """

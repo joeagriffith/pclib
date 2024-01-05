@@ -82,7 +82,7 @@ class FCLI(FC):
         return F.linear(F.relu(self.boost(state['x'])), lat_connectivity, None)
         # return F.linear(self.boost(state['x']), lat_connectivity, None)
         
-    def update_x(self, state, e_below=None, temp=None):
+    def update_x(self, state, e_below=None, d_pred=None, temp=None):
         """
         | Calculates a new_x and then interpolates between the current state['x'] and new_x, updating state['x'] inplace.
         | This uses the lateral connectivity to produce a target value, rather than an incremental update.
@@ -93,8 +93,8 @@ class FCLI(FC):
         """
         state['x'] = (1.0 - self.gamma) * state['x'] + self.gamma * self.lateral(state)
         if e_below is not None:
-            update = self.propagate(e_below)
-            state['x'] += self.gamma * (update * self.d_actv_fn(state['x']))
+            update = self.propagate(e_below * d_pred)
+            state['x'] += self.gamma * update
 
         state['x'] += self.gamma * -state['e']
 
@@ -102,20 +102,6 @@ class FCLI(FC):
             eps = torch.randn_like(state['x'].detach(), device=self.device) * temp * 0.034
             state['x'] += eps
         
-        # state['x'] = self.norm(self.actv_fn(state['x']))
-        state['x'] = self.norm(state['x'])
-
-        # new_x = self.lateral(state)
-        # if e_below is not None:
-        #     update = self.propagate(e_below)
-        #     new_x += update * (self.d_actv_fn(state['x'])) - state['e']
-        # else:
-        #     new_x += -state['e']
-        # if temp is not None:
-        #     eps = torch.randn_like(new_x, device=self.device) * .034 * temp
-        #     new_x += eps
-        
-        # state['x'] = (1-self.gamma) * state['x'] + self.gamma * self.actv_fn(new_x)
         # state['x'] = self.norm(state['x'])
         
     def assert_grad(self, state, e_below=None):
@@ -131,11 +117,11 @@ class FCLI(FC):
         """
 
         # self.moving_avg = 0.999 * self.moving_avg + 0.001 * state['x'].mean(dim=0)
-        self.moving_avg = 0.99 * self.moving_avg + 0.01 * state['x'].mean(dim=0)
+        self.moving_avg = 0.90 * self.moving_avg + 0.1 * state['x'].mean(dim=0)
     
     def boost(self, x):
         # return x
-        mult = (self.moving_avg * F.relu(self.lat_conn_mat)).mean(dim=0)  / self.moving_avg
+        mult = (self.moving_avg * self.lat_conn_mat.abs()).mean(dim=0)  / self.moving_avg
         return x * mult
 
 # TODO: Confirm descriptions for beta_scale and alpha_scale are correct.

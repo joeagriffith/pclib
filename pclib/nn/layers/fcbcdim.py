@@ -181,7 +181,7 @@ class FCBCDIM(nn.Module):
             eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
             state['e'] += eps
     
-    def update_x(self, state, e_below=None, pred=None, temp=None):
+    def update_x(self, state, e_below=None, d_pred=None, temp=None):
         """
         | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x)).
@@ -192,8 +192,8 @@ class FCBCDIM(nn.Module):
         """
         # If not input layer, propagate error from layer below
         if e_below is not None:
-            update = self.propagate(e_below)
-            state['x'] = (state['x'] + torch.ones_like(state['x'])*1e-6) * (update * self.d_actv_fn(state['x']))
+            update = self.propagate(e_below * d_pred)
+            state['x'] = (state['x'] + torch.ones_like(state['x'])*1e-6) * update
         if pred is not None:
             state['x'] = state['x'] * (torch.ones_like(pred) + self.gamma*pred)
         if temp is not None:

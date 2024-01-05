@@ -155,17 +155,16 @@ class FCClassifier(nn.Module):
         
         # self.pin(state, obs, y)
 
+        pred, d_pred, e_below = None, None, None
         for i, layer in enumerate(self.layers):
-            e_below = state[i-1]['e'] if i > 0 else None
             if i > 0 or obs is None: # Don't update bottom x if obs is given
                 if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
                     with torch.no_grad():
-                        layer.update_x(state[i], e_below, temp=temp)
-        for i, layer in enumerate(self.layers):
+                        layer.update_x(state[i], e_below, d_pred=d_pred, temp=temp)
             if i < len(self.layers) - 1:
-                pred = self.layers[i+1].predict(state[i+1])
+                pred, d_pred = self.layers[i+1].predict(state[i+1])
                 layer.update_e(state[i], pred, temp=temp)
-
+                e_below = state[i]['e']
 
     def _init_xs(self, state, obs=None, y=None):
         """

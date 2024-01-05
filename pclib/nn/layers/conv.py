@@ -111,7 +111,7 @@ class Conv2d(nn.Module):
 
     # Returns a prediction of the state in the previous layer
     def predict(self, state):
-        x = F.interpolate(self.actv_fn(state['x'].detach()), scale_factor=self.maxpool, mode='nearest')
+        x = F.interpolate(state['x'].detach(), scale_factor=self.maxpool, mode='nearest')
         prev_shape = (x.shape[0], self.prev_shape[0], self.prev_shape[1], self.prev_shape[2])
         pred = conv2d_input(prev_shape, self.conv[0].weight, x, stride=self.stride, padding=self.padding, dilation=1, groups=1)
         if self.has_bias:
@@ -127,29 +127,30 @@ class Conv2d(nn.Module):
     def update_e(self, state, pred, temp=None):
         if pred.dim() == 2:
             pred = pred.unsqueeze(-1).unsqueeze(-1)
-        state['e'] = state['x'].detach() - pred
+        state['e'] = state['x'].detach() - self.actv_fn(pred)
 
         if temp is not None:
             eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
             state['e'] += eps
 
-    def update_x(self, state, e_below=None, temp=None):
+    def update_x(self, state, e_below=None, pred_below=None, temp=None):
         # If not input layer, propagate error from layer below
         state['x'] = state['x'].detach()
 
         if e_below is not None:
             if e_below.dim() == 2:
                 e_below = e_below.unsqueeze(-1).unsqueeze(-1)
-            update = self.propagate(e_below)
-            state['x'] += self.gamma * (update * self.d_actv_fn(state['x']))
+            d_pred = self.d_actv_fn(pred_below)
+            update = self.propagate(e_below * d_pred)
+            state['x'] += self.gamma * update
 
         state['x'] += self.gamma * -state['e']
+
+        state['x'] += self.gamma**2 * 0.1 * -state['x']
         
         if temp is not None:
             eps = torch.randn_like(state['x'], device=self.device) * 0.034 * temp
             state['x'] += eps
-        
-        # state['x'] = self.norm(state['x'])
 
 
     def update_grad(self, state, e_below=None):

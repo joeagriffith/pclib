@@ -204,14 +204,14 @@ def train(
 
     optimiser = get_optimiser(model.parameters(), lr, reg_coeff, optim)
     if scheduler == 'ReduceLROnPlateau':
-        sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=5, verbose=True)
+        sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=5, verbose=True, factor=0.1)
 
 
     if hasattr(model, 'classifier') and c_lr > 0:
         c_optimiser = get_optimiser(model.classifier.parameters(), c_lr, reg_coeff, optim)
         loss_fn = F.cross_entropy
         if scheduler == 'ReduceLROnPlateau':
-            c_sched = torch.optim.lr_scheduler.ReduceLROnPlateau(c_optimiser, patience=5, verbose=True)
+            c_sched = torch.optim.lr_scheduler.ReduceLROnPlateau(c_optimiser, patience=5, cooldown=10, verbose=True, factor=0.1)
     else:
         c_optimiser = None
 

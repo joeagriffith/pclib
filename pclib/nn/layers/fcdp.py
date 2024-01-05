@@ -143,7 +143,7 @@ class FCDP(FC):
             eps = torch.randn_like(state['e'].detach(), device=self.device) * temp * 0.034
             state['e'] += eps
     
-    def update_x(self, state, e_below=None, temp=None):
+    def update_x(self, state, e_below=None, d_pred=None, temp=None):
         """
         | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x)).
@@ -158,10 +158,7 @@ class FCDP(FC):
                 if e_below.dim() == 4:
                     e_below = e_below.flatten(1)
                 e_below = e_below * self.in_sign_correct
-                update = self.propagate(e_below)
-                # saves a tiny bit of compute if d_actv_fn is identity
-                if self.actv_fn != identity:
-                    update *= self.d_actv_fn(state['x'])
+                update = self.propagate(e_below * d_pred)
                 state['x'] += self.gamma * update
 
             e = state['e'][:, :self.out_features] - state['e'][:, self.out_features:]

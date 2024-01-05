@@ -155,7 +155,10 @@ class FC(nn.Module):
         Returns:
             | pred (torch.Tensor): Prediction of state['x'] in the layer below.
         """
-        return F.linear(self.actv_fn(state['x'].detach()), self.weight_td, self.bias)
+        pre_act = F.linear(state['x'].detach(), self.weight_td, self.bias)
+
+        return self.actv_fn(pre_act), self.d_actv_fn(pre_act)
+    
     
     def propagate(self, e_below):
         """
@@ -194,7 +197,7 @@ class FC(nn.Module):
             eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
             state['e'] += eps
     
-    def update_x(self, state, e_below=None, temp=None):
+    def update_x(self, state, e_below=None, d_pred=None, temp=None):
         """
         | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x)).
@@ -205,22 +208,22 @@ class FC(nn.Module):
         """
         # If not input layer, propagate error from layer below
         with torch.no_grad():
+            dx = torch.zeros_like(state['x'], device=self.device)
             if e_below is not None:
                 if e_below.dim() == 4:
                     e_below = e_below.flatten(1)
-                update = self.propagate(e_below)
+                update = self.propagate(e_below * d_pred)
                 # saves a tiny bit of compute if d_actv_fn is identity
-                if self.actv_fn != identity:
-                    update *= self.d_actv_fn(state['x'])
-                state['x'] += self.gamma * update
+                dx += update
 
-            state['x'] += self.gamma * -state['e']
+            dx += 0.1 * -state['e']
 
-            state['x'] += self.gamma**2 * 0.1 * -state['x']
+            dx += 0.1 * 0.1 * -state['x']
 
             if temp is not None:
-                eps = torch.randn_like(state['x'], device=self.device) * temp * 0.034
-                state['x'] += eps
+                dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034
+
+            state['x'] = state['x'].detach() + self.gamma * dx
 
     def update_grad(self, state, e_below=None):
         """

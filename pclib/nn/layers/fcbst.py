@@ -80,7 +80,6 @@ class FC(nn.Module):
         self.norm = nn.LayerNorm(self.out_features)
         # Normalize moving_avg??!?! and on each update
         self.moving_avg = torch.ones((self.out_features), **self.factory_kwargs) # Normalize
-        self.moving_avg = 
 
     def __str__(self):
         base_str = super().__str__()
@@ -198,7 +197,7 @@ class FC(nn.Module):
             eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
             state['e'] += eps
     
-    def update_x(self, state, e_below=None, temp=None):
+    def update_x(self, state, e_below=None, d_pred=None, temp=None):
         """
         | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x)).
@@ -209,31 +208,20 @@ class FC(nn.Module):
         """
         # If not input layer, propagate error from layer below
         with torch.no_grad():
+            dx = torch.zeros_like(state['x'], device=self.device)
             if e_below is not None:
                 if e_below.dim() == 4:
                     e_below = e_below.flatten(1)
-                update = self.propagate(e_below)
-                state['x'] += self.gamma * (update * self.d_actv_fn(state['x']))
+                update = self.propagate(e_below * d_pred)
+                dx += update
 
-            state['x'] += self.gamma * -state['e']
+            dx += -state['e']
 
             if temp is not None:
-                eps = torch.randn_like(state['x'], device=self.device) * temp * 0.034
-                state['x'] += eps
+                dx = torch.randn_like(state['x'], device=self.device) * temp * 0.034
             
-            state['x'] = self.norm(self.actv_fn(state['x'].detach()))
-
-        # new_x = state['x'].detach()
-        # if e_below is not None:
-        #     update = self.propagate(e_below)
-        #     new_x += update * (self.d_actv_fn(state['x']))
-        # new_x += -state['e']
-        # if temp is not None:
-        #     eps = torch.randn_like(new_x, device=self.device) * .034 * temp
-        #     new_x += eps
-        # state['x'] = (1-self.gamma) * state['x'] + self.gamma * new_x
-        # state['x'] = self.norm(state['x'])
-
+            state['x'] = state['x'].detach() + self.gamma * dx
+            
     def update_grad(self, state, e_below=None):
         """
         | Manually calculates gradients for weight_td, weight_bu, and bias if they exist.
