@@ -102,22 +102,6 @@ class ConvClassifier(nn.Module):
 
         return vfe
 
-    def pin(self, state, obs=None, y=None):
-        """
-        | Pins the input and/or target to the state if provided.
-        | Not permanent, so is called after every x update.
-
-        Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
-            | obs (Optional[torch.Tensor]): Input data
-            | y (Optional[torch.Tensor]): Target data
-
-        """
-        if obs is not None:
-            state[0]['x'] = obs.clone()
-        if y is not None:
-            state[-1]['x'] = y.clone()
-
     def step(self, state, obs=None, y=None, temp=None):
         """
         | Performs on step of inference, updating Es first, then calculates X updates using .backward() on the VFE.
@@ -130,26 +114,18 @@ class ConvClassifier(nn.Module):
             | temp (Optional[float]): Temperature for the softmax function
 
         """
-        preds = []
+        
+        pred, d_pred, e_below = None, None, None
         for i, layer in enumerate(self.layers):
-            if i == 0:
-                continue
-            preds.append(layer.predict(state[i]))
+            if i > 0 or obs is None: # Don't update bottom x if obs is given
+                if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
+                    with torch.no_grad():
+                        layer.update_x(state[i], e_below, d_pred=d_pred, temp=temp)
+            if i < len(self.layers) - 1:
+                pred, d_pred = self.layers[i+1].predict(state[i+1])
+                layer.update_e(state[i], pred, temp=temp)
+                e_below = state[i]['e']
 
-        for i, layer in enumerate(self.layers):
-            # Update layer's x if not pinned
-            if i == 0 and obs is not None:
-                pass
-            elif i == len(self.layers) - 1 and y is not None:
-                pass
-            else:
-                e_below = state[i-1]['e'] if i > 0 else None
-                pred_down = preds[i-1] if i > 0 else None
-                layer.update_x(state[i], e_below, pred_down, temp=temp)
-                
-            # Update layer's e if not top layer
-            if i < len(self.layers) - 1: # don't update top e (no prediction)
-                layer.update_e(state[i], preds[i], temp=temp)
 
     def _init_xs(self, state, obs=None, y=None):
         """
@@ -181,6 +157,7 @@ class ConvClassifier(nn.Module):
                     state[0]['x'] = obs.detach()
                 else:
                     x_below = state[i-1]['x']
+                    # state[i]['x'] = layer.propagate(x_below)
                     state[i]['x'] = layer.propagate(x_below)
 
     def init_state(self, obs=None, y=None):
@@ -198,6 +175,8 @@ class ConvClassifier(nn.Module):
             b_size = obs.shape[0]
         elif y is not None:
             b_size = y.shape[0]
+        else:
+            raise ValueError('Either obs or y must be provided to init_state.')
         state = []
         for layer in self.layers:
             state.append(layer.init_state(b_size))

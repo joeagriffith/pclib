@@ -310,26 +310,20 @@ def train(
                 #     make_dot(vfe).render("vfe", format="png")
                 vfe.backward()
 
-
-
             for i, layer in enumerate(model.layers):
                 if isinstance(layer, FCLI):
                     # Hebbian update to reduce correlations between neurons
                     layer.weight_lat.grad = state[i]['x'].t() @ state[i]['x'] / b_size
-                    # push lat weights towards identity matrix
-                    (reg_coeff * (layer.weight_lat - torch.eye(layer.weight_lat.shape[0], device=layer.weight_lat.device)).norm()).backward()
                     # zero diagonal of grad so self-connections are not updated, (stay at 1.0)
                     layer.weight_lat.grad -= layer.weight_lat.grad.diag().diag()
                     # Apply grad update here so optimiser doesn't add weight decay
-                    layer.weight_lat.data += lr * layer.weight_lat.grad
-                    layer.weight_lat.grad = None
                     if lr > 0:
                         with torch.no_grad():
                             layer.update_mov_avg(state[i])
-                elif isinstance(layer, FCPW): # updating data directly as we don't want weight decay
-                    layer.weight_var.data -= lr * layer.weight_var.grad
-                    layer.weight_var.data = torch.clamp(layer.weight_var.data, min=0.01)
-                    layer.weight_var.grad = None
+                # elif isinstance(layer, FCPW): # updating data directly as we don't want weight decay
+                #     layer.weight_var.data -= lr * layer.weight_var.grad
+                #     layer.weight_var.data = torch.clamp(layer.weight_var.data, min=0.01)
+                #     layer.weight_var.grad = None
 
             if assert_grads: model.assert_grads(state)
 
@@ -367,9 +361,9 @@ def train(
                         if model.layers[i].bias is not None:
                             epoch_stats['Bias_means'][i-1].append(layer.bias.mean().item())
                             epoch_stats['Bias_stds'][i-1].append(layer.bias.std().item())
-                    if isinstance(layer, FCPW) and i < len(epoch_stats['WeightVar_means']):
-                        epoch_stats['WeightVar_means'][i].append(layer.weight_var.mean().item())
-                        epoch_stats['WeightVar_stds'][i].append(layer.weight_var.std().item())
+                    # if isinstance(layer, FCPW) and i < len(epoch_stats['WeightVar_means']):
+                    #     epoch_stats['WeightVar_means'][i].append(layer.weight_var.mean().item())
+                    #     epoch_stats['WeightVar_stds'][i].append(layer.weight_var.std().item())
 
         
 
@@ -426,8 +420,8 @@ def train(
                         if layer.bias is not None:
                             writer.add_scalar(f'Bias_means/layer_{i}', torch.tensor(epoch_stats['Bias_means'][i-1]).mean().item(), model.epochs_trained.item())
                             writer.add_scalar(f'Bias_stds/layer_{i}', torch.tensor(epoch_stats['Bias_stds'][i-1]).mean().item(), model.epochs_trained.item())
-                    if isinstance(layer, FCPW):
-                        writer.add_scalar(f'WeightVar_means/layer_{i}', torch.tensor(epoch_stats['WeightVar_means'][i]).mean().item(), model.epochs_trained.item())
-                        writer.add_scalar(f'WeightVar_stds/layer_{i}', torch.tensor(epoch_stats['WeightVar_stds'][i]).mean().item(), model.epochs_trained.item())
+                    # if isinstance(layer, FCPW):
+                    #     writer.add_scalar(f'WeightVar_means/layer_{i}', torch.tensor(epoch_stats['WeightVar_means'][i]).mean().item(), model.epochs_trained.item())
+                    #     writer.add_scalar(f'WeightVar_stds/layer_{i}', torch.tensor(epoch_stats['WeightVar_stds'][i]).mean().item(), model.epochs_trained.item())
         
         model.inc_epochs()

@@ -51,8 +51,8 @@ class FCLI(FC):
 
         self.lat_conn_mat = (create_competition_matrix(out_features, out_features//self.group_size) * (2*torch.eye(out_features) - 1)).to(device)
         
-        # Initialise weights
-        self.weight_lat = nn.Parameter(torch.eye((out_features), **factory_kwargs) * 1.0)
+        # Initialise lateral weights to zero (this is the offset from identity matrix so we can use standard weight decay)
+        self.weight_lat = nn.Parameter(torch.zeros((out_features), **factory_kwargs) * 1.0)
 
         # Normalize moving_avg??!?! and on each update
         self.moving_avg = torch.ones((out_features), **factory_kwargs)
@@ -77,7 +77,7 @@ class FCLI(FC):
         Returns:
             | new_x (torch.Tensor): 
         """
-        lat_connectivity = self.lat_conn_mat * F.relu(self.weight_lat) # self-excitation, lateral-inhibition, and no negative weights
+        lat_connectivity = self.lat_conn_mat * F.relu(self.weight_lat + torch.eye(self.out_features, device=self.device)) # self-excitation, lateral-inhibition, and no negative weights
         # return F.linear(self.actv_fn(self.boost(state['x'])), lat_connectivity, None)
         return F.linear(F.relu(self.boost(state['x'])), lat_connectivity, None)
         # return F.linear(self.boost(state['x']), lat_connectivity, None)

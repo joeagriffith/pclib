@@ -63,15 +63,11 @@ class ConvClassifierUsBc(ConvClassifierUs):
         layers.append(Conv2dBc((64, 4, 4), (64, 2, 2),    3, 2, 1, **self.factory_kwargs))
         layers.append(Conv2dBc((64, 2, 2), (64, 1, 1),    3, 2, 1, **self.factory_kwargs))
         self.layers = nn.ModuleList(layers)
-
+        
         self.classifier = nn.Sequential(
-            nn.Linear(self.layers[-1].shape[0], 256, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
+            nn.Linear(self.layers[-1].shape[0], 200, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
             nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(256, 128, device=self.device, dtype=self.factory_kwargs['dtype']),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(128, self.num_classes, bias=True, device=self.device, dtype=self.factory_kwargs['dtype'])
+            nn.Linear(200, self.num_classes, bias=False, device=self.device, dtype=self.factory_kwargs['dtype']),
         )
 
     def step(self, state, obs=None, y=None, temp=None):

@@ -38,7 +38,8 @@ def my_relu(input):
 
 # Calculate Correlations
 def calc_corr(state):
-    corrs = [F.relu(state_i['x'].flatten(1)).t().corrcoef() for state_i in state]
+    x = F.normalize(state['x'].flatten(1), dim=1)
+    corrs = [F.relu(x).t().corrcoef() for state_i in state]
     corrs = [corr.nan_to_num() for corr in corrs]
     avg_corr = sum([(corr - torch.eye(corr.shape[0]).to(corr.device)).abs().sum() for corr in corrs]) / len(corrs)
     return avg_corr

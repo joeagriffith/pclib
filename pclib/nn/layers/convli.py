@@ -47,38 +47,40 @@ class Conv2dLi(Conv2d):
             dtype=dtype
         )
 
-        self.lateral_layer = nn.Conv2d(self.shape[0], self.shape[0], kernel_size=3, stride=1, padding=1, bias=False, **self.factory_kwargs)
-        nn.init.dirac_(self.lateral_layer.weight)
-        self.calc_mean = nn.Conv2d(self.shape[0], self.shape[0], kernel_size=3, stride=1, padding=1, bias=False, **self.factory_kwargs)
-        # set weights to 1/num
-        self.calc_mean.weight.data.fill_(1.0 / (kernel_size**2*self.shape[0]))
+        self.weight_lat = nn.Parameter(torch.zeros((self.shape[0], self.shape[0], 3, 3), **self.factory_kwargs))
+        self.offset = torch.zeros((self.shape[0], self.shape[0], 3, 3), **self.factory_kwargs)
+        nn.init.dirac_(self.offset)
 
+        #  calc_mean returns the mean of each inhibition group to each member of that group
+        self.calc_mean = nn.Conv2d(self.shape[0], self.shape[0], kernel_size=3, stride=1, padding=1, bias=False, **self.factory_kwargs)
+        self.calc_mean.weight.data.fill_(1.0 / (kernel_size**2*self.shape[0]))
         self.moving_avg = torch.ones(self.shape, **self.factory_kwargs)
     
     def to(self, *args, **kwargs):
         self.device = args[0]
+        self.offset = self.offset.to(self.device)
         self.moving_avg = self.moving_avg.to(self.device)
         return super().to(*args, **kwargs)
 
     def lateral(self, state):
-        return self.lateral_layer(self.boost(state['x']))
+        x = self.boost(state['x'])
+        weight = self.weight_lat + self.offset
+        return F.conv2d(x, weight, bias=None, padding=1, groups=self.shape[0])
     
-    def update_x(self, state, e_below=None, temp=None):
+    def update_x(self, state, e_below=None, d_pred=None, temp=None):
         # If not input layer, propagate error from layer below
         state['x'] = (1.0 - self.gamma) * state['x'] + self.gamma * self.lateral(state['x'].detach())
         if e_below is not None:
             if e_below.dim() == 2:
                 e_below = e_below.unsqueeze(-1).unsqueeze(-1)
-            update = self.propagate(e_below)
-            state['x'] += self.gamma * (update * self.d_actv_fn(state['x']))
+            update = self.propagate(e_below * d_pred)
+            state['x'] += self.gamma * update
 
-        state['x'] += self.gamma * (-state['e'])
+        state['x'] += self.gamma * -state['e']
         
         if temp is not None:
             eps = torch.randn_like(state['x'], device=self.device) * 0.034 * temp
             state['x'] += eps
-        
-        state['x'] = self.norm(state['x'])
 
     def update_mov_avg(self, state):
         self.moving_avg = 0.99 * self.moving_avg + 0.01 * state['x'].detach().mean(0)

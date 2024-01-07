@@ -50,32 +50,28 @@ class ConvClassifierUs(ConvClassifier):
         """
         | Initialises the layers of the network.
         """
-        layers = []
-        layers.append(Conv2d(None,          (1, 32, 32),                  **self.factory_kwargs))
-        layers.append(Conv2d((1, 32, 32),   (32, 16, 16),  5, 2, 2, **self.factory_kwargs))
-        layers.append(Conv2d((32, 16, 16),  (64, 8, 8),    3, 2, 1, **self.factory_kwargs))
-        layers.append(Conv2d((64, 8, 8),    (128, 4, 4),    3, 2, 1, **self.factory_kwargs))
-        layers.append(Conv2d((128, 4, 4),    (128, 2, 2),    3, 2, 1, **self.factory_kwargs))
-        layers.append(Conv2d((128, 2, 2),    (128, 1, 1),    3, 2, 1, **self.factory_kwargs))
-        self.layers = nn.ModuleList(layers)
-
         # layers = []
         # layers.append(Conv2d(None,          (1, 32, 32),                  **self.factory_kwargs))
-        # layers.append(Conv2d((1, 32, 32),   (32, 16, 16),  5, 1, 2, maxpool=2, **self.factory_kwargs))
-        # layers.append(Conv2d((32, 16, 16),  (64, 8, 8),    3, 1, 1, maxpool=2, **self.factory_kwargs))
-        # layers.append(Conv2d((64, 8, 8),    (64, 4, 4),    3, 1, 1, maxpool=2, **self.factory_kwargs))
-        # layers.append(Conv2d((64, 4, 4),    (64, 2, 2),    3, 1, 1, maxpool=2, **self.factory_kwargs))
-        # layers.append(Conv2d((64, 2, 2),    (64, 1, 1),    3, 1, 1, maxpool=2, **self.factory_kwargs))
+        # layers.append(Conv2d((1, 32, 32),   (32, 16, 16),  5, 2, 2, **self.factory_kwargs))
+        # layers.append(Conv2d((32, 16, 16),  (64, 8, 8),    3, 2, 1, **self.factory_kwargs))
+        # layers.append(Conv2d((64, 8, 8),    (128, 4, 4),    3, 2, 1, **self.factory_kwargs))
+        # layers.append(Conv2d((128, 4, 4),    (256, 2, 2),    3, 2, 1, **self.factory_kwargs))
+        # layers.append(Conv2d((256, 2, 2),    (256, 1, 1),    3, 2, 1, **self.factory_kwargs))
         # self.layers = nn.ModuleList(layers)
 
+        layers = []
+        layers.append(Conv2d(None,         (1, 28, 28),                  **self.factory_kwargs))
+        layers.append(Conv2d((1, 28, 28),  (32, 22, 22), 7, 1, 0, **self.factory_kwargs))
+        layers.append(Conv2d((32, 22, 22), (64, 16, 16), 7, 1, 0, **self.factory_kwargs))
+        layers.append(Conv2d((64, 16, 16), (128, 10, 10), 7, 1, 0, **self.factory_kwargs))
+        layers.append(Conv2d((128, 10, 10), (128, 4, 4), 7, 1, 0, **self.factory_kwargs))
+        layers.append(Conv2d((128, 4, 4), (128, 1, 1), 4, 1, 0, **self.factory_kwargs))
+        self.layers = nn.ModuleList(layers)
+
         self.classifier = nn.Sequential(
-            nn.Linear(self.layers[-1].shape[0], 256, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
+            nn.Linear(self.layers[-1].shape[0], 200, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
             nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(256, 128, device=self.device, dtype=self.factory_kwargs['dtype']),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(128, self.num_classes, bias=True, device=self.device, dtype=self.factory_kwargs['dtype'])
+            nn.Linear(200, self.num_classes, bias=False, device=self.device, dtype=self.factory_kwargs['dtype']),
         )
 
 

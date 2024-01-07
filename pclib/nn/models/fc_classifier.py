@@ -141,19 +141,6 @@ class FCClassifier(nn.Module):
             | temp (Optional[float]): Temperature to use for update
 
         """
-        # for i, layer in reversed(list(enumerate(self.layers))):
-        #     if i < len(self.layers) - 1: # don't update top e (no prediction)
-        #         layer.update_e(state[i], pred, temp=temp)
-        #     if i > 0: # Bottom layer can't predict
-        #         pred = layer.predict(state[i])
-
-        # # Update Xs
-        # with torch.no_grad():
-        #     for i, layer in enumerate(self.layers):
-        #         e_below = state[i-1]['e'] if i > 0 else None
-        #         layer.update_x(state[i], e_below, temp=temp)
-        
-        # self.pin(state, obs, y)
 
         pred, d_pred, e_below = None, None, None
         for i, layer in enumerate(self.layers):
@@ -182,7 +169,8 @@ class FCClassifier(nn.Module):
                 if i == len(self.layers) - 1: # last layer
                     state[i]['x'] = y.clone()
                 else:
-                    state[i-1]['x'] = layer.predict(state[i])
+                    pred, _ = layer.predict(state[i])
+                    state[i-1]['x'] = pred
                     state[i-1]['x'] = self.layers[i-1].actv_fn(state[i-1]['x'].detach())
             if obs is not None:
                 state[0]['x'] = obs.clone()
@@ -191,8 +179,7 @@ class FCClassifier(nn.Module):
                 if i == 0:
                     state[0]['x'] = obs.clone()
                 else:
-                    pass
-                    # state[i]['x'] = layer.actv_fn(layer.propagate(state[i-1]['x'].detach()))
+                    state[i]['x'] = layer.actv_fn(layer.propagate(state[i-1]['x'].detach()))
 
 
     def init_state(self, obs=None, y=None):

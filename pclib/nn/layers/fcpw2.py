@@ -6,8 +6,9 @@ from torch import Tensor
 from torch.nn import Parameter
 from typing import Optional
 from pclib.utils.functional import reTanh, identity
+from pclib.nn.layers import FC
 
-class FC(nn.Module):
+class FCPW2(FC):
     """
     | Fully connected layer with optional bias and optionally symmetric weights.
     | The layer stores its state in a dictionary with keys 'x' and 'e'.
@@ -50,100 +51,17 @@ class FC(nn.Module):
                  ) -> None:
 
         self.factory_kwargs = {'device': device, 'dtype': dtype}
-        super().__init__()
-
-        self.in_features = in_features
-        self.out_features = out_features
-        self.has_bias = has_bias
-        self.symmetric = symmetric
-        self.actv_fn = actv_fn
-        self.gamma = gamma
-        self.device = device
-
-        # Automatically set d_actv_fn if not provided
-        if d_actv_fn is not None:
-            self.d_actv_fn: callable = d_actv_fn
-        elif actv_fn == F.relu:
-            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x))
-        elif actv_fn == F.leaky_relu:
-            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) + torch.sign(torch.minimum(x, torch.zeros_like(x))) * 0.01
-        elif actv_fn == reTanh:
-            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) * (1 - torch.tanh(x).square())
-        elif actv_fn == F.sigmoid:
-            self.d_actv_fn: callable = lambda x: torch.sigmoid(x) * (1 - torch.sigmoid(x))
-        elif actv_fn == F.tanh:
-            self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
-        elif actv_fn == identity:
-            self.d_actv_fn: callable = lambda x: torch.ones_like(x)
-
-        self.init_params()
-
-    def __str__(self):
-        base_str = super().__str__()
-
-        custom_info = "\n  (params): \n" + \
-            f"    in_features: {self.in_features}\n" + \
-            f"    out_features: {self.out_features}\n" + \
-            f"    has_bias: {self.has_bias}\n" + \
-            f"    symmetric: {self.symmetric}\n" + \
-            f"    actv_fn: {self.actv_fn.__name__}\n" + \
-            f"    gamma: {self.gamma}"
-        
-        string = base_str[:base_str.find('\n')] + custom_info + base_str[base_str.find('\n'):]
-        
-        return string
-        
-    # Declare weights if not input layer
-    def init_params(self):
-        """
-        | Creates and initialises weight tensors and bias tensor based on init args.
-        """
-        if self.in_features is not None:
-            self.weight_td = Parameter(torch.empty((self.in_features, self.out_features), **self.factory_kwargs))
-            nn.init.kaiming_uniform_(self.weight_td, a=math.sqrt(5))
-            # nn.init.kaiming_normal_(self.weight_td, a=math.sqrt(5))
-            # nn.init.xavier_uniform_(self.weight_td)
-            # nn.init.xavier_normal_(self.weight_td)
-            
-
-            if self.has_bias:
-                self.bias = Parameter(torch.empty(self.in_features, **self.factory_kwargs))
-                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight_td.T)
-                bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-                nn.init.uniform_(self.bias, -bound, bound)
-            else:
-                self.register_parameter('bias', None)
-
-            if not self.symmetric:
-                self.weight_bu = Parameter(torch.empty((self.out_features, self.in_features), **self.factory_kwargs))
-                nn.init.kaiming_uniform_(self.weight_bu, a=math.sqrt(5))
-            else:
-                self.register_parameter('weight_bu', None)
-
-        else:
-            self.register_parameter('weight_td', None)
-            self.register_parameter('weight_bu', None)
-            self.register_parameter('bias', None)
-            
-    def init_state(self, batch_size):
-        """
-        | Builds a new state dictionary for the layer.
-
-        Args:
-            | batch_size (int): Batch size of the state.
-
-        Returns:
-            | state (dict): Dictionary containing 'x' and 'e' tensors of shape (batch_size, out_features).
-
-        """
-        return {
-            'x': torch.zeros((batch_size, self.out_features), device=self.device),
-            'e': torch.zeros((batch_size, self.out_features), device=self.device),
-        }
-
-    def to(self, *args, **kwargs):
-        self.device = args[0]
-        return super().to(*args, **kwargs)
+        super().__init__(
+            in_features=in_features,
+            out_features=out_features,
+            has_bias=has_bias,
+            symmetric=symmetric,
+            actv_fn=actv_fn,
+            d_actv_fn=d_actv_fn,
+            gamma=gamma,
+            device=device,
+            dtype=dtype,
+        )
 
     def predict(self, state):
         """
@@ -155,7 +73,8 @@ class FC(nn.Module):
         Returns:
             | pred (torch.Tensor): Prediction of state['x'] in the layer below.
         """
-        pre_act = F.linear(state['x'].detach(), self.weight_td, self.bias)
+        x = state['x'].detach() * (1 - state['e'].detach())
+        pre_act = F.linear(x, self.weight_td, self.bias)
 
         return self.actv_fn(pre_act), self.d_actv_fn(pre_act)
     
@@ -212,13 +131,13 @@ class FC(nn.Module):
             if e_below is not None:
                 if e_below.dim() == 4:
                     e_below = e_below.flatten(1)
-                update = self.propagate(e_below * d_pred)
+                update = self.propagate(e_below * d_pred) * (1 - state['e'])
                 # saves a tiny bit of compute if d_actv_fn is identity
                 dx += update
 
             dx += 0.1 * 0.34 * -(state['e'] * self.d_actv_fn(state['x'].detach()))
 
-            dx += 0.1 * 0.1 * -state['x']
+            # dx += 0.1 * 0.1 * -state['x']
 
             if temp is not None:
                 dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034
