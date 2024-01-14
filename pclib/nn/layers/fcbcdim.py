@@ -75,6 +75,8 @@ class FCBCDIM(nn.Module):
             self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
         elif actv_fn == identity:
             self.d_actv_fn: callable = lambda x: torch.ones_like(x)
+        elif actv_fn == F.gelu:
+            self.d_actv_fn: callable = lambda x: torch.sigmoid(1.702 * x) * (1. + 1.702 * x * (1. - torch.sigmoid(1.702 * x)))
 
         self.init_params()
         self.norm = nn.LayerNorm(self.out_features)

@@ -38,10 +38,22 @@ def my_relu(input):
 
 # Calculate Correlations
 def calc_corr(state):
-    x = F.normalize(state['x'].flatten(1), dim=1)
-    corrs = [F.relu(x).t().corrcoef() for state_i in state]
-    corrs = [corr.nan_to_num() for corr in corrs]
-    avg_corr = sum([(corr - torch.eye(corr.shape[0]).to(corr.device)).abs().sum() for corr in corrs]) / len(corrs)
-    return avg_corr
+    # Normalize activations
+    activations = [F.normalize(state_i['x'].flatten(1), dim=1) for state_i in state]
+    # Calculate correlations
+    correlations = [torch.corrcoef(activations_i.t()) for activations_i in activations]
+    # Mask to exclude self-correlations
+    masks = [torch.eye(corr.shape[0]).to(correlations[0].device) for corr in correlations]
+    masked_correlations = [corr.masked_select(mask == 0).abs().mean() for corr, mask in zip(correlations, masks)]
+    # Return average absolute correlation
+    return sum(masked_correlations) / len(masked_correlations)
+
+
+def calc_sparsity(state, std_multiplier=0.1):
+    thresholds = [std_multiplier * state_i['x'].std() for state_i in state]
+    small_values = [(state_i['x'].abs() < threshold).sum(dim=1).float().mean() for state_i, threshold in zip(state, thresholds)]
+    return sum(small_values) / len(small_values)
+
+
 
 

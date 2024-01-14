@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from pclib.optim.eval import topk_accuracy
 from pclib.nn.layers import FCPW, FCLI, Conv2dLi
-from pclib.utils.functional import format_y, calc_corr
+from pclib.utils.functional import format_y, calc_corr, calc_sparsity
 
 def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW'):
     """
@@ -58,6 +58,7 @@ def init_stats(model, minimal=False, loss=False):
             "WeightVar_stds": [[] for _ in range(len(model.layers)-1)],
             "train_vfe": [],
             "train_corr": [],
+            "train_sparsity": [],
             "val_vfe": [],
             "val_acc": [],
         }
@@ -65,6 +66,7 @@ def init_stats(model, minimal=False, loss=False):
         stats = {
             "train_vfe": [],
             "train_corr": [],
+            "train_sparsity": [],
             "val_vfe": [],
             "val_acc": [],
         }
@@ -167,6 +169,7 @@ def train(
     log_dir=None,
     minimal_stats=False,
     track_corr=False,
+    track_sparsity=False,
     assert_grads=False,
     val_grads=False,
     save_best=True,
@@ -304,11 +307,12 @@ def train(
                     out, state = model(x)
 
                 model.zero_grad()
-                vfe = model.vfe(state)
-                # Plots computation graph for vfe, for debugging
-                # if epoch == 0 and batch_i == 0:
-                #     make_dot(vfe).render("vfe", format="png")
-                vfe.backward()
+                if lr > 0:
+                    vfe = model.vfe(state)
+                    # Plots computation graph for vfe, for debugging
+                    # if epoch == 0 and batch_i == 0:
+                    #     make_dot(vfe).render("vfe", format="png")
+                    vfe.backward()
 
             for i, layer in enumerate(model.layers):
                 if isinstance(layer, FCLI):
@@ -334,19 +338,21 @@ def train(
             if untr_coeff is not None and untr_coeff > 0: untr_pass(model, x, untr_coeff)
 
             # Parameter Update (Grad Descent)
-            optimiser.step()
+            if lr > 0:
+                optimiser.step()
             if c_optimiser is not None:# and grad_mode=='auto':
                 train_loss = loss_fn(out, targets)
                 train_loss.backward()
                 c_optimiser.step()
                 epoch_stats['train_loss'].append(train_loss.item())
-            optimiser.step()
 
 
             # Track batch statistics
             epoch_stats['train_vfe'].append(model.vfe(state, batch_reduction='sum').item())
             if track_corr:
                 epoch_stats['train_corr'].append(calc_corr(state).item())
+            if track_sparsity:
+                epoch_stats['train_sparsity'].append(calc_sparsity(state).item())
             
             if not minimal_stats:
                 for i, layer in enumerate(model.layers):
@@ -375,6 +381,10 @@ def train(
             stats['train_corr'] = torch.tensor(epoch_stats['train_corr']).mean().item()
             if log_dir:
                 writer.add_scalar('Corr/train', stats['train_corr'], model.epochs_trained.item())
+        if track_sparsity:
+            stats['train_sparsity'] = torch.tensor(epoch_stats['train_sparsity']).mean().item()
+            if log_dir:
+                writer.add_scalar('Sparsity/train', stats['train_sparsity'], model.epochs_trained.item())
         if c_optimiser is not None:
             stats['train_loss'] = torch.tensor(epoch_stats['train_loss']).mean().item()
             if log_dir:

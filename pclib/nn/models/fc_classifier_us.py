@@ -47,7 +47,8 @@ class FCClassifierUs(FCClassifier):
         """
         layers = []
         in_features = None
-        for out_features in [self.in_features] + self.hidden_sizes:
+        self.sizes = [self.in_features] + self.hidden_sizes
+        for out_features in self.sizes:
             if self.precision_weighted:
                 raise NotImplementedError
                 # layers.append(FCPW(in_features, out_features, actv_fn=actv_fn, d_actv_fn=d_actv_fn, gamma=gamma, beta=beta, **factory_kwargs))
@@ -57,7 +58,7 @@ class FCClassifierUs(FCClassifier):
         self.layers = nn.ModuleList(layers)
         
         self.classifier = nn.Sequential(
-            nn.Linear(self.hidden_sizes[-1], 200, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
+            nn.Linear(self.sizes[-1], 200, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
             nn.ReLU(),
             nn.Linear(200, self.num_classes, bias=False, device=self.device, dtype=self.factory_kwargs['dtype']),
         )

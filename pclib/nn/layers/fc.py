@@ -75,6 +75,16 @@ class FC(nn.Module):
             self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
         elif actv_fn == identity:
             self.d_actv_fn: callable = lambda x: torch.ones_like(x)
+        elif actv_fn == F.gelu:
+            self.d_actv_fn: callable = lambda x: torch.sigmoid(1.702 * x) * (1. + torch.exp(-1.702 * x) * (1.702 * x + 1.)) + 0.5
+        elif actv_fn == F.softplus:
+            self.d_actv_fn: callable = lambda x: torch.sigmoid(x)
+        elif actv_fn == F.softsign:
+            self.d_actv_fn: callable = lambda x: 1 / (1 + torch.abs(x)).square()
+        elif actv_fn == F.elu:
+            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) + torch.sign(torch.minimum(x, torch.zeros_like(x))) * 0.01 + 1
+        elif actv_fn == F.leaky_relu:
+            self.d_actv_fn: callable = lambda x: torch.where(x > 0, torch.ones_like(x), alpha * torch.ones_like(x))
 
         self.init_params()
 
@@ -155,9 +165,7 @@ class FC(nn.Module):
         Returns:
             | pred (torch.Tensor): Prediction of state['x'] in the layer below.
         """
-        pre_act = F.linear(state['x'].detach(), self.weight_td, self.bias)
-
-        return self.actv_fn(pre_act), self.d_actv_fn(pre_act)
+        return F.linear(self.actv_fn(state['x'].detach()), self.weight_td, self.bias)
     
     
     def propagate(self, e_below):
@@ -191,13 +199,13 @@ class FC(nn.Module):
         if pred is not None:
             if pred.dim() == 4:
                 pred = pred.flatten(1)
-            state['e'] = self.actv_fn(state['x'].detach()) - pred
+            state['e'] = state['x'].detach() - pred
 
         if temp is not None:
             eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
             state['e'] += eps
     
-    def update_x(self, state, e_below=None, d_pred=None, temp=None):
+    def update_x(self, state, e_below=None, temp=None):
         """
         | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x)).
@@ -212,13 +220,13 @@ class FC(nn.Module):
             if e_below is not None:
                 if e_below.dim() == 4:
                     e_below = e_below.flatten(1)
-                update = self.propagate(e_below * d_pred)
-                # saves a tiny bit of compute if d_actv_fn is identity
+                update = self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
                 dx += update
 
-            dx += 0.1 * 0.34 * -(state['e'] * self.d_actv_fn(state['x'].detach()))
+            # dx += 0.1 * 0.34 * -(state['e'] * self.d_actv_fn(state['x'].detach()))
+            dx += 0.34 * -state['e']
 
-            dx += 0.1 * 0.1 * -state['x']
+            dx += 0.1 * -state['x']
 
             if temp is not None:
                 dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034

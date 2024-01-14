@@ -10,6 +10,7 @@ from pclib.nn.models.fc_classifier_us_bcdim import FCClassifierUsBcDim
 from pclib.nn.models.fc_classifier_us_pw import FCClassifierUsPw
 from pclib.nn.models.fc_classifier_us_pw2 import FCClassifierUsPw2
 
+
 from pclib.nn.models.conv_classifier import ConvClassifier
 from pclib.nn.models.conv_classifier_us import ConvClassifierUs
 from pclib.nn.models.conv_classifier_us_bc import ConvClassifierUsBc

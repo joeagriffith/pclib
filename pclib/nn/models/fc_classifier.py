@@ -59,6 +59,26 @@ class FCClassifier(nn.Module):
         self.register_buffer('epochs_trained', torch.tensor(0, dtype=torch.long))
         self.register_buffer('min_vfe', torch.tensor(float('inf'), dtype=torch.float32))
 
+    def __str__(self):
+        base_str = super().__str__()
+
+        custom_info = "\n  (params): \n" + \
+            f"    in_features: {self.in_features}\n" + \
+            f"    num_classes: {self.num_classes}\n" + \
+            f"    hidden_sizes: {self.hidden_sizes}\n" + \
+            f"    steps: {self.steps}\n" + \
+            f"    bias: {self.bias}\n" + \
+            f"    symmetric: {self.symmetric}\n" + \
+            f"    precision_weighted: {self.precision_weighted}\n" + \
+            f"    actv_fn: {self.factory_kwargs['actv_fn'].__name__}\n" + \
+            f"    gamma: {self.gamma}\n" + \
+            f"    device: {self.device}\n" + \
+            f"    dtype: {self.factory_kwargs['dtype']}\n"
+        
+        string = base_str[:base_str.find('\n')] + custom_info + base_str[base_str.find('\n'):]
+        
+        return string
+
 
     def init_layers(self):
         """
@@ -142,14 +162,14 @@ class FCClassifier(nn.Module):
 
         """
 
-        pred, d_pred, e_below = None, None, None
+        pred, e_below = None, None
         for i, layer in enumerate(self.layers):
             if i > 0 or obs is None: # Don't update bottom x if obs is given
                 if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
                     with torch.no_grad():
-                        layer.update_x(state[i], e_below, d_pred=d_pred, temp=temp)
+                        layer.update_x(state[i], e_below, temp=temp)
             if i < len(self.layers) - 1:
-                pred, d_pred = self.layers[i+1].predict(state[i+1])
+                pred = self.layers[i+1].predict(state[i+1])
                 layer.update_e(state[i], pred, temp=temp)
                 e_below = state[i]['e']
 
@@ -169,9 +189,8 @@ class FCClassifier(nn.Module):
                 if i == len(self.layers) - 1: # last layer
                     state[i]['x'] = y.clone()
                 else:
-                    pred, _ = layer.predict(state[i])
+                    pred = layer.predict(state[i])
                     state[i-1]['x'] = pred
-                    state[i-1]['x'] = self.layers[i-1].actv_fn(state[i-1]['x'].detach())
             if obs is not None:
                 state[0]['x'] = obs.clone()
         elif obs is not None:
