@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Parameter
 from typing import Optional
-from pclib.utils.functional import reTanh, identity
+from pclib.utils.functional import reTanh, identity, trec
 
 class FC(nn.Module):
     """
@@ -84,7 +84,9 @@ class FC(nn.Module):
         elif actv_fn == F.elu:
             self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) + torch.sign(torch.minimum(x, torch.zeros_like(x))) * 0.01 + 1
         elif actv_fn == F.leaky_relu:
-            self.d_actv_fn: callable = lambda x: torch.where(x > 0, torch.ones_like(x), alpha * torch.ones_like(x))
+            self.d_actv_fn: callable = lambda x: torch.where(x > 0, torch.ones_like(x), 0.01 * torch.ones_like(x))
+        elif actv_fn == trec:
+            self.d_actv_fn: callable = lambda x: (x > 1.0).float()
 
         self.init_params()
 
@@ -220,11 +222,9 @@ class FC(nn.Module):
             if e_below is not None:
                 if e_below.dim() == 4:
                     e_below = e_below.flatten(1)
-                update = self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
-                dx += update
+                dx += self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
 
-            # dx += 0.1 * 0.34 * -(state['e'] * self.d_actv_fn(state['x'].detach()))
-            dx += 0.34 * -state['e']
+            dx += -state['e']
 
             dx += 0.1 * -state['x']
 

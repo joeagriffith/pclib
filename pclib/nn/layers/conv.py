@@ -63,6 +63,7 @@ class Conv2d(nn.Module):
         elif actv_fn == identity:
             self.d_actv_fn: callable = lambda x: torch.ones_like(x)
         
+        self.ln = nn.LayerNorm(shape, elementwise_affine=False)
         self.init_weights()
 
     def __str__(self):
@@ -111,10 +112,10 @@ class Conv2d(nn.Module):
     def predict(self, state):
         x = F.interpolate(state['x'].detach(), scale_factor=self.maxpool, mode='nearest')
         prev_shape = (x.shape[0], self.prev_shape[0], self.prev_shape[1], self.prev_shape[2])
-        pre_act = conv2d_input(prev_shape, self.conv[0].weight, x, stride=self.stride, padding=self.padding, dilation=1, groups=1)
+        actv = conv2d_input(prev_shape, self.conv[0].weight, self.actv_fn(x), stride=self.stride, padding=self.padding, dilation=1, groups=1)
         if self.has_bias:
-            pre_act += self.bias
-        return self.actv_fn(pre_act), self.d_actv_fn(pre_act)
+            actv += self.bias
+        return actv
     
     # propagates error from layer below, return an update for x
     def propagate(self, e_below):
@@ -125,31 +126,30 @@ class Conv2d(nn.Module):
     def update_e(self, state, pred, temp=None):
         if pred.dim() == 2:
             pred = pred.unsqueeze(-1).unsqueeze(-1)
-        state['e'] = self.actv_fn(state['x'].detach()) - pred
+        state['e'] = state['x'].detach() - pred
 
         if temp is not None:
             eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
             state['e'] += eps
 
-    def update_x(self, state, e_below=None, d_pred=None, temp=None):
+    def update_x(self, state, e_below=None, temp=None):
         # If not input layer, propagate error from layer below
-        state['x'] = state['x'].detach()
-
+        dx = torch.zeros_like(state['x'], device=self.device)
         if e_below is not None:
             if e_below.dim() == 2:
                 e_below = e_below.unsqueeze(-1).unsqueeze(-1)
-            update = self.propagate(e_below * d_pred)
-            state['x'] += self.gamma * update
+            dx += self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
 
-        state['x'] += self.gamma * 0.34 * -state['e']
+        dx += 0.34 * -state['e']
 
-        state['x'] += self.gamma**2 * 0.1 * -state['x']
-        # state['x'] += self.gamma * 0.1 * -state['x']
+        dx += 0.1 * -state['x']
         
         if temp is not None:
-            eps = torch.randn_like(state['x'], device=self.device) * 0.034 * temp
-            state['x'] += eps
+            dx += torch.randn_like(state['x'], device=self.device) * 0.034 * temp
 
+        state['x'] = state['x'].detach() + self.gamma * dx
+        state['x'] = self.ln(state['x'])
+        # state['x'] = F.normalize(state['x'], dim=1, p=2)
 
     def update_grad(self, state, e_below=None):
         """

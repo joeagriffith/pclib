@@ -13,7 +13,6 @@ from pclib.nn.models.fc_classifier_us_pw2 import FCClassifierUsPw2
 
 from pclib.nn.models.conv_classifier import ConvClassifier
 from pclib.nn.models.conv_classifier_us import ConvClassifierUs
-from pclib.nn.models.conv_classifier_us_bc import ConvClassifierUsBc
 
 # from pclib.nn.models.UNet import UNet
 from pclib.nn.models.stochastic_hebbian import StochasticHebbian

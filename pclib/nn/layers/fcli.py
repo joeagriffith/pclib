@@ -49,21 +49,19 @@ class FCLI(FC):
         super().__init__(in_features, out_features, has_bias, symmetric, actv_fn, d_actv_fn, gamma, **factory_kwargs)
         self.group_size = 20
 
-        self.lat_conn_mat = (create_competition_matrix(out_features, out_features//self.group_size) * (2*torch.eye(out_features) - 1)).to(device)
+        # self.lat_conn_mat = (create_competition_matrix(out_features, out_features//self.group_size) * (2*torch.eye(out_features) - 1)).to(device)
+        self.lat_conn_mat = (create_competition_matrix(out_features, 1) * (2*torch.eye(out_features) - 1)).to(device)
         
         # Initialise lateral weights to zero (this is the offset from identity matrix so we can use standard weight decay)
-        self.weight_lat = nn.Parameter(torch.zeros((out_features), **factory_kwargs) * 1.0)
+        self.weight_lat = nn.Parameter(torch.zeros((out_features, out_features), **factory_kwargs))
 
         # Normalize moving_avg??!?! and on each update
-        self.moving_avg = torch.ones((out_features), **factory_kwargs)
-        self.norm = nn.LayerNorm(out_features, **factory_kwargs)
-        if in_features is not None:
-            self.norm = nn.GroupNorm(out_features//self.group_size, out_features, **factory_kwargs)
+        # self.moving_avg = torch.ones((out_features), **factory_kwargs)
+        self.moving_avg = None
 
     def to(self, *args, **kwargs):
         self.device = args[0]
         self.lat_conn_mat = self.lat_conn_mat.to(self.device)
-        self.moving_avg = self.moving_avg.to(self.device)
         return super().to(*args, **kwargs)
 
     def lateral(self, state):
@@ -77,12 +75,16 @@ class FCLI(FC):
         Returns:
             | new_x (torch.Tensor): 
         """
-        lat_connectivity = self.lat_conn_mat * F.relu(self.weight_lat + torch.eye(self.out_features, device=self.device)) # self-excitation, lateral-inhibition, and no negative weights
+        lat_connectivity = self.lat_conn_mat * F.relu(self.weight_lat + torch.eye(self.out_features, device=self.device)*1.2) # self-excitation, lateral-inhibition, and no negative weights
         # return F.linear(self.actv_fn(self.boost(state['x'])), lat_connectivity, None)
-        return F.linear(F.relu(self.boost(state['x'])), lat_connectivity, None)
         # return F.linear(self.boost(state['x']), lat_connectivity, None)
+        # return F.linear(self.boost(F.relu(state['x'])), lat_connectivity, None)
+        return F.linear(F.relu(state['x']), lat_connectivity, None)
+    
+    def predict(self, state):
+        return F.linear(state['x'].detach(), self.weight_td, self.bias)
         
-    def update_x(self, state, e_below=None, d_pred=None, temp=None):
+    def update_x(self, state, e_below=None, temp=None):
         """
         | Calculates a new_x and then interpolates between the current state['x'] and new_x, updating state['x'] inplace.
         | This uses the lateral connectivity to produce a target value, rather than an incremental update.
@@ -91,18 +93,19 @@ class FCLI(FC):
             | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
             | e_below Optional([torch.Tensor]): Error of layer below. if None, no gradients are calculated.
         """
-        state['x'] = (1.0 - self.gamma) * state['x'] + self.gamma * self.lateral(state)
+        # state['x'] = (1.0 - self.gamma) * state['x'] + self.gamma * self.lateral(state)
+        dx = self.lateral(state)
         if e_below is not None:
-            update = self.propagate(e_below * d_pred)
-            state['x'] += self.gamma * update
+            dx += self.propagate(e_below)# * self.d_actv_fn(state['x'].detach())
 
-        state['x'] += self.gamma * -state['e']
+        dx += 0.34 * -state['e']
 
         if temp is not None:
-            eps = torch.randn_like(state['x'].detach(), device=self.device) * temp * 0.034
-            state['x'] += eps
+            dx += torch.randn_like(state['x'].detach(), device=self.device) * temp * 0.034
         
-        # state['x'] = self.norm(state['x'])
+        # state['x'] = state['x'].detach() + self.gamma * dx
+        # state['x'] = (1.0 - self.gamma) * state['x'] + self.gamma * dx
+        state['x'] = (1.0 - self.gamma) * state['x'] + self.gamma * self.actv_fn(state['x'] + self.boost(dx))
         
     def assert_grad(self, state, e_below=None):
         raise(NotImplementedError)
@@ -116,11 +119,16 @@ class FCLI(FC):
             | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
         """
 
-        # self.moving_avg = 0.999 * self.moving_avg + 0.001 * state['x'].mean(dim=0)
-        self.moving_avg = 0.90 * self.moving_avg + 0.1 * state['x'].mean(dim=0)
+        if self.moving_avg is None:
+            self.moving_avg = state['x'].mean(dim=0)
+        else:
+            # self.moving_avg = 0.999 * self.moving_avg + 0.001 * state['x'].mean(dim=0)
+            self.moving_avg = 0.9 * self.moving_avg + 0.1 * state['x'].mean(dim=0)
     
     def boost(self, x):
-        # return x
+        # increases x_i if x_i is lower than the average of the group, and vice versa
+        if self.moving_avg is None:
+            self.moving_avg = x.mean(dim=0)
         mult = (self.moving_avg * self.lat_conn_mat.abs()).mean(dim=0)  / self.moving_avg
         return x * mult
 

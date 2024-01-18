@@ -49,14 +49,27 @@ class ConvClassifier(nn.Module):
         self.register_buffer('epochs_trained', torch.tensor(0, dtype=torch.long))
         self.register_buffer('min_vfe', torch.tensor(float('inf'), dtype=torch.float32))
 
-    def inc_epochs(self, n=1):
-        """
-        | Increments the number of epochs trained by n.
+    def __str__(self):
+        base_str = super().__str__()
 
-        Args:
-            | n (int): Number of epochs to increment by
-        """
-        self.epochs_trained += n
+        custom_info = "\n  (params): \n" + \
+            f"    in_shape: (-1, 1, 32, 32)" + \
+            f"    out_shape: (-1, 10)" + \
+            f"    steps: {self.steps}" + \
+            f"    bias: {self.factory_kwargs['has_bias']}" + \
+            f"    symmetric: {self.factory_kwargs['symmetric']}" + \
+            f"    precision_weighted: {self.precision_weighted}" + \
+            f"    actv_fn: {self.factory_kwargs['actv_fn'].__name__}" + \
+            f"    gamma: {self.factory_kwargs['gamma']}" + \
+            f"    device: {self.device}" + \
+            f"    dtype: {self.factory_kwargs['dtype']}" + \
+            f"    epochs_trained: {self.epochs_trained}" + \
+            f"    min_vfe: {self.min_vfe}\n"
+        
+        string = base_str[:base_str.find('\n')] + custom_info + base_str[base_str.find('\n'):]
+        
+        return string
+
 
     def init_layers(self):
         """
@@ -72,6 +85,16 @@ class ConvClassifier(nn.Module):
         layers.append(FC(64, 128, **self.factory_kwargs))
         layers.append(FC(128, 10, **self.factory_kwargs))
         self.layers = nn.ModuleList(layers)
+
+    def inc_epochs(self, n=1):
+        """
+        | Increments the number of epochs trained by n.
+
+        Args:
+            | n (int): Number of epochs to increment by
+        """
+        self.epochs_trained += n
+
 
     def vfe(self, state, batch_reduction='mean', unit_reduction='sum'):
         """
@@ -115,14 +138,14 @@ class ConvClassifier(nn.Module):
 
         """
         
-        pred, d_pred, e_below = None, None, None
+        pred, e_below = None, None
         for i, layer in enumerate(self.layers):
             if i > 0 or obs is None: # Don't update bottom x if obs is given
                 if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
                     with torch.no_grad():
-                        layer.update_x(state[i], e_below, d_pred=d_pred, temp=temp)
+                        layer.update_x(state[i], e_below, temp=temp)
             if i < len(self.layers) - 1:
-                pred, d_pred = self.layers[i+1].predict(state[i+1])
+                pred = self.layers[i+1].predict(state[i+1])
                 layer.update_e(state[i], pred, temp=temp)
                 e_below = state[i]['e']
 
@@ -156,8 +179,7 @@ class ConvClassifier(nn.Module):
                 if i == 0:
                     state[0]['x'] = obs.detach()
                 else:
-                    x_below = state[i-1]['x']
-                    # state[i]['x'] = layer.propagate(x_below)
+                    x_below = state[i-1]['x'].detach()
                     state[i]['x'] = layer.propagate(x_below)
 
     def init_state(self, obs=None, y=None):
@@ -181,7 +203,9 @@ class ConvClassifier(nn.Module):
         for layer in self.layers:
             state.append(layer.init_state(b_size))
         
-        self._init_xs(state, obs, y)
+        with torch.no_grad():
+            self._init_xs(state, obs, y)
+        
         return state
 
     def to(self, device):

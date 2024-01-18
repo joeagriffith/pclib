@@ -73,7 +73,9 @@ class FCClassifier(nn.Module):
             f"    actv_fn: {self.factory_kwargs['actv_fn'].__name__}\n" + \
             f"    gamma: {self.gamma}\n" + \
             f"    device: {self.device}\n" + \
-            f"    dtype: {self.factory_kwargs['dtype']}\n"
+            f"    dtype: {self.factory_kwargs['dtype']}\n" + \
+            f"    epochs_trained: {self.epochs_trained}\n" + \
+            f"    min_vfe: {self.min_vfe}\n"
         
         string = base_str[:base_str.find('\n')] + custom_info + base_str[base_str.find('\n'):]
         
@@ -133,22 +135,6 @@ class FCClassifier(nn.Module):
 
         return vfe
 
-    def pin(self, state, obs=None, y=None):
-        """
-        | Pins the input and/or target to the state if provided.
-        | Not permanent, so is called after every x update.
-
-        Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
-            | obs (Optional[torch.Tensor]): Input data
-            | y (Optional[torch.Tensor]): Target data
-
-        """
-        if obs is not None:
-            state[0]['x'] = obs.clone()
-        if y is not None:
-            state[-1]['x'] = y.clone()
-
     def step(self, state, obs=None, y=None, temp=None):
         """
         | Performs one step of inference. Updates Es first, then Xs, then pins.
@@ -187,18 +173,19 @@ class FCClassifier(nn.Module):
         if y is not None:
             for i, layer in reversed(list(enumerate(self.layers))):
                 if i == len(self.layers) - 1: # last layer
-                    state[i]['x'] = y.clone()
-                else:
+                    state[i]['x'] = y.detach()
+                if i > 0:
                     pred = layer.predict(state[i])
-                    state[i-1]['x'] = pred
+                    state[i-1]['x'] = pred.detach()
             if obs is not None:
-                state[0]['x'] = obs.clone()
+                state[0]['x'] = obs.detach()
         elif obs is not None:
             for i, layer in enumerate(self.layers):
                 if i == 0:
                     state[0]['x'] = obs.clone()
                 else:
-                    state[i]['x'] = layer.actv_fn(layer.propagate(state[i-1]['x'].detach()))
+                    x_below = state[i-1]['x'].detach()
+                    state[i]['x'] = layer.actv_fn(layer.propagate(x_below))
 
 
     def init_state(self, obs=None, y=None):
@@ -212,17 +199,20 @@ class FCClassifier(nn.Module):
         Returns:
             | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
         """
-        with torch.no_grad():
-            if obs is not None:
-                b_size = obs.shape[0]
-            elif y is not None:
-                b_size = y.shape[0]
-            state = []
-            for layer in self.layers:
-                state.append(layer.init_state(b_size))
+        if obs is not None:
+            b_size = obs.shape[0]
+        elif y is not None:
+            b_size = y.shape[0]
+        else:
+            raise ValueError("Either obs or y must be provided to init_state.")
+        state = []
+        for layer in self.layers:
+            state.append(layer.init_state(b_size))
             
+        with torch.no_grad():
             self._init_xs(state, obs, y)
-            return state
+
+        return state
 
     def to(self, device):
         self.device = device
