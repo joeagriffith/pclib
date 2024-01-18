@@ -18,13 +18,12 @@
 #     in_features: int
 #     num_classes: int
 
-#     def __init__(self, steps=100, bias=True, symmetric=True, precision_weighted=False, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
+#     def __init__(self, steps=100, bias=True, symmetric=True, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, beta=1.0, device=torch.device('cpu'), dtype=None):
 #         factory_kwargs = {'bias': bias, 'device': device, 'dtype': dtype}
 #         super(UNet, self).__init__()
 
 #         self.bias = bias
 #         self.symmetric = symmetric
-#         self.precision_weighted = precision_weighted
 #         self.gamma = gamma
 #         self.beta = beta
 

@@ -7,7 +7,7 @@ from torchviz import make_dot
 from torch.utils.tensorboard import SummaryWriter
 
 from pclib.optim.eval import topk_accuracy
-from pclib.nn.layers import FCPW, FCLI, Conv2dLi
+from pclib.nn.layers import FCLI, Conv2dLi
 from pclib.utils.functional import format_y, calc_corr, calc_sparsity
 
 def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW'):
@@ -48,14 +48,12 @@ def init_stats(model, minimal=False, loss=False):
         stats = {
             "X_norms": [[] for _ in range(len(model.layers))],
             "E_mags": [[] for _ in range(len(model.layers))],
-            "WeightTD_means": [[] for _ in range(len(model.layers)-1)],
-            "WeightTD_stds": [[] for _ in range(len(model.layers)-1)],
+            "Weight_means": [[] for _ in range(len(model.layers)-1)],
+            "Weight_stds": [[] for _ in range(len(model.layers)-1)],
             "Bias_means": [[] for _ in range(len(model.layers)-1)],
             "Bias_stds": [[] for _ in range(len(model.layers)-1)],
-            "WeightBU_means": [[] for _ in range(len(model.layers)-1)],
-            "WeightBU_stds": [[] for _ in range(len(model.layers)-1)],
-            "WeightVar_means": [[] for _ in range(len(model.layers)-1)],
-            "WeightVar_stds": [[] for _ in range(len(model.layers)-1)],
+            "WeightTD_means": [[] for _ in range(len(model.layers)-1)],
+            "WeightTD_stds": [[] for _ in range(len(model.layers)-1)],
             "train_vfe": [],
             "train_corr": [],
             "train_sparsity": [],
@@ -324,10 +322,6 @@ def train(
                     if lr > 0:
                         with torch.no_grad():
                             layer.update_mov_avg(state[i])
-                # elif isinstance(layer, FCPW): # updating data directly as we don't want weight decay
-                #     layer.weight_var.data -= lr * layer.weight_var.grad
-                #     layer.weight_var.data = torch.clamp(layer.weight_var.data, min=0.01)
-                #     layer.weight_var.grad = None
 
             if assert_grads: model.assert_grads(state)
 
@@ -359,17 +353,14 @@ def train(
                     epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                     epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
                     if layer.in_features is not None:
-                        epoch_stats['WeightTD_means'][i-1].append(layer.weight_td.mean().item())
-                        epoch_stats['WeightTD_stds'][i-1].append(layer.weight_td.std().item())
+                        epoch_stats['Weight_means'][i-1].append(layer.weight.mean().item())
+                        epoch_stats['Weight_stds'][i-1].append(layer.weight.std().item())
                         if not model.layers[i].symmetric:
-                            epoch_stats['WeightBU_means'][i-1].append(layer.weight_bu.mean().item())
-                            epoch_stats['WeightBU_stds'][i-1].append(layer.weight_bu.std().item())
+                            epoch_stats['WeightTD_means'][i-1].append(layer.weight_td.mean().item())
+                            epoch_stats['WeightTD_stds'][i-1].append(layer.weight_td.std().item())
                         if model.layers[i].bias is not None:
                             epoch_stats['Bias_means'][i-1].append(layer.bias.mean().item())
                             epoch_stats['Bias_stds'][i-1].append(layer.bias.std().item())
-                    # if isinstance(layer, FCPW) and i < len(epoch_stats['WeightVar_means']):
-                    #     epoch_stats['WeightVar_means'][i].append(layer.weight_var.mean().item())
-                    #     epoch_stats['WeightVar_stds'][i].append(layer.weight_var.std().item())
 
         
 
@@ -422,16 +413,13 @@ def train(
                     writer.add_scalar(f'X_norms/layer_{i}', torch.tensor(epoch_stats['X_norms'][i]).mean().item(), model.epochs_trained.item())
                     writer.add_scalar(f'E_mags/layer_{i}', torch.tensor(epoch_stats['E_mags'][i]).mean().item(), model.epochs_trained.item())
                     if layer.in_features is not None:
-                        writer.add_scalar(f'WeightTD_means/layer_{i}', torch.tensor(epoch_stats['WeightTD_means'][i-1]).mean().item(), model.epochs_trained.item())
-                        writer.add_scalar(f'WeightTD_stds/layer_{i}', torch.tensor(epoch_stats['WeightTD_stds'][i-1]).mean().item(), model.epochs_trained.item())
+                        writer.add_scalar(f'Weight_means/layer_{i}', torch.tensor(epoch_stats['Weight_means'][i-1]).mean().item(), model.epochs_trained.item())
+                        writer.add_scalar(f'Weight_stds/layer_{i}', torch.tensor(epoch_stats['Weight_stds'][i-1]).mean().item(), model.epochs_trained.item())
                         if not layer.symmetric:
-                            writer.add_scalar(f'WeightBU_means/layer_{i}', torch.tensor(epoch_stats['WeightBU_means'][i-1]).mean().item(), model.epochs_trained.item())
-                            writer.add_scalar(f'WeightBU_stds/layer_{i}', torch.tensor(epoch_stats['WeightBU_stds'][i-1]).mean().item(), model.epochs_trained.item())
+                            writer.add_scalar(f'WeightTD_means/layer_{i}', torch.tensor(epoch_stats['WeightTD_means'][i-1]).mean().item(), model.epochs_trained.item())
+                            writer.add_scalar(f'WeightTD_stds/layer_{i}', torch.tensor(epoch_stats['WeightTD_stds'][i-1]).mean().item(), model.epochs_trained.item())
                         if layer.bias is not None:
                             writer.add_scalar(f'Bias_means/layer_{i}', torch.tensor(epoch_stats['Bias_means'][i-1]).mean().item(), model.epochs_trained.item())
                             writer.add_scalar(f'Bias_stds/layer_{i}', torch.tensor(epoch_stats['Bias_stds'][i-1]).mean().item(), model.epochs_trained.item())
-                    # if isinstance(layer, FCPW):
-                    #     writer.add_scalar(f'WeightVar_means/layer_{i}', torch.tensor(epoch_stats['WeightVar_means'][i]).mean().item(), model.epochs_trained.item())
-                    #     writer.add_scalar(f'WeightVar_stds/layer_{i}', torch.tensor(epoch_stats['WeightVar_stds'][i]).mean().item(), model.epochs_trained.item())
         
         model.inc_epochs()

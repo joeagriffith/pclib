@@ -26,15 +26,15 @@ class FC(nn.Module):
         | dtype (torch.dtype): Data type to use for computation.
 
     Attributes:
-        | weight_td (torch.Tensor): Weights for top-down predictions.
-        | weight_bu (torch.Tensor): Weights for bottom-up predictions (if symmetric=False).
+        | weight (torch.Tensor): Weights for bottom-up error propagation
+        | weight_td (torch.Tensor): Weights for top-down predictions. (if symmetric=False)
         | bias (torch.Tensor): Bias term (if has_bias=True).
     """
     __constants__ = ['in_features', 'out_features']
     in_features: Optional[int]
     out_features: int
+    weight: Optional[Tensor]
     weight_td: Optional[Tensor]
-    weight_bu: Optional[Tensor]
     bias: Optional[Tensor]
 
     def __init__(self,
@@ -111,30 +111,27 @@ class FC(nn.Module):
         | Creates and initialises weight tensors and bias tensor based on init args.
         """
         if self.in_features is not None:
-            self.weight_td = Parameter(torch.empty((self.in_features, self.out_features), **self.factory_kwargs))
-            nn.init.kaiming_uniform_(self.weight_td, a=math.sqrt(5))
-            # nn.init.kaiming_normal_(self.weight_td, a=math.sqrt(5))
-            # nn.init.xavier_uniform_(self.weight_td)
-            # nn.init.xavier_normal_(self.weight_td)
-            
+            self.weight = Parameter(torch.empty((self.out_features, self.in_features), **self.factory_kwargs))
+            nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
             if self.has_bias:
+                #  Bias is used in prediction of layer below, so it has shape (in_features)
                 self.bias = Parameter(torch.empty(self.in_features, **self.factory_kwargs))
-                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight_td.T)
+                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight.T)
                 bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
                 nn.init.uniform_(self.bias, -bound, bound)
             else:
                 self.register_parameter('bias', None)
 
             if not self.symmetric:
-                self.weight_bu = Parameter(torch.empty((self.out_features, self.in_features), **self.factory_kwargs))
-                nn.init.kaiming_uniform_(self.weight_bu, a=math.sqrt(5))
+                self.weight_td = Parameter(torch.empty((self.in_features, self.out_features), **self.factory_kwargs))
+                nn.init.kaiming_uniform_(self.weight_td, a=math.sqrt(5))
             else:
-                self.register_parameter('weight_bu', None)
+                self.register_parameter('weight_td', None)
 
         else:
+            self.register_parameter('weight', None)
             self.register_parameter('weight_td', None)
-            self.register_parameter('weight_bu', None)
             self.register_parameter('bias', None)
             
     def init_state(self, batch_size):
@@ -167,7 +164,8 @@ class FC(nn.Module):
         Returns:
             | pred (torch.Tensor): Prediction of state['x'] in the layer below.
         """
-        return F.linear(self.actv_fn(state['x'].detach()), self.weight_td, self.bias)
+        weight_td = self.weight.T if self.symmetric else self.weight_td
+        return F.linear(self.actv_fn(state['x'].detach()), weight_td, self.bias)
     
     
     def propagate(self, e_below):
@@ -182,8 +180,7 @@ class FC(nn.Module):
         """
         if e_below.dim() == 4:
             e_below = e_below.flatten(1)
-        weight_bu = self.weight_td.T if self.symmetric else self.weight_bu
-        return F.linear(e_below, weight_bu, None)
+        return F.linear(e_below, self.weight, None)
         
     # Recalculates prediction-error (state['e']) between state['x'] and a top-down prediction of it
     # With simulated annealing
@@ -232,70 +229,3 @@ class FC(nn.Module):
                 dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034
 
             state['x'] = state['x'].detach() + self.gamma * dx
-
-    def update_grad(self, state, e_below=None):
-        """
-        | Manually calculates gradients for weight_td, weight_bu, and bias if they exist.
-        | Slightly faster than using autograd.
-
-        Args:
-            | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
-            | e_below (Optional[torch.Tensor]): Error of layer below. if None, no gradients are calculated.
-        """
-        if e_below is not None:
-            b_size = e_below.shape[0]
-            if e_below.dim() == 4:
-                e_below = e_below.flatten(1)
-            self.weight_td.grad = 2*-(e_below.T @ self.actv_fn(state['x'])) / b_size
-            if self.bias is not None:
-                self.bias.grad = 2*-e_below.mean(dim=0)
-            if not self.symmetric:
-                self.weight_bu.grad = 2*-(self.actv_fn(state['x']).T @ e_below) / b_size
-        
-    def assert_grad(self, state, e_below=None):
-        """
-        | Iff model is being updated with autograd, this function can be used to check whether the manual gradient calculations agree.
-        | Uses assertions and torch.isclose to compare.
-
-        Args:
-            | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
-            | e_below (Optional[torch.Tensor]): Error of layer below. if None, no gradients are calculated.
-        """
-        with torch.no_grad():
-            assert (e_below is None) == (self.in_features is None), "e_below must be None iff in_features is None"
-            if e_below is not None:
-                b_size = e_below.shape[0]
-                manual_weight_td_grad = 2*-(e_below.T @ self.actv_fn(state['x'])) / b_size
-                isclose = torch.isclose(self.weight_td.grad, manual_weight_td_grad, atol=0.001, rtol=0.1)
-                assert isclose.all(), f" \
-                    \nbackward: {self.weight_td.grad} \
-                    \nmanual  : {manual_weight_td_grad}, \
-                    \nrel_diff: {(manual_weight_td_grad - self.weight_td.grad).abs() / manual_weight_td_grad.abs()} \
-                    \nrel_diff_max: {((manual_weight_td_grad - self.weight_td.grad).abs() / manual_weight_td_grad.abs()).max()} \
-                    \nmax_diff: {(manual_weight_td_grad - self.weight_td.grad).abs().max()} \
-                    \n(bak, man, diff): {[(self.weight_td.grad[i, j].item(), manual_weight_td_grad[i, j].item(), (self.weight_td.grad[i, j] - manual_weight_td_grad[i, j]).abs().item()) for i, j in (isclose==False).nonzero()[:5]]}"
-
-
-                if self.bias is not None:
-                    manual_bias_grad = 2*-e_below.mean(dim=0)
-                    isclose = torch.isclose(self.bias.grad, manual_bias_grad, atol=0.001, rtol=0.1)
-                    assert isclose.all(), f" \
-                        \nmanual  : {manual_bias_grad}, \
-                        \nbackward: {self.bias.grad} \
-                        \nrel_diff: {(manual_bias_grad - self.bias.grad).abs() / manual_bias_grad.abs()} \
-                        \nrel_diff_max: {((manual_bias_grad - self.bias.grad).abs() / manual_bias_grad.abs()).max()} \
-                        \nmax_diff: {(manual_bias_grad - self.bias.grad).abs().max()} \
-                        \n(bak, man, diff): {[(self.bias.grad[i].item(), manual_bias_grad[i].item(), (self.bias.grad[i] - manual_bias_grad[i]).abs().item()) for i in (isclose==False).nonzero()[:5]]}"
-
-                if not self.symmetric:
-                    manual_weight_bu_grad = 2*-(self.actv_fn(state['x']).T @ e_below) / b_size
-                    isclose = torch.isclose(self.weight_bu.grad, manual_weight_bu_grad, atol=0.001, rtol=0.1)
-                    assert isclose.all(), f" \
-                        \nmanual  : {manual_weight_bu_grad}, \
-                        \nbackward: {self.weight_bu.grad} \
-                        \nrel_diff: {(manual_weight_bu_grad - self.weight_bu.grad).abs() / manual_weight_bu_grad.abs()} \
-                        \nrel_diff_max: {((manual_weight_bu_grad - self.weight_bu.grad).abs() / manual_weight_bu_grad.abs()).max()} \
-                        \nmax_diff: {(manual_weight_bu_grad - self.weight_bu.grad).abs().max()} \
-                        \n(bak, man, diff): {[(self.weight_bu.grad[i, j].item(), manual_weight_bu_grad[i, j].item(), (self.weight_bu.grad[i, j] - manual_weight_bu_grad[i, j]).abs().item()) for i, j in (isclose==False).nonzero()[:5]]}"
-
-        return True

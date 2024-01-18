@@ -18,7 +18,6 @@ class ConvClassifierUs(ConvClassifier):
         | steps (int): Number of steps to run the network for.
         | bias (bool): Whether to include bias terms in the network.
         | symmetric (bool): Whether to use symmetric weights. 
-        | precision_weighted (bool): Whether to weight the VFE by the precision of the prediction.
         | actv_fn (function): Activation function to use in the network.
         | d_actv_fn (function): Derivative of the activation function to use in the network.
         | gamma (float): step size for x updates
@@ -33,12 +32,11 @@ class ConvClassifierUs(ConvClassifier):
         | layers (torch.nn.ModuleList): List of layers in the network.
 
     """
-    def __init__(self, steps=20, bias=True, symmetric=True, precision_weighted=False, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, device=torch.device('cpu'), dtype=None):
+    def __init__(self, steps=20, bias=True, symmetric=True, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, device=torch.device('cpu'), dtype=None):
         super().__init__(
             steps=steps,
             bias=bias,
             symmetric=symmetric,
-            precision_weighted=precision_weighted,
             actv_fn=actv_fn,
             d_actv_fn=d_actv_fn,
             gamma=gamma,

@@ -80,9 +80,19 @@ class FCLI(FC):
         # return F.linear(self.boost(state['x']), lat_connectivity, None)
         # return F.linear(self.boost(F.relu(state['x'])), lat_connectivity, None)
         return F.linear(F.relu(state['x']), lat_connectivity, None)
-    
+
     def predict(self, state):
-        return F.linear(state['x'].detach(), self.weight_td, self.bias)
+        """
+        | Calculates a prediction of state['x'] in the layer below.
+
+        Args:
+            | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
+        
+        Returns:
+            | pred (torch.Tensor): Prediction of state['x'] in the layer below.
+        """
+        weight_td = self.weight.T if self.symmetric else self.weight_td
+        return F.linear(state['x'].detach(), weight_td, self.bias)
         
     def update_x(self, state, e_below=None, temp=None):
         """

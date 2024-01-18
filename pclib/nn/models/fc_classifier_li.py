@@ -17,7 +17,6 @@ class FCClassifierLI(FCClassifier):
         | steps (int): Number of steps to run inference for
         | bias (bool): Whether to include bias in layers
         | symmetric (bool): Whether to use same weights for top-down prediction and bottom-up error prop.
-        | precision_weighted (bool): Whether to use precision weighted layers (FCPW instead of FC)
         | actv_fn (torch.nn.functional): Activation function to use
         | d_actv_fn (torch.nn.functional): Derivative of activation function to use
         | gamma (float): step size for x updates
@@ -32,10 +31,9 @@ class FCClassifierLI(FCClassifier):
         | steps (int): Number of steps to run inference for
         | bias (bool): Whether to include bias in layers
         | symmetric (bool): Whether to use same weights for top-down prediction and bottom-up error prop.
-        | precision_weighted (bool): Whether to use precision weighted layers (FCPW instead of FC) (NOT IMPLEMENTED)
     """
-    def __init__(self, in_features, num_classes, hidden_sizes = [], steps=20, bias=True, symmetric=True, precision_weighted=False, actv_fn=F.tanh, d_actv_fn=None, gamma=0.1, device=torch.device('cpu'), dtype=None):
-        super().__init__(in_features, num_classes, hidden_sizes, steps, bias, symmetric, precision_weighted, actv_fn, d_actv_fn, gamma, device, dtype)
+    def __init__(self, in_features, num_classes, hidden_sizes = [], steps=20, bias=True, symmetric=True, actv_fn=F.tanh, d_actv_fn=None, gamma=0.1, device=torch.device('cpu'), dtype=None):
+        super().__init__(in_features, num_classes, hidden_sizes, steps, bias, symmetric, actv_fn, d_actv_fn, gamma, device, dtype)
 
     def init_layers(self):
         """
@@ -45,9 +43,6 @@ class FCClassifierLI(FCClassifier):
         layers = []
         in_features = None
         for out_features in [self.in_features] + self.hidden_sizes + [self.num_classes]:
-            if self.precision_weighted:
-                raise NotImplementedError("Precision weighted not implemented for FCClassifierLI")
-            else:
-                layers.append(FCLI(in_features, out_features, device=self.device, **self.factory_kwargs))
+            layers.append(FCLI(in_features, out_features, device=self.device, **self.factory_kwargs))
             in_features = out_features
         self.layers = nn.ModuleList(layers)

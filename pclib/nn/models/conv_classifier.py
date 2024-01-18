@@ -17,7 +17,6 @@ class ConvClassifier(nn.Module):
         | steps (int): Number of steps to run the network for.
         | bias (bool): Whether to include bias terms in the network.
         | symmetric (bool): Whether to use symmetric weights. 
-        | precision_weighted (bool): Whether to weight the VFE by the precision of the prediction.
         | actv_fn (function): Activation function to use in the network.
         | d_actv_fn (function): Derivative of the activation function to use in the network.
         | gamma (float): step size for x updates
@@ -36,12 +35,11 @@ class ConvClassifier(nn.Module):
     in_features: int
     num_classes: int
 
-    def __init__(self, steps=20, bias=True, symmetric=True, precision_weighted=False, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, device=torch.device('cpu'), dtype=None):
+    def __init__(self, steps=20, bias=True, symmetric=True, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, device=torch.device('cpu'), dtype=None):
         self.factory_kwargs = {'actv_fn': actv_fn, 'd_actv_fn': d_actv_fn, 'gamma': gamma, 'has_bias': bias, 'symmetric': symmetric, 'dtype': dtype}
         super().__init__()
 
         self.num_classes = 10
-        self.precision_weighted = precision_weighted
         self.steps = steps
         self.device = device
 
@@ -58,7 +56,6 @@ class ConvClassifier(nn.Module):
             f"    steps: {self.steps}" + \
             f"    bias: {self.factory_kwargs['has_bias']}" + \
             f"    symmetric: {self.factory_kwargs['symmetric']}" + \
-            f"    precision_weighted: {self.precision_weighted}" + \
             f"    actv_fn: {self.factory_kwargs['actv_fn'].__name__}" + \
             f"    gamma: {self.factory_kwargs['gamma']}" + \
             f"    device: {self.device}" + \

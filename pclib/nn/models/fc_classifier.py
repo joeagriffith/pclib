@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from pclib.nn.layers import FC, FCPW
+from pclib.nn.layers import FC
 from pclib.utils.functional import format_y
 
 
@@ -19,7 +19,6 @@ class FCClassifier(nn.Module):
         | steps (int): Number of steps to run inference for
         | bias (bool): Whether to include bias in layers
         | symmetric (bool): Whether to use same weights for top-down prediction and bottom-up error prop.
-        | precision_weighted (bool): Whether to use precision weighted layers (FCPW instead of FC)
         | actv_fn (torch.nn.functional): Activation function to use
         | d_actv_fn (torch.nn.functional): Derivative of activation function to use
         | gamma (float): step size for x updates
@@ -34,14 +33,13 @@ class FCClassifier(nn.Module):
         | steps (int): Number of steps to run inference for
         | bias (bool): Whether to include bias in layers
         | symmetric (bool): Whether to use same weights for top-down prediction and bottom-up error prop.
-        | precision_weighted (bool): Whether to use precision weighted layers (FCPW instead of FC)
 
     """
     __constants__ = ['in_features', 'num_classes']
     in_features: int
     num_classes: int
 
-    def __init__(self, in_features, num_classes, hidden_sizes = [], steps=20, bias=True, symmetric=True, precision_weighted=False, actv_fn=F.tanh, d_actv_fn=None, gamma=0.1, device=torch.device('cpu'), dtype=None):
+    def __init__(self, in_features, num_classes, hidden_sizes = [], steps=20, bias=True, symmetric=True, actv_fn=F.tanh, d_actv_fn=None, gamma=0.1, device=torch.device('cpu'), dtype=None):
         super().__init__()
 
         self.factory_kwargs = {'actv_fn': actv_fn, 'd_actv_fn': d_actv_fn, 'gamma': gamma, 'has_bias': bias, 'symmetric': symmetric, 'dtype': dtype}
@@ -50,7 +48,6 @@ class FCClassifier(nn.Module):
         self.num_classes = num_classes
         self.bias = bias
         self.symmetric = symmetric
-        self.precision_weighted = precision_weighted
         self.gamma = gamma
         self.steps = steps
         self.device = device
@@ -69,7 +66,6 @@ class FCClassifier(nn.Module):
             f"    steps: {self.steps}\n" + \
             f"    bias: {self.bias}\n" + \
             f"    symmetric: {self.symmetric}\n" + \
-            f"    precision_weighted: {self.precision_weighted}\n" + \
             f"    actv_fn: {self.factory_kwargs['actv_fn'].__name__}\n" + \
             f"    gamma: {self.gamma}\n" + \
             f"    device: {self.device}\n" + \
@@ -89,10 +85,7 @@ class FCClassifier(nn.Module):
         layers = []
         in_features = None
         for out_features in [self.in_features] + self.hidden_sizes + [self.num_classes]:
-            if self.precision_weighted:
-                layers.append(FCPW(in_features, out_features, device=self.device, **self.factory_kwargs))
-            else:
-                layers.append(FC(in_features, out_features, device=self.device, **self.factory_kwargs))
+            layers.append(FC(in_features, out_features, device=self.device, **self.factory_kwargs))
             in_features = out_features
         self.layers = nn.ModuleList(layers)
     
