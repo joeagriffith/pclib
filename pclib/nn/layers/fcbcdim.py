@@ -89,8 +89,9 @@ class FCBCDIM(nn.Module):
         | Creates and initialises weight tensors and bias tensor based on init args.
         """
         if self.in_features is not None:
-            self.weight_td = Parameter(torch.empty((self.in_features, self.out_features), **self.factory_kwargs))
-            nn.init.kaiming_uniform_(self.weight_td, a=math.sqrt(5))
+            self.weight_td = Parameter(F.relu((torch.randn((self.in_features, self.out_features), **self.factory_kwargs) / 64.0) + 1.0/16.0))
+            # nn.init.kaiming_uniform_(self.weight_td, a=math.sqrt(5))
+            # self.weight_td.data = self.weight_td.data.abs()
             # nn.init.kaiming_normal_(self.weight_td, a=math.sqrt(5))
             # nn.init.xavier_uniform_(self.weight_td)
             # nn.init.xavier_normal_(self.weight_td)
@@ -135,6 +136,22 @@ class FCBCDIM(nn.Module):
         self.device = args[0]
         return super().to(*args, **kwargs)
 
+    def _init_xs(self, state, obs=None, y=None):
+        """
+        | Initialises xs using either y or obs if provided.
+        | If y is provided, then top down predictions are calculated and used as initial xs.
+        | Else if obs is provided, then bottom up error propagations (pred=0) are calculated and used as initial xs.
+
+        Args:
+            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+            | obs (Optional[torch.Tensor]): Input data
+            | y (Optional[torch.Tensor]): Target data
+        """
+        if y is not None:
+            state[-1]['x'] = y.detach()
+        if obs is not None:
+            state[0]['x'] = obs.detach()
+
     def predict(self, state):
         """
         | Calculates a prediction of state['x'] in the layer below.
@@ -145,8 +162,9 @@ class FCBCDIM(nn.Module):
         Returns:
             | pred (torch.Tensor): Prediction of state['x'] in the layer below.
         """
-
-        return F.linear(self.actv_fn(state['x'].detach()), self.weight_td, self.bias)
+        row_maxes = self.weight_td.max(dim=1, keepdim=True)[0]
+        weight = self.weight_td / torch.clamp(row_maxes, min=1e-3)
+        return F.linear(state['x'].detach(), self.weight_td, self.bias)
     
     def propagate(self, e_below):
         """
@@ -169,7 +187,7 @@ class FCBCDIM(nn.Module):
         | Uses simulated annealing if temp is not None.
         | Does nothing if pred is None. This is useful so the output layer doesn't need specific handling.
 
-        Args:
+       Args:
             | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
             | pred (Optional[torch.Tensor]): Top-down prediction of state['x'].
             | temp (Optional[float]): Temperature for simulated annealing.
@@ -177,13 +195,13 @@ class FCBCDIM(nn.Module):
         if pred is not None:
             if pred.dim() == 4:
                 pred = pred.flatten(1)
-            state['e'] = state['x'].detach() / (pred + torch.ones_like(pred)*1e-6)
+            state['e'] = state['x'].detach() / torch.clamp(pred, min=1e-3)
 
-        if temp is not None:
-            eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
-            state['e'] += eps
+        # if temp is not None:
+        #     eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
+        #     state['e'] += eps
     
-    def update_x(self, state, e_below=None, d_pred=None, temp=None):
+    def update_x(self, state, e_below=None, temp=None):
         """
         | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x)).
@@ -194,16 +212,13 @@ class FCBCDIM(nn.Module):
         """
         # If not input layer, propagate error from layer below
         if e_below is not None:
-            update = self.propagate(e_below * d_pred)
-            state['x'] = (state['x'] + torch.ones_like(state['x'])*1e-6) * update
-        if pred is not None:
-            state['x'] = state['x'] * (torch.ones_like(pred) + self.gamma*pred)
-        if temp is not None:
-            eps = torch.randn_like(state['x'], device=self.device) * 0.034 * temp
-            state['x'] += eps
+            update = self.propagate(e_below)
+            new_x = torch.clamp(state['x'], min=1e-6) * update
+            state['x'] = (1.0 - self.gamma) * state['x'] + self.gamma * new_x
+        # if temp is not None:
+        #     eps = torch.randn_like(state['x'], device=self.device) * 0.034 * temp
+        #     state['x'] += eps
         
-        state['x'] = self.norm(state['x'])
-
     def update_grad(self, state, e_below=None):
         """
         | Manually calculates gradients for weight_td, weight_bu, and bias if they exist.

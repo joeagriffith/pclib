@@ -62,24 +62,55 @@ class FCClassifierUsBcDim(FCClassifierUs):
             nn.Linear(200, self.num_classes, bias=False, device=self.device, dtype=self.factory_kwargs['dtype']),
         )
 
-    def step(self, state, obs=None, y=None, temp=None):
+    def forward(self, obs=None, steps=None):
         """
-        | Performs one step of inference. Updates Es first, then Xs, then pins.
-        | Es are updated top-down, Xs are updated bottom-up, due to the way the updates flow.
-
+        | Performs inference for the model.
+        
         Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e; (and 'eps' for FCPW)
             | obs (Optional[torch.Tensor]): Input data
             | y (Optional[torch.Tensor]): Target data
-            | temp (Optional[float]): Temperature to use for update
+            | steps (Optional[int]): Number of steps to run inference for. Uses self.steps if not provided.
 
+        Returns:
+            | out (torch.Tensor): Output of the model
+            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
         """
-        for i, layer in enumerate(self.layers):
-            e_below = state[i-1]['e'] if i > 0 else None
-            pred = self.layers[i+1].predict(state[i+1]) if i < len(self.layers) - 1 else None
-            if i > 0 or obs is None: # Don't update bottom x if obs is given
-                if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
-                    with torch.no_grad():
-                        layer.update_x(state[i], e_below, pred, temp=temp)
-            if i < len(self.layers) - 1:
-                layer.update_e(state[i], pred, temp=temp)
+        if steps is None:
+            steps = self.steps
+
+        for layer in self.layers:
+            if layer.weight_td is not None:
+                layer.weight_td.data = F.relu(layer.weight_td.data)
+
+        state = self.init_state(obs)
+
+        for i in range(steps):
+            temp = self.calc_temp(i, steps)
+            self.step(state, obs, temp)
+            
+        out = self.get_output(state)
+            
+        return out, state
+
+
+    # def step(self, state, obs=None, y=None, temp=None):
+    #     """
+    #     | Performs one step of inference. Updates Es first, then Xs, then pins.
+    #     | Es are updated top-down, Xs are updated bottom-up, due to the way the updates flow.
+
+    #     Args:
+    #         | state (list): List of layer state dicts, each containing 'x' and 'e; (and 'eps' for FCPW)
+    #         | obs (Optional[torch.Tensor]): Input data
+    #         | y (Optional[torch.Tensor]): Target data
+    #         | temp (Optional[float]): Temperature to use for update
+
+    #     """
+    #     for i, layer in enumerate(self.layers):
+    #         e_below = state[i-1]['e'] if i > 0 else None
+    #         pred = self.layers[i+1].predict(state[i+1]) if i < len(self.layers) - 1 else None
+    #         if i > 0 or obs is None: # Don't update bottom x if obs is given
+    #             if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
+    #                 with torch.no_grad():
+    #                     layer.update_x(state[i], e_below, temp=temp)
+    #         if i < len(self.layers) - 1:
+    #             layer.update_e(state[i], pred, temp=temp)
