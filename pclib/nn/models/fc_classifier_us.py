@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchviz import make_dot
 
 from pclib.nn.layers import FC
 from pclib.nn.models import FCClassifier
