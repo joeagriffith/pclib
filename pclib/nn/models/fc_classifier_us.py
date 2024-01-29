@@ -9,9 +9,9 @@ from pclib.nn.models import FCClassifier
 # Based on Whittington and Bogacz 2017, but with targets predicting inputs
 class FCClassifierUs(FCClassifier):
     """
-    | A Self-Supervised version of FCClassifier.
-    | It learns a feature extractor (self.layers) only from observations.
-    | It separately learns a classifier (self.classifier) which takes the output of self.layers as input.
+    | A Unsupervised version of FCClassifier.
+    | Learns a feature extractor (self.layers) via unsupervised learning.
+    | Also learns an mlp classifier (self.classifier) which takes the output of self.layers as input, via supervised learning.
 
     Args:
         | in_features (int): Number of input features
@@ -83,7 +83,7 @@ class FCClassifierUs(FCClassifier):
 
     def forward(self, obs=None, steps=None, back_on_step=False):
         """
-        | Performs inference for the model. 
+        | Performs inference phase of the model. 
         | Uses self.classifier to get output.
 
         Args:
@@ -103,8 +103,7 @@ class FCClassifierUs(FCClassifier):
             temp = self.calc_temp(i, steps)
             self.step(state, obs, temp=temp)
             if back_on_step:
-                vfe = self.vfe(state)
-                vfe.backward()
+                self.vfe(state).backward()
             
         out = self.get_output(state)
             

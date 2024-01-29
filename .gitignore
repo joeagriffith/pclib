@@ -1,6 +1,2 @@
-**/out
 **/__pycache__
-ideas.txt
-runs/**
-testing/**
-**/logs/**
+**/out

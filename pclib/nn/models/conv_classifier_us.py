@@ -9,9 +9,7 @@ from torch.nn.grad import conv2d_input, conv2d_weight
 # Based on Whittington and Bogacz 2017
 class ConvClassifierUs(ConvClassifier):
     """
-    | Similar to the FCClassifier, except uses convolutions instead of fully connected layers.
-    | Currently calculates X updates using .backward() on the VFE, which is slow.
-    | May be possible to speed up by calculating X updates manually, but requires complex indexing to minimise floating point operations.
+    | Similar to the ConvClassifer, except it learns an unsupervised feature extractor, and a separate backprop trained classifier.
     | This network is not currently customisable, but requires altering the init_layers() code to change the architecture.
 
     Args:
@@ -57,15 +55,6 @@ class ConvClassifierUs(ConvClassifier):
         layers.append(Conv2d((256, 2, 2),    (256, 1, 1),    3, 2, 1, **self.factory_kwargs))
         self.layers = nn.ModuleList(layers)
 
-        # layers = []
-        # layers.append(Conv2d(None,         (1, 28, 28),                  **self.factory_kwargs))
-        # layers.append(Conv2d((1, 28, 28),  (32, 22, 22), 7, 1, 0, **self.factory_kwargs))
-        # layers.append(Conv2d((32, 22, 22), (64, 16, 16), 7, 1, 0, **self.factory_kwargs))
-        # layers.append(Conv2d((64, 16, 16), (128, 10, 10), 7, 1, 0, **self.factory_kwargs))
-        # layers.append(Conv2d((128, 10, 10), (128, 4, 4), 7, 1, 0, **self.factory_kwargs))
-        # layers.append(Conv2d((128, 4, 4), (128, 1, 1), 4, 1, 0, **self.factory_kwargs))
-        # self.layers = nn.ModuleList(layers)
-
         self.classifier = nn.Sequential(
             nn.Linear(self.layers[-1].shape[0], 200, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
             nn.ReLU(),
@@ -96,14 +85,14 @@ class ConvClassifierUs(ConvClassifier):
         return out
         
 
-    def forward(self, obs=None, steps=None):
+    def forward(self, obs=None, steps=None, back_on_step=False):
         """
         | Performs inference for the network.
 
         Args:
             | obs (Optional[torch.Tensor]): Input data
-            | y (Optional[torch.Tensor]): Target data
             | steps (Optional[int]): Number of steps to run inference for
+            | back_on_step (bool): Whether to backpropagate on each step. Default False.
         
         Returns:
             | out (torch.Tensor): Output of the network
@@ -117,6 +106,8 @@ class ConvClassifierUs(ConvClassifier):
         for i in range(steps):
             temp = self.calc_temp(i, steps)
             self.step(state, obs, temp)
+            if back_on_step:
+                self.vfe(state).backward()
             
         out = self.get_output(state)
             

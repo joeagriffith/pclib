@@ -12,7 +12,7 @@ class FC(nn.Module):
     | Fully connected layer with optional bias and optionally symmetric weights.
     | The layer stores its state in a dictionary with keys 'x' and 'e'.
     | Layer is defined such that 'x' and 'e' are the same shape, and 'x' precedes 'e' in the architecture.
-    | The Layer implements predictions as: Wf(x) + Optional(b).
+    | The Layer defines predictions as: Wf(x) + Optional(bias).
 
     Args:
         | in_features (int): Number of input features.
@@ -26,6 +26,8 @@ class FC(nn.Module):
         | dtype (torch.dtype): Data type to use for computation.
 
     Attributes:
+        | in_features (int): Number of input features.
+        | out_features (int): Number of output features; size of x and e vectors.
         | weight (torch.Tensor): Weights for bottom-up error propagation
         | weight_td (torch.Tensor): Weights for top-down predictions. (if symmetric=False)
         | bias (torch.Tensor): Bias term (if has_bias=True).
@@ -108,7 +110,7 @@ class FC(nn.Module):
     # Declare weights if not input layer
     def init_params(self):
         """
-        | Creates and initialises weight tensors and bias tensor based on init args.
+        | Creates and initialises weight tensors and bias tensor based on args from self.__init__().
         """
         if self.in_features is not None:
             self.weight = Parameter(torch.empty((self.out_features, self.in_features), **self.factory_kwargs))
@@ -183,9 +185,7 @@ class FC(nn.Module):
             e_below = e_below.flatten(1)
         return F.linear(e_below, self.weight, None)
         
-    # Recalculates prediction-error (state['e']) between state['x'] and a top-down prediction of it
-    # With simulated annealing
-    def update_e(self, state, pred=None, temp=None):
+    def update_e(self, state, pred, temp=None):
         """
         | Updates prediction-error (state['e']) inplace between state['x'] and the top-down prediction of it.
         | Uses simulated annealing if temp is not None.
@@ -193,16 +193,17 @@ class FC(nn.Module):
 
         Args:
             | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
-            | pred (Optional[torch.Tensor]): Top-down prediction of state['x'].
+            | pred (torch.Tensor): Top-down prediction of state['x'].
             | temp (Optional[float]): Temperature for simulated annealing.
         """
+        assert pred is not None, "Prediction must be provided to update_e()."
+
         if self.symmetric:
             state['x'] = state['x'].detach()
         
-        if pred is not None:
-            if pred.dim() == 4:
-                pred = pred.flatten(1)
-            state['e'] = state['x'] - pred
+        if pred.dim() == 4:
+            pred = pred.flatten(1)
+        state['e'] = state['x'] - pred
 
         if temp is not None:
             eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
@@ -211,7 +212,7 @@ class FC(nn.Module):
     def update_x(self, state, e_below=None, temp=None):
         """
         | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
-        | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x)).
+        | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x) - 0.1 * x + noise).
 
         Args:
             | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.

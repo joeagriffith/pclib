@@ -9,8 +9,6 @@ from torch.nn.grad import conv2d_input, conv2d_weight
 class ConvClassifier(nn.Module):
     """
     | Similar to the FCClassifier, except uses convolutions instead of fully connected layers.
-    | Currently calculates X updates using .backward() on the VFE, which is slow.
-    | May be possible to speed up by calculating X updates manually, but requires complex indexing to minimise floating point operations.
     | This network is not currently customisable, but requires altering the init_layers() code to change the architecture.
 
     Args:
@@ -71,6 +69,7 @@ class ConvClassifier(nn.Module):
     def init_layers(self):
         """
         | Initialises the layers of the network.
+        | Not currently customisable, but can be changed by altering this code.
         """
         layers = []
         layers.append(Conv2d(None, (1, 32, 32),         maxpool=2, **self.factory_kwargs))
@@ -100,7 +99,7 @@ class ConvClassifier(nn.Module):
         | how batches and units are reduced is controlled by batch_reduction and unit_reduction.
 
         Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+            | state (list): List of layer state dicts, each containing 'x' and 'e'
             | batch_reduction (str): How to reduce over batches ['sum', 'mean', None]
             | unit_reduction (str): How to reduce over units ['sum', 'mean']
 
@@ -124,60 +123,58 @@ class ConvClassifier(nn.Module):
 
     def step(self, state, obs=None, y=None, temp=None):
         """
-        | Performs on step of inference, updating Es first, then calculates X updates using .backward() on the VFE.
-        | Es are updated top-down, collecting predictions along the way, then Xs are updated bottom-up.
+        | Performs one step of inference, updating all Xs first, then calculates Errors.
 
         Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+            | state (list): List of layer state dicts, each containing 'x' and 'e'
             | obs (Optional[torch.Tensor]): Input data
             | y (Optional[torch.Tensor]): Target data
-            | temp (Optional[float]): Temperature for the softmax function
+            | temp (Optional[float]): Temperature for simulated annealing
 
         """
-        
-        pred, e_below = None, None
         for i, layer in enumerate(self.layers):
-            if i > 0 or obs is None: # Don't update bottom x if obs is given
-                if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
-                    with torch.no_grad():
-                        layer.update_x(state[i], e_below, temp=temp)
+            if i > 0 or obs is None:
+                if i < len(self.layers) - 1 or y is None:
+                    e_below = state[i-1]['e'] if i > 0 else None
+                    layer.update_x(state[i], e_below, temp=temp)
+        for i, layer in enumerate(self.layers):
             if i < len(self.layers) - 1:
                 pred = self.layers[i+1].predict(state[i+1])
                 layer.update_e(state[i], pred, temp=temp)
-                e_below = state[i]['e']
 
 
     def _init_xs(self, state, obs=None, y=None):
         """
-        | Initialises xs using y if provided.
+        | Initialises Xs.
         | If y is provided, xs are initialised top-down using predictions.
-        | Else if just obs is provided, xs can't be initialised, so are initialised randomly.
+        | Else if obs is provided, xs are initialised bottom-up using propagations.
         
         Args:
             | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
             | obs (Optional[torch.Tensor]): Input data
             | y (Optional[torch.Tensor]): Target data
         """
-        if y is not None:
-            for i, layer in reversed(list(enumerate(self.layers))):
-                if i == len(self.layers) - 1: # last layer
-                    state[i]['x'] = y.detach()
-                if i > 0:
-                    pred = layer.predict(state[i])
-                    if isinstance(layer, FC) and isinstance(self.layers[i-1], Conv2d):
-                        shape = self.layers[i-1].shape
-                        pred = pred.view(pred.shape[0], shape[0], shape[1], shape[2])
-                    state[i-1]['x'] = pred.detach()
-            if obs is not None:
-                state[0]['x'] = obs.detach()
-
-        elif obs is not None:
-            for i, layer in enumerate(self.layers):
-                if i == 0:
+        with torch.no_grad():
+            if y is not None:
+                for i, layer in reversed(list(enumerate(self.layers))):
+                    if i == len(self.layers) - 1: # last layer
+                        state[i]['x'] = y.detach()
+                    if i > 0:
+                        pred = layer.predict(state[i])
+                        if isinstance(layer, FC) and isinstance(self.layers[i-1], Conv2d):
+                            shape = self.layers[i-1].shape
+                            pred = pred.view(pred.shape[0], shape[0], shape[1], shape[2])
+                        state[i-1]['x'] = pred.detach()
+                if obs is not None:
                     state[0]['x'] = obs.detach()
-                else:
-                    x_below = state[i-1]['x'].detach()
-                    state[i]['x'] = layer.propagate(x_below)
+
+            elif obs is not None:
+                for i, layer in enumerate(self.layers):
+                    if i == 0:
+                        state[0]['x'] = obs.detach()
+                    else:
+                        x_below = state[i-1]['x'].detach()
+                        state[i]['x'] = layer.propagate(x_below)
 
     def init_state(self, obs=None, y=None):
         """
@@ -188,7 +185,7 @@ class ConvClassifier(nn.Module):
             | y (Optional[torch.Tensor]): Target data
 
         Returns:
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+            | state (list): List of layer state dicts, each containing 'x' and 'e'
         """
         if obs is not None:
             b_size = obs.shape[0]
@@ -200,8 +197,7 @@ class ConvClassifier(nn.Module):
         for layer in self.layers:
             state.append(layer.init_state(b_size))
         
-        with torch.no_grad():
-            self._init_xs(state, obs, y)
+        self._init_xs(state, obs, y)
         
         return state
 
@@ -216,7 +212,7 @@ class ConvClassifier(nn.Module):
         | Returns the output of the network.
 
         Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+            | state (list): List of layer state dicts, each containing 'x' and 'e'
 
         Returns:
             | out (torch.Tensor): Output of the network
@@ -232,22 +228,23 @@ class ConvClassifier(nn.Module):
             | steps (int): Total number of steps
         
         Returns:
-            | temp (float): Temperature for the current step
+            | temp (float): Temperature for the current step = 1 - (step_i / steps)
         """
         return 1 - (step_i / steps)
 
-    def forward(self, obs=None, y=None, steps=None):
+    def forward(self, obs=None, y=None, steps=None, back_on_step=False):
         """
-        | Performs inference for the network.
+        | Performs inference phase of the network.
 
         Args:
             | obs (Optional[torch.Tensor]): Input data
             | y (Optional[torch.Tensor]): Target data
             | steps (Optional[int]): Number of steps to run inference for
+            | back_on_step (bool): Whether to backpropagate on each step. Default False.
         
         Returns:
             | out (torch.Tensor): Output of the network
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+            | state (list): List of layer state dicts, each containing 'x' and 'e'
         """
         if steps is None:
             steps = self.steps
@@ -257,6 +254,8 @@ class ConvClassifier(nn.Module):
         for i in range(steps):
             temp = self.calc_temp(i, steps)
             self.step(state, obs, y, temp)
+            if back_on_step:
+                self.vfe(state).backward()
             
         out = self.get_output(state)
             
@@ -283,7 +282,7 @@ class ConvClassifier(nn.Module):
 
         Args:
             | obs (torch.Tensor): Input data
-            | state (Optional[list]): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+            | state (Optional[list]): List of layer state dicts, each containing 'x' and 'e'
             | steps (Optional[int]): Number of steps to run inference for
         
         Returns:
@@ -300,6 +299,3 @@ class ConvClassifier(nn.Module):
             vfes[:, target] = self.vfe(state, batch_reduction=None)
         
         return vfes.argmin(dim=1)
-
-
-

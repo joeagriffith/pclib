@@ -106,9 +106,9 @@ class FCClassifier(nn.Module):
         | how batches and units are reduced is controlled by batch_reduction and unit_reduction.
 
         Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
-            | batch_reduction (str): How to reduce over batches ['sum', 'mean', None]
-            | unit_reduction (str): How to reduce over units ['sum', 'mean']
+            | state (list): List of layer state dicts, each containing 'x' and 'e'
+            | batch_reduction (str): How to reduce over batches ['sum', 'mean', None], default='mean'
+            | unit_reduction (str): How to reduce over units ['sum', 'mean'], default='sum'
 
         Returns:
             | vfe (torch.Tensor): VFE of the model (scalar)
@@ -130,8 +130,8 @@ class FCClassifier(nn.Module):
 
     def step(self, state, obs=None, y=None, temp=None):
         """
-        | Performs one step of inference. Updates Es first, then Xs, then pins.
-        | Es are updated top-down, Xs are updated bottom-up, due to the way the updates flow.
+        | Performs one step of inference. Updates Xs first, then Es.
+        | Both are updated from bottom to top.
 
         Args:
             | state (list): List of layer state dicts, each containing 'x' and 'e; (and 'eps' for FCPW)
@@ -156,7 +156,7 @@ class FCClassifier(nn.Module):
         | Else if obs is provided, then bottom up error propagations (pred=0) are calculated and used as initial xs.
 
         Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+            | state (list): List of layer state dicts, each containing 'x' and 'e'
             | obs (Optional[torch.Tensor]): Input data
             | y (Optional[torch.Tensor]): Target data
         """
@@ -176,6 +176,7 @@ class FCClassifier(nn.Module):
                         state[0]['x'] = obs.clone()
                     else:
                         x_below = state[i-1]['x'].detach()
+                        # Found that using actv_fn here gives better results
                         state[i]['x'] = layer.actv_fn(layer.propagate(x_below))
 
 
@@ -188,7 +189,7 @@ class FCClassifier(nn.Module):
             | y (Optional[torch.Tensor]): Target data
 
         Returns:
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+            | state (list): List of layer state dicts, each containing 'x' and 'e'
         """
         if obs is not None:
             b_size = obs.shape[0]
@@ -200,8 +201,7 @@ class FCClassifier(nn.Module):
         for layer in self.layers:
             state.append(layer.init_state(b_size))
             
-        with torch.no_grad():
-            self._init_xs(state, obs, y)
+        self._init_xs(state, obs, y)
 
         return state
 
@@ -232,13 +232,13 @@ class FCClassifier(nn.Module):
             | steps (int): Total number of steps
 
         Returns:
-            | temp (float): Temperature for the current step
+            | temp (float): Temperature for the current step = 1 - (step_i / steps)
         """
         return 1 - (step_i / steps)
 
     def forward(self, obs=None, y=None, steps=None, back_on_step=False):
         """
-        | Performs inference for the model.
+        | Performs inference phase of the model.
         
         Args:
             | obs (Optional[torch.Tensor]): Input data
@@ -258,8 +258,7 @@ class FCClassifier(nn.Module):
             temp = self.calc_temp(i, steps)
             self.step(state, obs, y, temp)
             if back_on_step:
-                vfe = self.vfe(state)
-                vfe.backward()
+                self.vfe(state).backward()
             
         out = self.get_output(state)
             
@@ -271,7 +270,7 @@ class FCClassifier(nn.Module):
         | Only useful if using autograd=True in training, otherwise comparing manual grads to themselves.
 
         Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+            | state (list): List of layer state dicts, each containing 'x' and 'e'
         """
         for i, layer in enumerate(model.layers):
             if i > 0:

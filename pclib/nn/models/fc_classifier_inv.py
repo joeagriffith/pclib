@@ -8,9 +8,9 @@ from pclib.nn.models import FCClassifier
 # Based on Whittington and Bogacz 2017
 class FCClassifierInv(FCClassifier):
     """
-    | Inherits most functionality from FCClassifier, except it predicts targets from inputs (inputs at top, targets at bottom).
+    | Inherits most functionality from FCClassifier, except it predictions from inputs to targets (inputs at top, targets at bottom).
     | Based on Whittington and Bogacz 2017.
-    | This model is the most effective classifier, acheiving >98% val accuracy on MNIST.
+    | This model is the most effective classifier, achieving >98% val accuracy on MNIST.
 
     Args:
         | in_features (int): Number of input features
@@ -44,20 +44,12 @@ class FCClassifierInv(FCClassifier):
         """
         layers = []
         in_features = None
-        for out_features in [self.num_classes] + self.hidden_sizes + [self.in_features]:
+        self.sizes = [self.in_features] + self.hidden_sizes + [self.num_classes]
+        self.sizes = self.sizes[::-1]
+        for out_features in self.sizes:
             layers.append(FC(in_features, out_features, device=self.device, **self.factory_kwargs))
             in_features = out_features
         self.layers = nn.ModuleList(layers)
-
-    def pin(self, state, obs=None, y=None):
-        """
-        | Pins the input and/or target to the state if provided.
-        | Overrides FCClassifier.pin() to pin targets at bottom, and inputs at top.
-        """
-        if obs is not None:
-            state[-1]['x'] = obs.clone()
-        if y is not None:
-            state[0]['x'] = y.clone()
 
     def _init_xs(self, state, obs=None, y=None):
         """

@@ -56,7 +56,3 @@ def calc_sparsity(state, std_multiplier=0.1):
     thresholds = [std_multiplier * state_i['x'].std() for state_i in state]
     small_values = [(state_i['x'].abs() < threshold).sum(dim=1).float().mean() for state_i, threshold in zip(state, thresholds)]
     return sum(small_values) / len(small_values)
-
-
-
-

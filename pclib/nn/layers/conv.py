@@ -6,10 +6,36 @@ from torch import Tensor
 from torch.nn import Parameter
 from torch.nn.grad import conv2d_input, conv2d_weight
 from typing import Optional, Tuple
-from pclib.utils.functional import reTanh, identity
+from pclib.utils.functional import reTanh, identity, trec
 
 # Whittington & Bogacz 2017
 class Conv2d(nn.Module):
+    """
+    | Convolutional layer with optional bias, assymetric weights not yet supported.
+    | Layer has similar functionality to FC layer, but propagates errors via a convolution.
+    | The predictions are calculated using pytorch's conv2d_input function.
+    | This layer also defines predictions as: Wf(x) + Optional(bias).
+
+    Args:
+        prev_shape: Shape of the previous layer, None if this is input layer.
+        shape: Shape of the current layer.
+        kernel_size: Size of the convolutional kernel.
+        stride: Stride of the convolutional kernel.
+        padding: Padding of the convolutional kernel.
+        has_bias: Whether the layer has a bias.
+        symmetric: Whether the layer has symmetric weights.
+        actv_fn: Activation function of the layer.
+        d_actv_fn: Derivative of the activation function of the layer (if None, it will be inferred from actv_fn).
+        gamma: Step size for x updates.
+        device: Device to run the layer on.
+        dtype: Data type of the layer.
+
+    Attributes:
+        | **prev_shape**: Shape of the previous layer, None if this is input layer.
+        | **shape**: Shape of the current layer.
+    """
+
+
     __constants__ = ['prev_shape', 'shape']
     shape: Tuple[int]
     prev_shape: Optional[Tuple[int]]
@@ -31,6 +57,7 @@ class Conv2d(nn.Module):
                  ) -> None:
         
         # assert stride == 1, "Stride != 1 not yet supported."
+        assert symmetric, "Asymmetric convolution not yet supported."
 
         self.factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
@@ -47,7 +74,7 @@ class Conv2d(nn.Module):
         self.has_bias = has_bias
         self.maxpool = maxpool
 
-        # Default derivative of activation function
+        # Automatically set d_actv_fn if not provided
         if d_actv_fn is not None:
             self.d_actv_fn: callable = d_actv_fn
         elif actv_fn == F.relu:
@@ -62,10 +89,25 @@ class Conv2d(nn.Module):
             self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
         elif actv_fn == identity:
             self.d_actv_fn: callable = lambda x: torch.ones_like(x)
+        elif actv_fn == F.gelu:
+            self.d_actv_fn: callable = lambda x: torch.sigmoid(1.702 * x) * (1. + torch.exp(-1.702 * x) * (1.702 * x + 1.)) + 0.5
+        elif actv_fn == F.softplus:
+            self.d_actv_fn: callable = lambda x: torch.sigmoid(x)
+        elif actv_fn == F.softsign:
+            self.d_actv_fn: callable = lambda x: 1 / (1 + torch.abs(x)).square()
+        elif actv_fn == F.elu:
+            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) + torch.sign(torch.minimum(x, torch.zeros_like(x))) * 0.01 + 1
+        elif actv_fn == F.leaky_relu:
+            self.d_actv_fn: callable = lambda x: torch.where(x > 0, torch.ones_like(x), 0.01 * torch.ones_like(x))
+        elif actv_fn == trec:
+            self.d_actv_fn: callable = lambda x: (x > 1.0).float()
         
         self.init_weights()
 
     def __str__(self):
+        """
+        | Returns a string representation of the layer.
+        """
         base_str = super().__str__()
 
         custom_info = "\n  (params): \n" + \
@@ -84,6 +126,11 @@ class Conv2d(nn.Module):
         return string
         
     def init_weights(self):
+        """
+        | Initialises the weights of the layer.
+        | Includes optional maxpooling.
+        """
+
         # Initialise weights if not input layer
         if self.prev_shape is not None:
             self.conv = nn.Sequential(
@@ -98,6 +145,15 @@ class Conv2d(nn.Module):
             # )
 
     def init_state(self, batch_size):
+        """
+        | Builds a new state dictionary for the layer.
+
+        Args:
+            | batch_size (int): Batch size of the state dictionary.
+
+        Returns:
+            | state (dict): A state dictionary for the layer.
+        """
         return {
             'x': torch.zeros((batch_size, self.shape[0], self.shape[1], self.shape[2]), device=self.device),
             'e': torch.zeros((batch_size, self.shape[0], self.shape[1], self.shape[2]), device=self.device),
@@ -107,8 +163,17 @@ class Conv2d(nn.Module):
         self.device = args[0]
         return super().to(*args, **kwargs)
 
-    # Returns a prediction of the state in the previous layer
     def predict(self, state):
+        """
+        | Calculates the prediction of state['x] the layer below.
+
+        Args:
+            | state (dict): The state dictionary for this layer.
+        
+        Returns:
+            | pred (torch.Tensor): The calculated prediction.
+        """
+
         x = F.interpolate(state['x'].detach(), scale_factor=self.maxpool, mode='nearest')
         prev_shape = (x.shape[0], self.prev_shape[0], self.prev_shape[1], self.prev_shape[2])
         actv = conv2d_input(prev_shape, self.conv[0].weight, self.actv_fn(x), stride=self.stride, padding=self.padding, dilation=1, groups=1)
@@ -116,13 +181,31 @@ class Conv2d(nn.Module):
             actv += self.bias
         return actv
     
-    # propagates error from layer below, return an update for x
     def propagate(self, e_below):
+        """
+        | Propagates error from layer below, returning an update for state['x'].
+
+        Args:
+            | e_below (torch.Tensor): The error from the layer below.
+
+        Returns:
+            | update (torch.Tensor): The update for state['x'].
+        """
         return self.conv(e_below)
     
-    # Recalculates prediction-error between state and top-down prediction of it
-    # With simulated annealing
     def update_e(self, state, pred, temp=None):
+        """
+        | Updates the prediction error (state['e']) between state['x'] and pred.
+        | Uses simulated annealing if temp is not None.
+
+        Args:
+            | state (dict): The state dictionary for this layer.
+            | pred (torch.Tensor): The prediction of the layer below.
+            | temp (Optional[float]): The temperature for simulated annealing.
+        """
+
+        assert pred is not None, "Prediction must be provided to update_e()."
+
         if pred.dim() == 2:
             pred = pred.unsqueeze(-1).unsqueeze(-1)
         state['e'] = state['x'].detach() - pred
@@ -132,7 +215,14 @@ class Conv2d(nn.Module):
             state['e'] += eps
 
     def update_x(self, state, e_below=None, temp=None):
-        # If not input layer, propagate error from layer below
+        """
+        | Updates state['x'] using the error signal from the layer below and of current layer.
+        | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x) - 0.1 * x + noise)
+
+        Args:
+            | state (dict): The state dictionary for this layer.
+            | e_below (Optional[torch.Tensor]): The error from the layer below.
+        """
         dx = torch.zeros_like(state['x'], device=self.device)
         if e_below is not None:
             if e_below.dim() == 2:
@@ -141,22 +231,9 @@ class Conv2d(nn.Module):
 
         dx += -state['e']
 
-        # dx += 0.1 * -state['x']
+        dx += 0.1 * -state['x']
         
         if temp is not None:
             dx += torch.randn_like(state['x'], device=self.device) * 0.034 * temp
 
         state['x'] = state['x'].detach() + self.gamma * dx
-
-    def update_grad(self, state, e_below=None):
-        """
-        
-        """
-        if e_below is not None:
-            b_size = e_below.shape[0]
-            x = F.interpolate(self.actv_fn(state['x']), scale_factor=self.maxpool, mode='nearest')
-            self.conv[0].weight.grad = 2*-conv2d_weight(e_below, self.conv[0].weight.shape, x, stride=self.stride, padding=self.padding, dilation=1, groups=1) / b_size
-            # I dont trust this
-            # Might need separate bias for prediction. this is for error prop
-            if self.has_bias:
-                self.bias.grad = 2*-e_below.mean(0)

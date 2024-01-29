@@ -7,9 +7,7 @@ from pclib.nn.models import FCClassifierUs
 
 class FCClassifierUsInv(FCClassifierUs):
     """
-    | Inherits most functionality from FCClassifierInv, except it is self-supervised.
-    | It learns a feature extractor (self.layers) only from observations.
-    | It separately learns a classifier (self.classifier) which takes the output of self.layers as input.
+    | Inherits most functionality from FCClassifierUs, except it predictions from inputs to targets (inputs at top, targets at bottom).
 
     Args:
         | in_features (int): Number of input features
@@ -45,26 +43,18 @@ class FCClassifierUsInv(FCClassifierUs):
         """
         layers = []
         in_features = None
-        for out_features in self.hidden_sizes + [self.in_features]:
+        self.sizes = [self.in_features] + self.hidden_sizes
+        self.sizes = self.sizes[::-1]
+        for out_features in self.sizes:
             layers.append(FC(in_features, out_features, device=self.device, **self.factory_kwargs))
             in_features = out_features
         self.layers = nn.ModuleList(layers)
 
         self.classifier = nn.Sequential(
-            nn.Linear(self.hidden_sizes[-1], 200, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
+            nn.Linear(self.sizes[0], 200, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
             nn.ReLU(),
             nn.Linear(200, self.num_classes, bias=False, device=self.device, dtype=self.factory_kwargs['dtype']),
         )
-
-    def pin(self, state, obs=None, y=None):
-        """
-        | Pins the input and/or target to the state if provided.
-        | Overrides FCClassifier.pin() to pin targets at bottom, and inputs at top.
-        """
-        if obs is not None:
-            state[-1]['x'] = obs.clone()
-        if y is not None:
-            state[0]['x'] = y.clone()
             
     def _init_xs(self, state, obs=None, y=None):
         """
@@ -72,32 +62,25 @@ class FCClassifierUsInv(FCClassifierUs):
         | Similar to FCClassifier._init_xs(), but generates predictions from obs, or propagates error from target.
 
         Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+            | state (list): List of layer state dicts, each containing 'x' and 'e'
             | obs (Optional[torch.Tensor]): Input data
             | y (Optional[torch.Tensor]): Target data
         """
+        assert y is None, "y should not be provided for unsupervised models"
         if obs is not None:
             for i, layer in reversed (list(enumerate(self.layers))):
                 if i == len(self.layers) - 1: # last layer
                     state[i]['x'] = obs.clone()
                 if i > 0:
                     state[i-1]['x'] = layer.predict(state[i])
-            if y is not None:
-                state[0]['x'] = y.clone()
-        elif y is not None:
-            for i, layer in enumerate(self.layers):
-                if i == 0:
-                    state[0]['x'] = y.clone()
-                else:
-                    state[i]['x'] = layer.propagate(state[i-1]['x'])
-
     
+
     def get_output(self, state):
         """
         | Takes the output from the feature extractor (bottom layer) and passes it through the classifier.
 
         Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e_l' and 'e_u'
+            | state (list): List of layer state dicts, each containing 'x' and 'e'
 
         Returns:
             | out (torch.Tensor): Output of the classifier
@@ -105,7 +88,7 @@ class FCClassifierUsInv(FCClassifierUs):
         x = state[0]['x']
         out = self.classifier(x.detach())
         return out
-    
+
 
     def reconstruct(self, obs, steps=None):
         """

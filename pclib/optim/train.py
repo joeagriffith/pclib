@@ -7,7 +7,6 @@ from torchviz import make_dot
 from torch.utils.tensorboard import SummaryWriter
 
 from pclib.optim.eval import topk_accuracy
-from pclib.nn.layers import FCLI, Conv2dLi
 from pclib.utils.functional import format_y, calc_corr, calc_sparsity
 
 def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW', no_momentum=False):
@@ -60,23 +59,17 @@ def init_stats(model, minimal=False, loss=False):
         stats = {
             "X_norms": [[] for _ in range(len(model.layers))],
             "E_mags": [[] for _ in range(len(model.layers))],
-            "Weight_means": [[] for _ in range(len(model.layers)-1)],
-            "Weight_stds": [[] for _ in range(len(model.layers)-1)],
-            "Bias_means": [[] for _ in range(len(model.layers)-1)],
-            "Bias_stds": [[] for _ in range(len(model.layers)-1)],
-            "WeightTD_means": [[] for _ in range(len(model.layers)-1)],
-            "WeightTD_stds": [[] for _ in range(len(model.layers)-1)],
             "train_vfe": [],
             "train_corr": [],
             "train_sparsity": [],
             "val_vfe": [],
             "val_acc": [],
+            "train_sparsity": [],
+            "train_corr": [],
         }
     else:
         stats = {
             "train_vfe": [],
-            "train_corr": [],
-            "train_sparsity": [],
             "val_vfe": [],
             "val_acc": [],
         }
@@ -128,7 +121,7 @@ def untr_pass(model, x, untr_coeff):
     if (grad_before == grad_after).all():
         raise RuntimeError("Untrained pass did not update gradients")
 
-def val_pass(model, val_loader, flatten=True, allow_grads=False, return_loss=False):
+def val_pass(model, val_loader, flatten=True, return_loss=False):
     """
     | Performs a validation pass on the model
 
@@ -141,7 +134,7 @@ def val_pass(model, val_loader, flatten=True, allow_grads=False, return_loss=Fal
         | val_vfe (float): average VFE for the validation data
         | val_acc (float): accuracy for the validation data
     """
-    with torch.set_grad_enabled(allow_grads):
+    with torch.no_grad():
         model.eval()
         acc = torch.tensor(0.0).to(model.device)
         vfe = torch.tensor(0.0).to(model.device)
@@ -178,13 +171,9 @@ def train(
     neg_coeff=None,
     untr_coeff=None,
     log_dir=None,
+    model_dir=None,
     minimal_stats=False,
-    track_corr=False,
-    track_sparsity=False,
     assert_grads=False,
-    val_grads=False,
-    save_best=True,
-    grad_mode='auto',
     optim='AdamW',
     scheduler=None,
     no_momentum=False,
@@ -200,20 +189,18 @@ def train(
         | num_epochs (int): number of epochs to train for
         | lr (float): learning rate
         | c_lr (float): learning rate for classifier. Ignored if model has no classifier.
+        | back_on_step (bool): if True, backpropagate on every model.step(), if False, backpropagate after model.forward().
         | batch_size (int): batch size
         | reg_coeff (float): weight decay. Also used for optimising classifier.
         | flatten (bool): if True, flatten input data
         | neg_coeff (float): coefficient to multiply vfe by during negative pass. 1.0 for balanced positive and negative passes. Must be positive.
-        | step (int): step number, used for logging
-        | stats (dict): dictionary to store statistics
+        | untr_coeff (float): coefficient to multiply vfe by during untraining pass. 1.0 for balanced positive and negative passes. Must be positive.
         | minimal_stats (bool): if True, only track minimal statistics (train_vfe, train_corr, val_vfe, val_acc)
         | assert_grads (bool): if True, assert that gradients are close to manual gradients. Must be false if grad_mode is 'manual'.
         | grad_mode (str): gradient mode. ['auto', 'manual']
         | optim (str): optimiser to use. ['AdamW', 'Adam', 'SGD', 'RMSprop']
-
-    Returns:
-        | step (int): step number
-        | stats (dict): dictionary of statistics
+        | scheduler (str): scheduler to use. [None, 'ReduceLROnPlateau']
+        | no momentum (bool): if True, momentum is set to 0.0 for optimiser. Only works for AdamW, Adam, SGD, RMSprop
     """
     assert scheduler in [None, 'ReduceLROnPlateau'], f"Invalid scheduler '{scheduler}', or not yet implemented"
     if back_on_step:
@@ -241,8 +228,6 @@ def train(
         'flatten': flatten,
         'neg_coeff': neg_coeff,
         'untr_coeff': untr_coeff,
-        'log_dir': log_dir,
-        'grad_mode': grad_mode,
         'optim': optim,
     }
 
@@ -255,19 +240,6 @@ def train(
         if c_optimiser is not None:
             writer.add_text('c_optimiser', str(c_optimiser).replace('\n', '<br/>').replace(' ', '&nbsp;'), model.epochs_trained.item())
 
-    if save_best:
-        if log_dir is not None:
-            weight_dir = log_dir.replace('logs', 'weights')
-            weight_dir = weight_dir + '.pt'
-        else:
-            raise ValueError("save_best=True requires log_dir to be specified")
-
-    assert grad_mode in ['auto', 'manual'], f"Invalid grad_mode {grad_mode}, must be 'auto' or 'manual'"
-    if grad_mode == 'manual':
-        assert(assert_grads == False), "assert_grads must be False when grad_mode is 'manual'"
-
-
-
     train_loader = train_data if isinstance(train_data, DataLoader) else DataLoader(train_data, batch_size, shuffle=True)
     if val_data is not None:
         val_loader = val_data if isinstance(val_data, DataLoader) else DataLoader(val_data, batch_size, shuffle=False)
@@ -275,10 +247,10 @@ def train(
     stats = {}
     for epoch in range(num_epochs):
 
-        # This applies the same transform to every image.
-        # Might be better to apply a different transform to each image.
-        # or atleast to each batch.
-        train_data.apply_transform()
+        # This applies the same transform to dataset in batches.
+        # Items in same batch with have same augmentation, but process is much faster.
+        if hasattr(train_data, 'apply_transform'):
+            train_data.apply_transform(batch_size=batch_size)
 
         # A second set of statistics for each epoch
         # Later aggregated into stats
@@ -290,63 +262,26 @@ def train(
         loop.set_description(f"Epoch [{epoch}/{num_epochs}]")
         loop.set_postfix(stats)
 
-        for batch_i, (images, targets) in enumerate(loop):
+        for images, targets in loop:
             if flatten:
                 x = images.flatten(start_dim=1)
             else:
                 x = images
             y = format_y(targets, model.num_classes)
-            b_size = x.shape[0]
 
-            if grad_mode == 'manual':
-                # with torch.no_grad():
-                    # Forward pass and gradient calculation
-                try:
-                    out, state = model(x, y=y)
-                # catch typeerror if model is not supervised
-                except TypeError:
-                    out, state = model(x)
-                model.zero_grad()
-                for i, layer in enumerate(model.layers):
-                    if i == 0:
-                        continue
-                    e_below = state[i-1]['e']
-                    layer.update_grad(state[i], e_below)
-            else:
-                model.zero_grad()
-                # Forward pass and gradient calculation
-                try:
-                    out, state = model(x, y=y)
-                # catch typeerror if model is not supervised
-                except TypeError:
-                    out, state = model(x, back_on_step=back_on_step)
-                if lr > 0 and not back_on_step:
-                    vfe = model.vfe(state)
-                    # Plots computation graph for vfe, for debugging
-                    # if epoch == 0 and batch_i == 0:
-                        # make_dot(vfe).render("sym_vfe", format="png")
-                    vfe.backward()
-            
-            # normalize gradients
-            if lr > 0:
-                for i, layer in enumerate(model.layers):
-                    if hasattr(layer, 'weight') and layer.weight is not None: 
-                        layer.weight.grad = F.normalize(layer.weight.grad, dim=0)
-                    if hasattr(layer, 'weight_td') and layer.weight_td is not None: 
-                        layer.weight_td.grad = F.normalize(layer.weight_td.grad, dim=0)
-                    elif hasattr(layer, 'conv') and layer.conv is not None:
-                        layer.conv[0].weight.grad = F.normalize(layer.conv[0].weight.grad, dim=(0,2,3))
-
-            for i, layer in enumerate(model.layers):
-                if isinstance(layer, FCLI):
-                    # Hebbian update to reduce correlations between neurons
-                    layer.weight_lat.grad = state[i]['x'].t() @ state[i]['x'] / b_size
-                    # zero diagonal of grad so self-connections are not updated, (stay at 1.0)
-                    layer.weight_lat.grad -= layer.weight_lat.grad.diag().diag()
-                    # Apply grad update here so optimiser doesn't add weight decay
-                    if lr > 0:
-                        with torch.no_grad():
-                            layer.update_mov_avg(state[i])
+            model.zero_grad()
+            # Forward pass and gradient calculation
+            try:
+                out, state = model(x, y=y)
+            # catch typeerror if model is not supervised
+            except TypeError:
+                out, state = model(x, back_on_step=back_on_step)
+            if lr > 0 and not back_on_step:
+                vfe = model.vfe(state)
+                # Plots computation graph for vfe, for debugging
+                # if epoch == 0 and batch_i == 0:
+                    # make_dot(vfe).render("sym_vfe", format="png")
+                vfe.backward()
 
             if assert_grads: model.assert_grads(state)
 
@@ -365,64 +300,20 @@ def train(
                 c_optimiser.step()
                 epoch_stats['train_loss'].append(train_loss.item())
 
-            # Constrain unit norm rows of weight matrix
-            if lr > 0:
-                for i, layer in enumerate(model.layers):
-                    if hasattr(layer, 'weight') and layer.weight is not None: 
-                        layer.weight.data = F.normalize(layer.weight.data, dim=0)
-                    elif hasattr(layer, 'conv') and layer.conv is not None:
-                        layer.conv[0].weight.data = F.normalize(layer.conv[0].weight.data, dim=(0,2,3))
-
-
             # Track batch statistics
             epoch_stats['train_vfe'].append(model.vfe(state, batch_reduction='sum').item())
-            if track_corr:
-                epoch_stats['train_corr'].append(calc_corr(state).item())
-            if track_sparsity:
-                epoch_stats['train_sparsity'].append(calc_sparsity(state).item())
             
             if not minimal_stats:
+                epoch_stats['train_corr'].append(calc_corr(state).item())
+                epoch_stats['train_sparsity'].append(calc_sparsity(state).item())
                 for i, layer in enumerate(model.layers):
                     epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                     epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
-                    if layer.in_features is not None:
-                        if hasattr(layer, 'weight') and layer.weight is not None:
-                            epoch_stats['Weight_means'][i-1].append(layer.weight.mean().item())
-                            epoch_stats['Weight_stds'][i-1].append(layer.weight.std().item())
-                        if hasattr(layer, 'weight_td') and layer.weight_td is not None:
-                            epoch_stats['WeightTD_means'][i-1].append(layer.weight_td.mean().item())
-                            epoch_stats['WeightTD_stds'][i-1].append(layer.weight_td.std().item())
-                        if hasattr(layer, 'bias') and layer.bias is not None:
-                            epoch_stats['Bias_means'][i-1].append(layer.bias.mean().item())
-                            epoch_stats['Bias_stds'][i-1].append(layer.bias.std().item())
 
-        
-
-        # Compiles statistics from each batch into a mean statistic for the epoch
-        stats['train_vfe'] = torch.tensor(epoch_stats['train_vfe']).sum().item() / len(train_loader.dataset)
-        if log_dir:
-            writer.add_scalar('VFE/train', stats['train_vfe'], model.epochs_trained.item())
-        if track_corr:
-            stats['train_corr'] = torch.tensor(epoch_stats['train_corr']).mean().item()
-            if log_dir:
-                writer.add_scalar('Corr/train', stats['train_corr'], model.epochs_trained.item())
-        if track_sparsity:
-            stats['train_sparsity'] = torch.tensor(epoch_stats['train_sparsity']).mean().item()
-            if log_dir:
-                writer.add_scalar('Sparsity/train', stats['train_sparsity'], model.epochs_trained.item())
-        if c_optimiser is not None:
-            stats['train_loss'] = torch.tensor(epoch_stats['train_loss']).mean().item()
-            if log_dir:
-                writer.add_scalar('Loss/train', stats['train_loss'], model.epochs_trained.item())
-        
-        if scheduler is not None:
-            sched.step(stats['train_vfe'])
-        if c_optimiser is not None and scheduler is not None:
-            c_sched.step(stats['train_loss'])
 
         # Collects statistics for validation data if it exists
         if val_data is not None:
-            val_results = val_pass(model, val_loader, flatten, val_grads, c_optimiser is not None)
+            val_results = val_pass(model, val_loader, flatten, c_optimiser is not None)
             stats['val_vfe'] = val_results['vfe'].item()
             stats['val_acc'] = val_results['acc'].item()
             if c_optimiser is not None:
@@ -433,28 +324,33 @@ def train(
                 writer.add_scalar('VFE/val', stats['val_vfe'], model.epochs_trained.item())
                 if c_optimiser is not None:
                     writer.add_scalar('Loss/val', stats['val_loss'], model.epochs_trained.item())
-        
-        # Saves model if it has the lowest validation VFE (or training VFE if no validation data) compared to previous training
-        if save_best:
-            current_vfe = stats['val_vfe'] if val_data is not None else stats['train_vfe']
-            if current_vfe < model.min_vfe:
-                torch.save(model.state_dict(), weight_dir)
-                model.min_vfe = torch.tensor(current_vfe)
 
+        stats['train_vfe'] = torch.tensor(epoch_stats['train_vfe']).sum().item() / len(train_loader.dataset)
+        if c_optimiser is not None:
+            stats['train_loss'] = torch.tensor(epoch_stats['train_loss']).mean().item()
         if log_dir:
+            writer.add_scalar('VFE/train', stats['train_vfe'], model.epochs_trained.item())
+            if c_optimiser is not None:
+                writer.add_scalar('Loss/train', stats['train_loss'], model.epochs_trained.item())
             if not minimal_stats:
+                stats['train_corr'] = torch.tensor(epoch_stats['train_corr']).mean().item()
+                writer.add_scalar('Corr/train', stats['train_corr'], model.epochs_trained.item())
+                stats['train_sparsity'] = torch.tensor(epoch_stats['train_sparsity']).mean().item()
+                writer.add_scalar('Sparsity/train', stats['train_sparsity'], model.epochs_trained.item())
                 for i, layer in enumerate(model.layers):
                     writer.add_scalar(f'X_norms/layer_{i}', torch.tensor(epoch_stats['X_norms'][i]).mean().item(), model.epochs_trained.item())
                     writer.add_scalar(f'E_mags/layer_{i}', torch.tensor(epoch_stats['E_mags'][i]).mean().item(), model.epochs_trained.item())
-                    if layer.in_features is not None:
-                        if hasattr(layer, 'weight') and layer.weight is not None:
-                            writer.add_scalar(f'Weight_means/layer_{i}', torch.tensor(epoch_stats['Weight_means'][i-1]).mean().item(), model.epochs_trained.item())
-                            writer.add_scalar(f'Weight_stds/layer_{i}', torch.tensor(epoch_stats['Weight_stds'][i-1]).mean().item(), model.epochs_trained.item())
-                        if hasattr(layer, 'weight_td') and layer.weight_td is not None:
-                            writer.add_scalar(f'WeightTD_means/layer_{i}', torch.tensor(epoch_stats['WeightTD_means'][i-1]).mean().item(), model.epochs_trained.item())
-                            writer.add_scalar(f'WeightTD_stds/layer_{i}', torch.tensor(epoch_stats['WeightTD_stds'][i-1]).mean().item(), model.epochs_trained.item())
-                        if hasattr(layer, 'bias') and layer.bias is not None:
-                            writer.add_scalar(f'Bias_means/layer_{i}', torch.tensor(epoch_stats['Bias_means'][i-1]).mean().item(), model.epochs_trained.item())
-                            writer.add_scalar(f'Bias_stds/layer_{i}', torch.tensor(epoch_stats['Bias_stds'][i-1]).mean().item(), model.epochs_trained.item())
         
+        if scheduler is not None:
+            sched.step(stats['train_vfe'])
+        if c_optimiser is not None and scheduler is not None:
+            c_sched.step(stats['train_loss'])
+        
+        # Saves model if it has the lowest validation VFE (or training VFE if no validation data) compared to previous training
+        if model_dir is not None:
+            current_vfe = stats['val_vfe'] if val_data is not None else stats['train_vfe']
+            if current_vfe < model.min_vfe:
+                torch.save(model.state_dict(), model_dir)
+                model.min_vfe = torch.tensor(current_vfe)
+
         model.inc_epochs()
