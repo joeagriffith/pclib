@@ -63,7 +63,6 @@ class Conv2d(nn.Module):
         elif actv_fn == identity:
             self.d_actv_fn: callable = lambda x: torch.ones_like(x)
         
-        self.ln = nn.LayerNorm(shape, elementwise_affine=False)
         self.init_weights()
 
     def __str__(self):
@@ -140,16 +139,14 @@ class Conv2d(nn.Module):
                 e_below = e_below.unsqueeze(-1).unsqueeze(-1)
             dx += self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
 
-        dx += 0.34 * -state['e']
+        dx += -state['e']
 
-        dx += 0.1 * -state['x']
+        # dx += 0.1 * -state['x']
         
         if temp is not None:
             dx += torch.randn_like(state['x'], device=self.device) * 0.034 * temp
 
         state['x'] = state['x'].detach() + self.gamma * dx
-        state['x'] = self.ln(state['x'])
-        # state['x'] = F.normalize(state['x'], dim=1, p=2)
 
     def update_grad(self, state, e_below=None):
         """

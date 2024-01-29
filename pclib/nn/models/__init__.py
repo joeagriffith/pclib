@@ -5,6 +5,7 @@ from pclib.nn.models.fc_classifier_us import FCClassifierUs
 from pclib.nn.models.fc_classifier_us_inv import FCClassifierUsInv
 from pclib.nn.models.fc_classifier_us_li import FCClassifierUsLi
 from pclib.nn.models.fc_classifier_us_bcdim import FCClassifierUsBcDim
+from pclib.nn.models.fc_classifier_us_ca import FCClassifierUsCa
 
 
 from pclib.nn.models.conv_classifier import ConvClassifier

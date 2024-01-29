@@ -165,7 +165,8 @@ class FC(nn.Module):
             | pred (torch.Tensor): Prediction of state['x'] in the layer below.
         """
         weight_td = self.weight.T if self.symmetric else self.weight_td
-        return F.linear(self.actv_fn(state['x'].detach()), weight_td, self.bias)
+        x = state['x'].detach() if self.symmetric else state['x']
+        return F.linear(self.actv_fn(x), weight_td, self.bias)
     
     
     def propagate(self, e_below):
@@ -195,13 +196,16 @@ class FC(nn.Module):
             | pred (Optional[torch.Tensor]): Top-down prediction of state['x'].
             | temp (Optional[float]): Temperature for simulated annealing.
         """
+        if self.symmetric:
+            state['x'] = state['x'].detach()
+        
         if pred is not None:
             if pred.dim() == 4:
                 pred = pred.flatten(1)
-            state['e'] = state['x'].detach() - pred
+            state['e'] = state['x'] - pred
 
         if temp is not None:
-            eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
+            eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
             state['e'] += eps
     
     def update_x(self, state, e_below=None, temp=None):
@@ -213,19 +217,23 @@ class FC(nn.Module):
             | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
             | e_below (Optional[torch.Tensor]): Error of layer below. None if input layer.
         """
+        if not self.symmetric:
+            state['x'] = state['x'].detach()
+            state['e'] = state['e'].detach()
+
         # If not input layer, propagate error from layer below
-        with torch.no_grad():
-            dx = torch.zeros_like(state['x'], device=self.device)
-            if e_below is not None:
-                if e_below.dim() == 4:
-                    e_below = e_below.flatten(1)
-                dx += self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
+        dx = torch.zeros_like(state['x'], device=self.device)
+        if e_below is not None:
+            e_below = e_below.detach()
+            if e_below.dim() == 4:
+                e_below = e_below.flatten(1)
+            dx += self.propagate(e_below) * self.d_actv_fn(state['x'])
 
-            dx += -state['e']
+        dx += -state['e']
 
-            dx += 0.1 * -state['x']
+        dx += 0.1 * -state['x']
 
-            if temp is not None:
-                dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034
+        if temp is not None:
+            dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034
 
-            state['x'] = state['x'].detach() + self.gamma * dx
+        state['x'] = state['x'] + self.gamma * dx

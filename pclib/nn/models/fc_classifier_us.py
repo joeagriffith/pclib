@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchviz import make_dot
 
 from pclib.nn.layers import FC
 from pclib.nn.models import FCClassifier
@@ -80,7 +81,7 @@ class FCClassifierUs(FCClassifier):
         out = self.classifier(x.detach())
         return out
 
-    def forward(self, obs=None, steps=None):
+    def forward(self, obs=None, steps=None, back_on_step=False):
         """
         | Performs inference for the model. 
         | Uses self.classifier to get output.
@@ -101,6 +102,9 @@ class FCClassifierUs(FCClassifier):
         for i in range(steps):
             temp = self.calc_temp(i, steps)
             self.step(state, obs, temp=temp)
+            if back_on_step:
+                vfe = self.vfe(state)
+                vfe.backward()
             
         out = self.get_output(state)
             

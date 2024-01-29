@@ -10,7 +10,7 @@ from pclib.optim.eval import topk_accuracy
 from pclib.nn.layers import FCLI, Conv2dLi
 from pclib.utils.functional import format_y, calc_corr, calc_sparsity
 
-def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW'):
+def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW', no_momentum=False):
     """
     | Builds an optimiser from the specified arguments
 
@@ -25,13 +25,25 @@ def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW'):
     """
     assert optimiser in ['AdamW', 'Adam', 'SGD', 'RMSprop'], f"Invalid optimiser {optimiser}"
     if optimiser == 'AdamW':
-        return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay)
+        if no_momentum:
+            return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay, betas=(0.0, 0.0))
+        else:
+            return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay)
     elif optimiser == 'Adam':
-        return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay)
+        if no_momentum:
+            return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay, betas=(0.0, 0.0))
+        else:
+            return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay)
     elif optimiser == 'SGD':
-        return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay, momentum=0.9)
+        if no_momentum:
+            return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay, momentum=0.0)
+        else:
+            return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay, momentum=0.9)
     elif optimiser == 'RMSprop':
-        return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, momentum=0.9)
+        if no_momentum:
+            return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, momentum=0.0)
+        else:
+            return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, momentum=0.9)
 
 def init_stats(model, minimal=False, loss=False):
     """
@@ -159,6 +171,7 @@ def train(
     num_epochs,
     lr = 3e-4,
     c_lr = 1e-3,
+    back_on_step=False,
     batch_size=1,
     reg_coeff = 1e-2,
     flatten=True,
@@ -174,6 +187,7 @@ def train(
     grad_mode='auto',
     optim='AdamW',
     scheduler=None,
+    no_momentum=False,
 ):
     """
     | Trains a model with the specified parameters
@@ -202,8 +216,10 @@ def train(
         | stats (dict): dictionary of statistics
     """
     assert scheduler in [None, 'ReduceLROnPlateau'], f"Invalid scheduler '{scheduler}', or not yet implemented"
+    if back_on_step:
+        assert lr > 0, "lr must be positive when back_on_step=True"
 
-    optimiser = get_optimiser(model.parameters(), lr, reg_coeff, optim)
+    optimiser = get_optimiser(model.parameters(), lr, reg_coeff, optim, no_momentum)
     if scheduler == 'ReduceLROnPlateau':
         sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=5, verbose=True, factor=0.1)
 
@@ -297,20 +313,29 @@ def train(
                     e_below = state[i-1]['e']
                     layer.update_grad(state[i], e_below)
             else:
+                model.zero_grad()
                 # Forward pass and gradient calculation
                 try:
                     out, state = model(x, y=y)
                 # catch typeerror if model is not supervised
                 except TypeError:
-                    out, state = model(x)
-
-                model.zero_grad()
-                if lr > 0:
+                    out, state = model(x, back_on_step=back_on_step)
+                if lr > 0 and not back_on_step:
                     vfe = model.vfe(state)
                     # Plots computation graph for vfe, for debugging
                     # if epoch == 0 and batch_i == 0:
-                    #     make_dot(vfe).render("vfe", format="png")
+                        # make_dot(vfe).render("sym_vfe", format="png")
                     vfe.backward()
+            
+            # normalize gradients
+            if lr > 0:
+                for i, layer in enumerate(model.layers):
+                    if hasattr(layer, 'weight') and layer.weight is not None: 
+                        layer.weight.grad = F.normalize(layer.weight.grad, dim=0)
+                    if hasattr(layer, 'weight_td') and layer.weight_td is not None: 
+                        layer.weight_td.grad = F.normalize(layer.weight_td.grad, dim=0)
+                    elif hasattr(layer, 'conv') and layer.conv is not None:
+                        layer.conv[0].weight.grad = F.normalize(layer.conv[0].weight.grad, dim=(0,2,3))
 
             for i, layer in enumerate(model.layers):
                 if isinstance(layer, FCLI):
@@ -340,6 +365,14 @@ def train(
                 c_optimiser.step()
                 epoch_stats['train_loss'].append(train_loss.item())
 
+            # Constrain unit norm rows of weight matrix
+            if lr > 0:
+                for i, layer in enumerate(model.layers):
+                    if hasattr(layer, 'weight') and layer.weight is not None: 
+                        layer.weight.data = F.normalize(layer.weight.data, dim=0)
+                    elif hasattr(layer, 'conv') and layer.conv is not None:
+                        layer.conv[0].weight.data = F.normalize(layer.conv[0].weight.data, dim=(0,2,3))
+
 
             # Track batch statistics
             epoch_stats['train_vfe'].append(model.vfe(state, batch_reduction='sum').item())
@@ -353,12 +386,13 @@ def train(
                     epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                     epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
                     if layer.in_features is not None:
-                        epoch_stats['Weight_means'][i-1].append(layer.weight.mean().item())
-                        epoch_stats['Weight_stds'][i-1].append(layer.weight.std().item())
-                        if not model.layers[i].symmetric:
+                        if hasattr(layer, 'weight') and layer.weight is not None:
+                            epoch_stats['Weight_means'][i-1].append(layer.weight.mean().item())
+                            epoch_stats['Weight_stds'][i-1].append(layer.weight.std().item())
+                        if hasattr(layer, 'weight_td') and layer.weight_td is not None:
                             epoch_stats['WeightTD_means'][i-1].append(layer.weight_td.mean().item())
                             epoch_stats['WeightTD_stds'][i-1].append(layer.weight_td.std().item())
-                        if model.layers[i].bias is not None:
+                        if hasattr(layer, 'bias') and layer.bias is not None:
                             epoch_stats['Bias_means'][i-1].append(layer.bias.mean().item())
                             epoch_stats['Bias_stds'][i-1].append(layer.bias.std().item())
 
@@ -413,12 +447,13 @@ def train(
                     writer.add_scalar(f'X_norms/layer_{i}', torch.tensor(epoch_stats['X_norms'][i]).mean().item(), model.epochs_trained.item())
                     writer.add_scalar(f'E_mags/layer_{i}', torch.tensor(epoch_stats['E_mags'][i]).mean().item(), model.epochs_trained.item())
                     if layer.in_features is not None:
-                        writer.add_scalar(f'Weight_means/layer_{i}', torch.tensor(epoch_stats['Weight_means'][i-1]).mean().item(), model.epochs_trained.item())
-                        writer.add_scalar(f'Weight_stds/layer_{i}', torch.tensor(epoch_stats['Weight_stds'][i-1]).mean().item(), model.epochs_trained.item())
-                        if not layer.symmetric:
+                        if hasattr(layer, 'weight') and layer.weight is not None:
+                            writer.add_scalar(f'Weight_means/layer_{i}', torch.tensor(epoch_stats['Weight_means'][i-1]).mean().item(), model.epochs_trained.item())
+                            writer.add_scalar(f'Weight_stds/layer_{i}', torch.tensor(epoch_stats['Weight_stds'][i-1]).mean().item(), model.epochs_trained.item())
+                        if hasattr(layer, 'weight_td') and layer.weight_td is not None:
                             writer.add_scalar(f'WeightTD_means/layer_{i}', torch.tensor(epoch_stats['WeightTD_means'][i-1]).mean().item(), model.epochs_trained.item())
                             writer.add_scalar(f'WeightTD_stds/layer_{i}', torch.tensor(epoch_stats['WeightTD_stds'][i-1]).mean().item(), model.epochs_trained.item())
-                        if layer.bias is not None:
+                        if hasattr(layer, 'bias') and layer.bias is not None:
                             writer.add_scalar(f'Bias_means/layer_{i}', torch.tensor(epoch_stats['Bias_means'][i-1]).mean().item(), model.epochs_trained.item())
                             writer.add_scalar(f'Bias_stds/layer_{i}', torch.tensor(epoch_stats['Bias_stds'][i-1]).mean().item(), model.epochs_trained.item())
         

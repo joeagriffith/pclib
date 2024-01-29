@@ -138,19 +138,16 @@ class FCClassifier(nn.Module):
             | obs (Optional[torch.Tensor]): Input data
             | y (Optional[torch.Tensor]): Target data
             | temp (Optional[float]): Temperature to use for update
-
         """
-
-        pred, e_below = None, None
         for i, layer in enumerate(self.layers):
             if i > 0 or obs is None: # Don't update bottom x if obs is given
                 if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
-                    with torch.no_grad():
-                        layer.update_x(state[i], e_below, temp=temp)
+                    e_below = state[i-1]['e'] if i > 0 else None
+                    layer.update_x(state[i], e_below, temp=temp)
+        for i, layer in enumerate(self.layers):
             if i < len(self.layers) - 1:
                 pred = self.layers[i+1].predict(state[i+1])
                 layer.update_e(state[i], pred, temp=temp)
-                e_below = state[i]['e']
 
     def _init_xs(self, state, obs=None, y=None):
         """
@@ -163,22 +160,23 @@ class FCClassifier(nn.Module):
             | obs (Optional[torch.Tensor]): Input data
             | y (Optional[torch.Tensor]): Target data
         """
-        if y is not None:
-            for i, layer in reversed(list(enumerate(self.layers))):
-                if i == len(self.layers) - 1: # last layer
-                    state[i]['x'] = y.detach()
-                if i > 0:
-                    pred = layer.predict(state[i])
-                    state[i-1]['x'] = pred.detach()
-            if obs is not None:
-                state[0]['x'] = obs.detach()
-        elif obs is not None:
-            for i, layer in enumerate(self.layers):
-                if i == 0:
-                    state[0]['x'] = obs.clone()
-                else:
-                    x_below = state[i-1]['x'].detach()
-                    state[i]['x'] = layer.actv_fn(layer.propagate(x_below))
+        with torch.no_grad():
+            if y is not None:
+                for i, layer in reversed(list(enumerate(self.layers))):
+                    if i == len(self.layers) - 1: # last layer
+                        state[i]['x'] = y.detach()
+                    if i > 0:
+                        pred = layer.predict(state[i])
+                        state[i-1]['x'] = pred.detach()
+                if obs is not None:
+                    state[0]['x'] = obs.detach()
+            elif obs is not None:
+                for i, layer in enumerate(self.layers):
+                    if i == 0:
+                        state[0]['x'] = obs.clone()
+                    else:
+                        x_below = state[i-1]['x'].detach()
+                        state[i]['x'] = layer.actv_fn(layer.propagate(x_below))
 
 
     def init_state(self, obs=None, y=None):
@@ -238,7 +236,7 @@ class FCClassifier(nn.Module):
         """
         return 1 - (step_i / steps)
 
-    def forward(self, obs=None, y=None, steps=None):
+    def forward(self, obs=None, y=None, steps=None, back_on_step=False):
         """
         | Performs inference for the model.
         
@@ -259,6 +257,9 @@ class FCClassifier(nn.Module):
         for i in range(steps):
             temp = self.calc_temp(i, steps)
             self.step(state, obs, y, temp)
+            if back_on_step:
+                vfe = self.vfe(state)
+                vfe.backward()
             
         out = self.get_output(state)
             
