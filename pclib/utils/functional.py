@@ -1,7 +1,19 @@
 import torch
 import torch.nn.functional as F
 
-def reTanh(x):
+def reTanh(x:torch.Tensor):
+    """
+    | Applies the tanh then relu function element-wise:
+    | x = x.tanh().relu()
+
+    Parameters
+    ----------
+        x : torch.Tensor
+    
+    Returns
+    -------
+        torch.Tensor
+    """
     return x.tanh().relu()
 
 def identity(x):

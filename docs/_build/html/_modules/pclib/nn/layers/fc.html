@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>pclib.nn.layers.fc &mdash; PCLib 1.0.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../../_static/documentation_options.js?v=09d090fc"></script>
+        <script src="../../../../_static/doctools.js?v=888ff710"></script>
+        <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../../index.html" class="icon icon-home">
+            PCLib
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../modules.html">pclib</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">PCLib</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">pclib.nn.layers.fc</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for pclib.nn.layers.fc</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+<span class="kn">import</span> <span class="nn">torch.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
+<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">Tensor</span>
+<span class="kn">from</span> <span class="nn">torch.nn</span> <span class="kn">import</span> <span class="n">Parameter</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span>
+<span class="kn">from</span> <span class="nn">pclib.utils.functional</span> <span class="kn">import</span> <span class="n">reTanh</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">trec</span>
+
+<div class="viewcode-block" id="FC">
+<a class="viewcode-back" href="../../../../pclib.nn.layers.html#pclib.nn.layers.fc.FC">[docs]</a>
+<span class="k">class</span> <span class="nc">FC</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    | Fully connected layer with optional bias and optionally symmetric weights.</span>
+<span class="sd">    | The layer stores its state in a dictionary with keys &#39;x&#39; and &#39;e&#39;.</span>
+<span class="sd">    | Layer is defined such that &#39;x&#39; and &#39;e&#39; are the same shape, and &#39;x&#39; precedes &#39;e&#39; in the architecture.</span>
+<span class="sd">    | The Layer defines predictions as: Wf(x) + Optional(bias).</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">        in_features : int</span>
+<span class="sd">            Number of input features.</span>
+<span class="sd">        out_features : int</span>
+<span class="sd">            Number of output features.</span>
+<span class="sd">        has_bias : bool</span>
+<span class="sd">            Whether to include a bias term.</span>
+<span class="sd">        symmetric : bool</span>
+<span class="sd">            Whether to reuse top-down prediction weights, for bottom-up error propagation.</span>
+<span class="sd">        actv_fn : callable</span>
+<span class="sd">            Activation function to use.</span>
+<span class="sd">        d_actv_fn : Optional[callable]</span>
+<span class="sd">            Derivative of activation function to use (if None, will be inferred from actv_fn).</span>
+<span class="sd">        gamma : float</span>
+<span class="sd">            step size for x updates.</span>
+<span class="sd">        device : torch.device</span>
+<span class="sd">            Device to use for computation.</span>
+<span class="sd">        dtype : torch.dtype</span>
+<span class="sd">            Data type to use for computation.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">__constants__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;in_features&#39;</span><span class="p">,</span> <span class="s1">&#39;out_features&#39;</span><span class="p">]</span>
+    <span class="n">in_features</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+    <span class="n">out_features</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">weight</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tensor</span><span class="p">]</span>
+    <span class="n">weight_td</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tensor</span><span class="p">]</span>
+    <span class="n">bias</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tensor</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                 <span class="n">in_features</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+                 <span class="n">out_features</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+                 <span class="n">has_bias</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+                 <span class="n">symmetric</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+                 <span class="n">actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">relu</span><span class="p">,</span>
+                 <span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">gamma</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">,</span>
+                 <span class="n">device</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s1">&#39;cpu&#39;</span><span class="p">),</span>
+                 <span class="n">dtype</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="kc">None</span>
+                 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">factory_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;device&#39;</span><span class="p">:</span> <span class="n">device</span><span class="p">,</span> <span class="s1">&#39;dtype&#39;</span><span class="p">:</span> <span class="n">dtype</span><span class="p">}</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">in_features</span> <span class="o">=</span> <span class="n">in_features</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">out_features</span> <span class="o">=</span> <span class="n">out_features</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">has_bias</span> <span class="o">=</span> <span class="n">has_bias</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">symmetric</span> <span class="o">=</span> <span class="n">symmetric</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">actv_fn</span> <span class="o">=</span> <span class="n">actv_fn</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gamma</span> <span class="o">=</span> <span class="n">gamma</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
+
+        <span class="c1"># Automatically set d_actv_fn if not provided</span>
+        <span class="k">if</span> <span class="n">d_actv_fn</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="n">d_actv_fn</span>
+        <span class="k">elif</span> <span class="n">actv_fn</span> <span class="o">==</span> <span class="n">F</span><span class="o">.</span><span class="n">relu</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">actv_fn</span> <span class="o">==</span> <span class="n">F</span><span class="o">.</span><span class="n">leaky_relu</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="o">+</span> <span class="n">torch</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span> <span class="o">*</span> <span class="mf">0.01</span>
+        <span class="k">elif</span> <span class="n">actv_fn</span> <span class="o">==</span> <span class="n">reTanh</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">torch</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">square</span><span class="p">())</span>
+        <span class="k">elif</span> <span class="n">actv_fn</span> <span class="o">==</span> <span class="n">F</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">torch</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">actv_fn</span> <span class="o">==</span> <span class="n">F</span><span class="o">.</span><span class="n">tanh</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">torch</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">square</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="n">actv_fn</span> <span class="o">==</span> <span class="n">identity</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">actv_fn</span> <span class="o">==</span> <span class="n">F</span><span class="o">.</span><span class="n">gelu</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="mf">1.702</span> <span class="o">*</span> <span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">+</span> <span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mf">1.702</span> <span class="o">*</span> <span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.702</span> <span class="o">*</span> <span class="n">x</span> <span class="o">+</span> <span class="mf">1.</span><span class="p">))</span> <span class="o">+</span> <span class="mf">0.5</span>
+        <span class="k">elif</span> <span class="n">actv_fn</span> <span class="o">==</span> <span class="n">F</span><span class="o">.</span><span class="n">softplus</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">actv_fn</span> <span class="o">==</span> <span class="n">F</span><span class="o">.</span><span class="n">softsign</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">torch</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">x</span><span class="p">))</span><span class="o">.</span><span class="n">square</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="n">actv_fn</span> <span class="o">==</span> <span class="n">F</span><span class="o">.</span><span class="n">elu</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="o">+</span> <span class="n">torch</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span> <span class="o">*</span> <span class="mf">0.01</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">elif</span> <span class="n">actv_fn</span> <span class="o">==</span> <span class="n">F</span><span class="o">.</span><span class="n">leaky_relu</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">x</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="mf">0.01</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">actv_fn</span> <span class="o">==</span> <span class="n">trec</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">:</span> <span class="nb">callable</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="n">x</span> <span class="o">&gt;</span> <span class="mf">1.0</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">init_params</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">base_str</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__str__</span><span class="p">()</span>
+
+        <span class="n">custom_info</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">  (params): </span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> \
+            <span class="sa">f</span><span class="s2">&quot;    in_features: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">in_features</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> \
+            <span class="sa">f</span><span class="s2">&quot;    out_features: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">out_features</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> \
+            <span class="sa">f</span><span class="s2">&quot;    has_bias: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">has_bias</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> \
+            <span class="sa">f</span><span class="s2">&quot;    symmetric: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">symmetric</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> \
+            <span class="sa">f</span><span class="s2">&quot;    actv_fn: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">actv_fn</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> \
+            <span class="sa">f</span><span class="s2">&quot;    gamma: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">gamma</span><span class="si">}</span><span class="s2">&quot;</span>
+        
+        <span class="n">string</span> <span class="o">=</span> <span class="n">base_str</span><span class="p">[:</span><span class="n">base_str</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)]</span> <span class="o">+</span> <span class="n">custom_info</span> <span class="o">+</span> <span class="n">base_str</span><span class="p">[</span><span class="n">base_str</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">):]</span>
+        
+        <span class="k">return</span> <span class="n">string</span>
+        
+    <span class="c1"># Declare weights if not input layer</span>
+<div class="viewcode-block" id="FC.init_params">
+<a class="viewcode-back" href="../../../../pclib.nn.layers.html#pclib.nn.layers.fc.FC.init_params">[docs]</a>
+    <span class="k">def</span> <span class="nf">init_params</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        | Creates and initialises weight tensors and bias tensor based on args from self.__init__().</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_features</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">=</span> <span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">out_features</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_features</span><span class="p">),</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">factory_kwargs</span><span class="p">))</span>
+            <span class="n">nn</span><span class="o">.</span><span class="n">init</span><span class="o">.</span><span class="n">kaiming_uniform_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">5</span><span class="p">))</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_bias</span><span class="p">:</span>
+                <span class="c1">#  Bias is used in prediction of layer below, so it has shape (in_features)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">bias</span> <span class="o">=</span> <span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">in_features</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">factory_kwargs</span><span class="p">))</span>
+                <span class="n">fan_in</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">init</span><span class="o">.</span><span class="n">_calculate_fan_in_and_fan_out</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+                <span class="n">bound</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">fan_in</span><span class="p">)</span> <span class="k">if</span> <span class="n">fan_in</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+                <span class="n">nn</span><span class="o">.</span><span class="n">init</span><span class="o">.</span><span class="n">uniform_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bias</span><span class="p">,</span> <span class="o">-</span><span class="n">bound</span><span class="p">,</span> <span class="n">bound</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">register_parameter</span><span class="p">(</span><span class="s1">&#39;bias&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">symmetric</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">weight_td</span> <span class="o">=</span> <span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">in_features</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">out_features</span><span class="p">),</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">factory_kwargs</span><span class="p">))</span>
+                <span class="n">nn</span><span class="o">.</span><span class="n">init</span><span class="o">.</span><span class="n">kaiming_uniform_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight_td</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">5</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">register_parameter</span><span class="p">(</span><span class="s1">&#39;weight_td&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">register_parameter</span><span class="p">(</span><span class="s1">&#39;weight&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">register_parameter</span><span class="p">(</span><span class="s1">&#39;weight_td&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">register_parameter</span><span class="p">(</span><span class="s1">&#39;bias&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span></div>
+
+            
+<div class="viewcode-block" id="FC.init_state">
+<a class="viewcode-back" href="../../../../pclib.nn.layers.html#pclib.nn.layers.fc.FC.init_state">[docs]</a>
+    <span class="k">def</span> <span class="nf">init_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        | Builds a new state dictionary for the layer.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            | batch_size (int): Batch size of the state.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            | state (dict): Dictionary containing &#39;x&#39; and &#39;e&#39; tensors of shape (batch_size, out_features).</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;x&#39;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">out_features</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">),</span>
+            <span class="s1">&#39;e&#39;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">out_features</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">),</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="FC.to">
+<a class="viewcode-back" href="../../../../pclib.nn.layers.html#pclib.nn.layers.fc.FC.to">[docs]</a>
+    <span class="k">def</span> <span class="nf">to</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="FC.predict">
+<a class="viewcode-back" href="../../../../pclib.nn.layers.html#pclib.nn.layers.fc.FC.predict">[docs]</a>
+    <span class="k">def</span> <span class="nf">predict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        | Calculates a prediction of state[&#39;x&#39;] in the layer below.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            | state (dict): Dictionary containing &#39;x&#39; and &#39;e&#39; tensors for this layer.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            | pred (torch.Tensor): Prediction of state[&#39;x&#39;] in the layer below.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">weight_td</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">T</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">symmetric</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight_td</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">symmetric</span> <span class="k">else</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">F</span><span class="o">.</span><span class="n">linear</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">actv_fn</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">weight_td</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias</span><span class="p">)</span></div>
+
+    
+    
+<div class="viewcode-block" id="FC.propagate">
+<a class="viewcode-back" href="../../../../pclib.nn.layers.html#pclib.nn.layers.fc.FC.propagate">[docs]</a>
+    <span class="k">def</span> <span class="nf">propagate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">e_below</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        | Propagates error from layer below, returning an update signal for state[&#39;x&#39;].</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            | e_below (torch.Tensor): Error signal from layer below.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            | update (torch.Tensor): Update signal for state[&#39;x&#39;].</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">e_below</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="n">e_below</span> <span class="o">=</span> <span class="n">e_below</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">F</span><span class="o">.</span><span class="n">linear</span><span class="p">(</span><span class="n">e_below</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span></div>
+
+        
+<div class="viewcode-block" id="FC.update_e">
+<a class="viewcode-back" href="../../../../pclib.nn.layers.html#pclib.nn.layers.fc.FC.update_e">[docs]</a>
+    <span class="k">def</span> <span class="nf">update_e</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">pred</span><span class="p">,</span> <span class="n">temp</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        | Updates prediction-error (state[&#39;e&#39;]) inplace between state[&#39;x&#39;] and the top-down prediction of it.</span>
+<span class="sd">        | Uses simulated annealing if temp is not None.</span>
+<span class="sd">        | Does nothing if pred is None. This is useful so the output layer doesn&#39;t need specific handling.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            | state (dict): Dictionary containing &#39;x&#39; and &#39;e&#39; tensors for this layer.</span>
+<span class="sd">            | pred (torch.Tensor): Top-down prediction of state[&#39;x&#39;].</span>
+<span class="sd">            | temp (Optional[float]): Temperature for simulated annealing.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="n">pred</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Prediction must be provided to update_e().&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">symmetric</span><span class="p">:</span>
+            <span class="n">state</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span>
+        
+        <span class="k">if</span> <span class="n">pred</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="n">pred</span> <span class="o">=</span> <span class="n">pred</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">state</span><span class="p">[</span><span class="s1">&#39;e&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">pred</span>
+
+        <span class="k">if</span> <span class="n">temp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">eps</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn_like</span><span class="p">(</span><span class="n">state</span><span class="p">[</span><span class="s1">&#39;e&#39;</span><span class="p">],</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.034</span> <span class="o">*</span> <span class="n">temp</span>
+            <span class="n">state</span><span class="p">[</span><span class="s1">&#39;e&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="n">eps</span></div>
+
+    
+<div class="viewcode-block" id="FC.update_x">
+<a class="viewcode-back" href="../../../../pclib.nn.layers.html#pclib.nn.layers.fc.FC.update_x">[docs]</a>
+    <span class="k">def</span> <span class="nf">update_x</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">e_below</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">temp</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        | Updates state[&#39;x&#39;] inplace, using the error signal from the layer below and error of the current layer.</span>
+<span class="sd">        | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x) - 0.1 * x + noise).</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            | state (dict): Dictionary containing &#39;x&#39; and &#39;e&#39; tensors for this layer.</span>
+<span class="sd">            | e_below (Optional[torch.Tensor]): Error of layer below. None if input layer.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">symmetric</span><span class="p">:</span>
+            <span class="n">state</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span>
+            <span class="n">state</span><span class="p">[</span><span class="s1">&#39;e&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;e&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span>
+
+        <span class="c1"># If not input layer, propagate error from layer below</span>
+        <span class="n">dx</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">state</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">],</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">e_below</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">e_below</span> <span class="o">=</span> <span class="n">e_below</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">e_below</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+                <span class="n">e_below</span> <span class="o">=</span> <span class="n">e_below</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">dx</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">propagate</span><span class="p">(</span><span class="n">e_below</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_actv_fn</span><span class="p">(</span><span class="n">state</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">])</span>
+
+        <span class="n">dx</span> <span class="o">+=</span> <span class="o">-</span><span class="n">state</span><span class="p">[</span><span class="s1">&#39;e&#39;</span><span class="p">]</span>
+
+        <span class="n">dx</span> <span class="o">+=</span> <span class="mf">0.1</span> <span class="o">*</span> <span class="o">-</span><span class="n">state</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">temp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">dx</span> <span class="o">+=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn_like</span><span class="p">(</span><span class="n">state</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">],</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span> <span class="o">*</span> <span class="n">temp</span> <span class="o">*</span> <span class="mf">0.034</span>
+
+        <span class="n">state</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">state</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">gamma</span> <span class="o">*</span> <span class="n">dx</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Joe Griffith.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

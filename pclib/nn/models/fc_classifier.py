@@ -12,28 +12,30 @@ class FCClassifier(nn.Module):
     | Predictions flow from targets to inputs (top-down).
     | Heavily customisable, however, the default settings usually give best results.
 
-    Args:
-        | in_features (int): Number of input features
-        | num_classes (int): Number of classes
-        | hidden_sizes (list): List of hidden layer sizes
-        | steps (int): Number of steps to run inference for
-        | bias (bool): Whether to include bias in layers
-        | symmetric (bool): Whether to use same weights for top-down prediction and bottom-up error prop.
-        | actv_fn (torch.nn.functional): Activation function to use
-        | d_actv_fn (torch.nn.functional): Derivative of activation function to use
-        | gamma (float): step size for x updates
-        | device (torch.device): Device to run on
-        | dtype (torch.dtype): Data type to use
-        
-    Attributes:
-        | layers (torch.nn.ModuleList): List of layers
-        | in_features (int): Number of input features
-        | num_classes (int): Number of classes
-        | hidden_sizes (list): List of hidden layer sizes
-        | steps (int): Number of steps to run inference for
-        | bias (bool): Whether to include bias in layers
-        | symmetric (bool): Whether to use same weights for top-down prediction and bottom-up error prop.
-
+    Parameters
+    ----------
+        in_features : int
+            Number of input features
+        num_classes : int
+            Number of classes
+        hidden_sizes : list
+            List of hidden layer sizes
+        steps : int
+            Number of steps to run inference for
+        bias : bool
+            Whether to include bias in layers
+        symmetric : bool
+            Whether to use same weights for top-down prediction and bottom-up error prop.
+        actv_fn : callable
+            Activation function to use
+        d_actv_fn : Optional[callable]
+            Derivative of activation function to use
+        gamma : float
+            step size for x updates
+        device : torch.device
+            Device to run on
+        dtype : torch.dtype
+            Data type to use
     """
     __constants__ = ['in_features', 'num_classes']
     in_features: int

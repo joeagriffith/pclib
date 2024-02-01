@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.grad import conv2d_input, conv2d_weight
+from typing import List, Optional
 
 # Based on Whittington and Bogacz 2017
 class ConvClassifier(nn.Module):
@@ -11,23 +12,24 @@ class ConvClassifier(nn.Module):
     | Similar to the FCClassifier, except uses convolutions instead of fully connected layers.
     | This network is not currently customisable, but requires altering the init_layers() code to change the architecture.
 
-    Args:
-        | steps (int): Number of steps to run the network for.
-        | bias (bool): Whether to include bias terms in the network.
-        | symmetric (bool): Whether to use symmetric weights. 
-        | actv_fn (function): Activation function to use in the network.
-        | d_actv_fn (function): Derivative of the activation function to use in the network.
-        | gamma (float): step size for x updates
-        | device (torch.device): Device to run the network on.
-        | dtype (torch.dtype): Data type to use for network parameters.
-    
-    Attributes:
-        | num_classes (int): Number of classes in the dataset.
-        | steps (int): Number of steps to run the network for.
-        | device (torch.device): Device to run the network on.
-        | factory_kwargs (dict): Keyword arguments for the layers.
-        | layers (torch.nn.ModuleList): List of layers in the network.
-
+    Parameters
+    ----------
+        steps : int 
+            Number of steps to run the network for in inference phase.
+        bias : bool
+            Whether to include bias terms in the network.
+        symmetric : bool
+            Whether to use symmetric weights. 
+        actv_fn : callable
+            Activation function to use in the network.
+        d_actv_fn : Optional[callable]
+            Derivative of the activation function to use in the network.
+        gamma : float
+            step size for x updates
+        device : torch.device
+            Device to run the network on.
+        dtype : torch.dtype
+            Data type to use for network parameters.
     """
     __constants__ = ['in_features', 'out_features']
     in_features: int
@@ -46,6 +48,13 @@ class ConvClassifier(nn.Module):
         self.register_buffer('min_vfe', torch.tensor(float('inf'), dtype=torch.float32))
 
     def __str__(self):
+        """
+        | Returns a string representation of the Model.
+
+        Returns
+        -------
+            str
+        """
         base_str = super().__str__()
 
         custom_info = "\n  (params): \n" + \
@@ -82,29 +91,37 @@ class ConvClassifier(nn.Module):
         layers.append(FC(128, 10, **self.factory_kwargs))
         self.layers = nn.ModuleList(layers)
 
-    def inc_epochs(self, n=1):
+    def inc_epochs(self, n:int=1):
         """
         | Increments the number of epochs trained by n.
 
-        Args:
-            | n (int): Number of epochs to increment by
+        Parameters
+        ----------
+            n : int
+                Number of epochs to increment by
         """
         self.epochs_trained += n
 
 
-    def vfe(self, state, batch_reduction='mean', unit_reduction='sum'):
+    def vfe(self, state:List[dict], batch_reduction:str='mean', unit_reduction:str='sum'):
         """
         | Calculates the Variational Free Energy (VFE) of the model.
         | This is the sum of the squared prediction errors of each layer.
         | how batches and units are reduced is controlled by batch_reduction and unit_reduction.
 
-        Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e'
-            | batch_reduction (str): How to reduce over batches ['sum', 'mean', None]
-            | unit_reduction (str): How to reduce over units ['sum', 'mean']
+        Parameters
+        ----------
+            state : list
+                List of state dicts for each layer, each containing 'x' and 'e' tensors.
+            batch_reduction : str
+                How to reduce over batches ['sum', 'mean', None]
+            unit_reduction : str
+                How to reduce over units ['sum', 'mean']
 
-        Returns:
-            | vfe (torch.Tensor): VFE of the model (scalar)
+        Returns
+        -------
+            torch.Tensor
+                VFE of the model (scalar)
         """
         # Reduce units for each layer
         if unit_reduction == 'sum':
@@ -121,16 +138,20 @@ class ConvClassifier(nn.Module):
 
         return vfe
 
-    def step(self, state, obs=None, y=None, temp=None):
+    def step(self, state:List[dict], obs:torch.Tensor=None, y:torch.Tensor=None, temp:float=None):
         """
-        | Performs one step of inference, updating all Xs first, then calculates Errors.
+        Performs one step of inference, updating all Xs first, then calculates Errors.
 
-        Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e'
-            | obs (Optional[torch.Tensor]): Input data
-            | y (Optional[torch.Tensor]): Target data
-            | temp (Optional[float]): Temperature for simulated annealing
-
+        Parameters
+        ----------
+            state : List[dict]
+                List of state dicts for each layer, each containing 'x' and 'e' tensors.
+            obs : Optional[torch.Tensor]
+                Input data
+            y : Optional[torch.Tensor]
+                Target data
+            temp : Optional[float]
+                Temperature for simulated annealing
         """
         for i, layer in enumerate(self.layers):
             if i > 0 or obs is None:
@@ -143,16 +164,20 @@ class ConvClassifier(nn.Module):
                 layer.update_e(state[i], pred, temp=temp)
 
 
-    def _init_xs(self, state, obs=None, y=None):
+    def _init_xs(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None):
         """
         | Initialises Xs.
         | If y is provided, xs are initialised top-down using predictions.
         | Else if obs is provided, xs are initialised bottom-up using propagations.
         
-        Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
-            | obs (Optional[torch.Tensor]): Input data
-            | y (Optional[torch.Tensor]): Target data
+        Parameters
+        ----------
+            state : List[dict]
+                List of state dicts for each layer, each containing 'x' and 'e' tensors.
+            obs : Optional[torch.Tensor]
+                Input data
+            y : Optional[torch.Tensor]
+                Target data
         """
         with torch.no_grad():
             if y is not None:
@@ -176,16 +201,21 @@ class ConvClassifier(nn.Module):
                         x_below = state[i-1]['x'].detach()
                         state[i]['x'] = layer.propagate(x_below)
 
-    def init_state(self, obs=None, y=None):
+    def init_state(self, obs:torch.Tensor = None, y:torch.Tensor = None):
         """
         | Initialises the state of the network.
 
-        Args:
-            | obs (Optional[torch.Tensor]): Input data
-            | y (Optional[torch.Tensor]): Target data
+        Parameters
+        ----------
+            obs : Optional[torch.Tensor]
+                Input data
+            y : Optional[torch.Tensor]
+                Target data
 
-        Returns:
-            | state (list): List of layer state dicts, each containing 'x' and 'e'
+        Returns
+        -------
+            List[dict]
+                List of state dicts for each layer, each containing 'x' and 'e' tensors.
         """
         if obs is not None:
             b_size = obs.shape[0]
@@ -207,44 +237,61 @@ class ConvClassifier(nn.Module):
             layer.to(device)
         return self
 
-    def get_output(self, state):
+    def get_output(self, state:List[dict]):
         """
         | Returns the output of the network.
 
-        Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e'
+        Parameters
+        ----------
+            state : List[dict]
+                List of layer state dicts, each containing 'x' and 'e'
 
-        Returns:
-            | out (torch.Tensor): Output of the network
+        Returns
+        -------
+            torch.Tensor
+                Output of the network
         """
         return state[-1]['x']
 
-    def calc_temp(self, step_i, steps):
+    def calc_temp(self, step_i:int, steps:int):
         """
         | Calculates the temperature for the current step.
 
-        Args:
-            | step_i (int): Current step
-            | steps (int): Total number of steps
+        Parameters
+        ----------
+            step_i : int
+                Current step
+            steps : int
+                Total number of steps
         
-        Returns:
-            | temp (float): Temperature for the current step = 1 - (step_i / steps)
+        Returns
+        -------
+            temp : float
+                Temperature for the current step = 1 - (step_i / steps)
         """
         return 1 - (step_i / steps)
 
-    def forward(self, obs=None, y=None, steps=None, back_on_step=False):
+    def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, steps:int = None, back_on_step:bool = False):
         """
         | Performs inference phase of the network.
 
-        Args:
-            | obs (Optional[torch.Tensor]): Input data
-            | y (Optional[torch.Tensor]): Target data
-            | steps (Optional[int]): Number of steps to run inference for
-            | back_on_step (bool): Whether to backpropagate on each step. Default False.
+        Parameters
+        ----------
+            obs : Optional[torch.Tensor]
+                Input data
+            y : Optional[torch.Tensor]
+                Target data
+            steps : Optional[int]
+                Number of steps to run inference for
+            back_on_step : bool
+                Whether to backpropagate on each step. Default False.
         
-        Returns:
-            | out (torch.Tensor): Output of the network
-            | state (list): List of layer state dicts, each containing 'x' and 'e'
+        Returns
+        -------
+            out : torch.Tensor
+                Output of the network
+            state : list
+                List of layer state dicts, each containing 'x' and 'e'
         """
         if steps is None:
             steps = self.steps
@@ -261,32 +308,43 @@ class ConvClassifier(nn.Module):
             
         return out, state
 
-    def generate(self, y, steps=None):
+    def generate(self, y:torch.Tensor, steps:int = None):
         """
         | Generates an image from the target y.
 
-        Args:
-            | y (torch.Tensor): Target data
-            | steps (Optional[int]): Number of steps to run inference for
+        Parameters
+        ----------
+            y : torch.Tensor
+                Target data
+            steps : Optional[int]
+                Number of steps to run inference for. defaults to self.steps
 
-        Returns:
-            | out (torch.Tensor): Generated image
+        Returns
+        -------
+            torch.Tensor
+                Generated image
         """
         y = format_y(y, self.num_classes)
         _, state = self.forward(y=y, steps=steps)
         return state[0]['x']
     
-    def classify(self, obs, state=None, steps=None):
+    def classify(self, obs:torch.Tensor, state:List[dict] = None, steps:int=None):
         """
         | Classifies the input obs.
 
-        Args:
-            | obs (torch.Tensor): Input data
-            | state (Optional[list]): List of layer state dicts, each containing 'x' and 'e'
-            | steps (Optional[int]): Number of steps to run inference for
+        Parameters
+        ----------
+            obs : torch.Tensor
+                Input data
+            state : Optional[List[dict]]
+                List of layer state dicts, each containing 'x' and 'e'
+            steps : Optional[int]
+                Number of steps to run inference for
         
-        Returns:
-            | out (torch.Tensor): Predicted class
+        Returns
+        -------
+            torch.Tensor
+                Predicted class
         """
         if steps is None:
             steps = self.steps

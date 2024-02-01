@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>pclib.nn.layers package &mdash; PCLib 1.0.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=09d090fc"></script>
+        <script src="_static/doctools.js?v=888ff710"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="pclib.nn.models package" href="pclib.nn.models.html" />
+    <link rel="prev" title="pclib.nn package" href="pclib.nn.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PCLib
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">pclib</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="pclib.html">pclib package</a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="pclib.html#subpackages">Subpackages</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="pclib.nn.html">pclib.nn package</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pclib.optim.html">pclib.optim package</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pclib.html#module-pclib">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PCLib</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="modules.html">pclib</a></li>
+          <li class="breadcrumb-item"><a href="pclib.html">pclib package</a></li>
+          <li class="breadcrumb-item"><a href="pclib.nn.html">pclib.nn package</a></li>
+      <li class="breadcrumb-item active">pclib.nn.layers package</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/pclib.nn.layers.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="pclib-nn-layers-package">
+<h1>pclib.nn.layers package<a class="headerlink" href="#pclib-nn-layers-package" title="Link to this heading"></a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading"></a></h2>
+</section>
+<section id="module-pclib.nn.layers.conv">
+<span id="pclib-nn-layers-conv-module"></span><h2>pclib.nn.layers.conv module<a class="headerlink" href="#module-pclib.nn.layers.conv" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="pclib.nn.layers.conv.Conv2d">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">pclib.nn.layers.conv.</span></span><span class="sig-name descname"><span class="pre">Conv2d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prev_shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel_size=3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride=1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding=1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">maxpool=1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">has_bias=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">symmetric=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actv_fn=&lt;function</span> <span class="pre">tanh&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d_actv_fn=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma=0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device=device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype=None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/conv.html#Conv2d"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.conv.Conv2d" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<div class="line-block">
+<div class="line">Convolutional layer with optional bias, assymetric weights not yet supported.</div>
+<div class="line">Layer has similar functionality to FC layer, but propagates errors via a convolution.</div>
+<div class="line">The predictions are calculated using pytorch’s conv2d_input function.</div>
+<div class="line">This layer also defines predictions as: Wf(x) + Optional(bias).</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>prev_shape</strong> (<em>Optional</em><em>[</em><em>Tuple</em><em>[</em><em>int</em><em>]</em><em>]</em>) – Shape of the previous layer, None if this is input layer.</p></li>
+<li><p><strong>shape</strong> (<em>(</em><em>int</em><em>, </em><em>int</em><em>, </em><em>int</em><em>)</em>) – Shape of the current layer.</p></li>
+<li><p><strong>kernel_size</strong> (<em>int</em>) – Size of the convolutional kernel.</p></li>
+<li><p><strong>stride</strong> (<em>int</em>) – Stride of the convolutional kernel.</p></li>
+<li><p><strong>padding</strong> (<em>int</em>) – Padding of the convolutional kernel.</p></li>
+<li><p><strong>has_bi</strong> (<em>bool</em>) – Whether the layer has a bias.</p></li>
+<li><p><strong>symmetric</strong> (<em>bool</em>) – Whether the layer has symmetric weights.</p></li>
+<li><p><strong>actv_fn</strong> (<em>callable</em>) – Activation function of the layer.</p></li>
+<li><p><strong>d_actv_fn</strong> (<em>Optional</em><em>[</em><em>callable</em><em>]</em>) – Derivative of the activation function of the layer (if None, it will be inferred from actv_fn).</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – Step size for x updates.</p></li>
+<li><p><strong>device</strong> (<em>Optional</em><em>[</em><em>torch.device</em><em>]</em>) – Device to run the layer on.</p></li>
+<li><p><strong>dtype</strong> (<em>Optional</em><em>[</em><em>torch.dtype</em><em>]</em>) – Data type of the layer.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.conv.Conv2d.init_state">
+<span class="sig-name descname"><span class="pre">init_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/conv.html#Conv2d.init_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.conv.Conv2d.init_state" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Builds a new state dictionary for the layer.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>batch_size</strong> (<em>|</em>) – Batch size of the state dictionary.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A state dictionary for the layer.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">state (dict)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.conv.Conv2d.init_weights">
+<span class="sig-name descname"><span class="pre">init_weights</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/conv.html#Conv2d.init_weights"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.conv.Conv2d.init_weights" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Initialises the weights of the layer.</div>
+<div class="line">Includes optional maxpooling.</div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.conv.Conv2d.predict">
+<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/conv.html#Conv2d.predict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.conv.Conv2d.predict" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Calculates the prediction of state[‘x] the layer below.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>state</strong> (<em>|</em>) – The state dictionary for this layer.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The calculated prediction.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">pred (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pclib.nn.layers.conv.Conv2d.prev_shape">
+<span class="sig-name descname"><span class="pre">prev_shape</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code><span class="pre">[</span><code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code><span class="pre">[</span><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code><span class="pre">]]</span></em><a class="headerlink" href="#pclib.nn.layers.conv.Conv2d.prev_shape" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.conv.Conv2d.propagate">
+<span class="sig-name descname"><span class="pre">propagate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">e_below</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/conv.html#Conv2d.propagate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.conv.Conv2d.propagate" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Propagates error from layer below, returning an update for state[‘x’].</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>e_below</strong> (<em>|</em>) – The error from the layer below.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The update for state[‘x’].</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">update (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pclib.nn.layers.conv.Conv2d.shape">
+<span class="sig-name descname"><span class="pre">shape</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code><span class="pre">[</span><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code><span class="pre">]</span></em><a class="headerlink" href="#pclib.nn.layers.conv.Conv2d.shape" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.conv.Conv2d.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/conv.html#Conv2d.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.conv.Conv2d.to" title="Link to this definition"></a></dt>
+<dd><p>Moves and/or casts the parameters and buffers.</p>
+<p>This can be called as</p>
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/conv.html#Conv2d.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/conv.html#Conv2d.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/conv.html#Conv2d.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">memory_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">torch.channels_last</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/conv.html#Conv2d.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<p>Its signature is similar to <code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.Tensor.to()</span></code>, but only accepts
+floating point or complex <code class="xref py py-attr docutils literal notranslate"><span class="pre">dtype</span></code>s. In addition, this method will
+only cast the floating point or complex parameters and buffers to <code class="xref py py-attr docutils literal notranslate"><span class="pre">dtype</span></code>
+(if given). The integral parameters and buffers will be moved
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">device</span></code>, if that is given, but with dtypes unchanged. When
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">non_blocking</span></code> is set, it tries to convert/move asynchronously
+with respect to the host if possible, e.g., moving CPU Tensors with
+pinned memory to CUDA devices.</p>
+<p>See below for examples.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method modifies the module in-place.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>device</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.device</span></code>) – the desired device of the parameters
+and buffers in this module</p></li>
+<li><p><strong>dtype</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.dtype</span></code>) – the desired floating point or complex dtype of
+the parameters and buffers in this module</p></li>
+<li><p><strong>tensor</strong> (<em>torch.Tensor</em>) – Tensor whose dtype and device are the desired
+dtype and device for all parameters and buffers in this module</p></li>
+<li><p><strong>memory_format</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.memory_format</span></code>) – the desired memory
+format for 4D parameters and buffers in this module (keyword
+only argument)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Module</p>
+</dd>
+</dl>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +IGNORE_WANT(&quot;non-deterministic&quot;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1913, -0.3420],</span>
+<span class="go">        [-0.5113, -0.2325]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">double</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1913, -0.3420],</span>
+<span class="go">        [-0.5113, -0.2325]], dtype=torch.float64)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +REQUIRES(env:TORCH_DOCTEST_CUDA1)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gpu1</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cuda:1&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">gpu1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">half</span><span class="p">,</span> <span class="n">non_blocking</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1914, -0.3420],</span>
+<span class="go">        [-0.5112, -0.2324]], dtype=torch.float16, device=&#39;cuda:1&#39;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cpu</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1914, -0.3420],</span>
+<span class="go">        [-0.5112, -0.2324]], dtype=torch.float16)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">cdouble</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.3741+0.j,  0.2382+0.j],</span>
+<span class="go">        [ 0.5593+0.j, -0.4443+0.j]], dtype=torch.complex128)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">cdouble</span><span class="p">))</span>
+<span class="go">tensor([[0.6122+0.j, 0.1150+0.j],</span>
+<span class="go">        [0.6122+0.j, 0.1150+0.j],</span>
+<span class="go">        [0.6122+0.j, 0.1150+0.j]], dtype=torch.complex128)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.conv.Conv2d.update_e">
+<span class="sig-name descname"><span class="pre">update_e</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pred</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/conv.html#Conv2d.update_e"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.conv.Conv2d.update_e" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Updates the prediction error (state[‘e’]) between state[‘x’] and pred.</div>
+<div class="line">Uses simulated annealing if temp is not None.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>state</strong> (<em>|</em>) – The state dictionary for this layer.</p></li>
+<li><p><strong>pred</strong> (<em>|</em>) – The prediction of the layer below.</p></li>
+<li><p><strong>temp</strong> (<em>|</em>) – The temperature for simulated annealing.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.conv.Conv2d.update_x">
+<span class="sig-name descname"><span class="pre">update_x</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_below</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/conv.html#Conv2d.update_x"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.conv.Conv2d.update_x" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Updates state[‘x’] using the error signal from the layer below and of current layer.</div>
+<div class="line">Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x) - 0.1 * x + noise)</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>state</strong> (<em>|</em>) – The state dictionary for this layer.</p></li>
+<li><p><strong>e_below</strong> (<em>|</em>) – The error from the layer below.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-pclib.nn.layers.fc">
+<span id="pclib-nn-layers-fc-module"></span><h2>pclib.nn.layers.fc module<a class="headerlink" href="#module-pclib.nn.layers.fc" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="pclib.nn.layers.fc.FC">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">pclib.nn.layers.fc.</span></span><span class="sig-name descname"><span class="pre">FC</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">has_bias=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">symmetric=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actv_fn=&lt;function</span> <span class="pre">relu&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d_actv_fn=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma=0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device=device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype=None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/fc.html#FC"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.fc.FC" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<div class="line-block">
+<div class="line">Fully connected layer with optional bias and optionally symmetric weights.</div>
+<div class="line">The layer stores its state in a dictionary with keys ‘x’ and ‘e’.</div>
+<div class="line">Layer is defined such that ‘x’ and ‘e’ are the same shape, and ‘x’ precedes ‘e’ in the architecture.</div>
+<div class="line">The Layer defines predictions as: Wf(x) + Optional(bias).</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>in_features</strong> (<em>int</em>) – Number of input features.</p></li>
+<li><p><strong>out_features</strong> (<em>int</em>) – Number of output features.</p></li>
+<li><p><strong>has_bias</strong> (<em>bool</em>) – Whether to include a bias term.</p></li>
+<li><p><strong>symmetric</strong> (<em>bool</em>) – Whether to reuse top-down prediction weights, for bottom-up error propagation.</p></li>
+<li><p><strong>actv_fn</strong> (<em>callable</em>) – Activation function to use.</p></li>
+<li><p><strong>d_actv_fn</strong> (<em>Optional</em><em>[</em><em>callable</em><em>]</em>) – Derivative of activation function to use (if None, will be inferred from actv_fn).</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – step size for x updates.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em>) – Device to use for computation.</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>) – Data type to use for computation.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pclib.nn.layers.fc.FC.bias">
+<span class="sig-name descname"><span class="pre">bias</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code><span class="pre">[</span><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code><span class="pre">]</span></em><a class="headerlink" href="#pclib.nn.layers.fc.FC.bias" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pclib.nn.layers.fc.FC.in_features">
+<span class="sig-name descname"><span class="pre">in_features</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code><span class="pre">[</span><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code><span class="pre">]</span></em><a class="headerlink" href="#pclib.nn.layers.fc.FC.in_features" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.fc.FC.init_params">
+<span class="sig-name descname"><span class="pre">init_params</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/fc.html#FC.init_params"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.fc.FC.init_params" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Creates and initialises weight tensors and bias tensor based on args from self.__init__().</div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.fc.FC.init_state">
+<span class="sig-name descname"><span class="pre">init_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/fc.html#FC.init_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.fc.FC.init_state" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Builds a new state dictionary for the layer.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>batch_size</strong> (<em>|</em>) – Batch size of the state.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary containing ‘x’ and ‘e’ tensors of shape (batch_size, out_features).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">state (dict)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pclib.nn.layers.fc.FC.out_features">
+<span class="sig-name descname"><span class="pre">out_features</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></em><a class="headerlink" href="#pclib.nn.layers.fc.FC.out_features" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.fc.FC.predict">
+<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/fc.html#FC.predict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.fc.FC.predict" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Calculates a prediction of state[‘x’] in the layer below.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>state</strong> (<em>|</em>) – Dictionary containing ‘x’ and ‘e’ tensors for this layer.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Prediction of state[‘x’] in the layer below.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">pred (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.fc.FC.propagate">
+<span class="sig-name descname"><span class="pre">propagate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">e_below</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/fc.html#FC.propagate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.fc.FC.propagate" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Propagates error from layer below, returning an update signal for state[‘x’].</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>e_below</strong> (<em>|</em>) – Error signal from layer below.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Update signal for state[‘x’].</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">update (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.fc.FC.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/fc.html#FC.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.fc.FC.to" title="Link to this definition"></a></dt>
+<dd><p>Moves and/or casts the parameters and buffers.</p>
+<p>This can be called as</p>
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/fc.html#FC.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/fc.html#FC.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/fc.html#FC.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">memory_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">torch.channels_last</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/fc.html#FC.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<p>Its signature is similar to <code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.Tensor.to()</span></code>, but only accepts
+floating point or complex <code class="xref py py-attr docutils literal notranslate"><span class="pre">dtype</span></code>s. In addition, this method will
+only cast the floating point or complex parameters and buffers to <code class="xref py py-attr docutils literal notranslate"><span class="pre">dtype</span></code>
+(if given). The integral parameters and buffers will be moved
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">device</span></code>, if that is given, but with dtypes unchanged. When
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">non_blocking</span></code> is set, it tries to convert/move asynchronously
+with respect to the host if possible, e.g., moving CPU Tensors with
+pinned memory to CUDA devices.</p>
+<p>See below for examples.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method modifies the module in-place.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>device</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.device</span></code>) – the desired device of the parameters
+and buffers in this module</p></li>
+<li><p><strong>dtype</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.dtype</span></code>) – the desired floating point or complex dtype of
+the parameters and buffers in this module</p></li>
+<li><p><strong>tensor</strong> (<em>torch.Tensor</em>) – Tensor whose dtype and device are the desired
+dtype and device for all parameters and buffers in this module</p></li>
+<li><p><strong>memory_format</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.memory_format</span></code>) – the desired memory
+format for 4D parameters and buffers in this module (keyword
+only argument)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Module</p>
+</dd>
+</dl>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +IGNORE_WANT(&quot;non-deterministic&quot;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1913, -0.3420],</span>
+<span class="go">        [-0.5113, -0.2325]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">double</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1913, -0.3420],</span>
+<span class="go">        [-0.5113, -0.2325]], dtype=torch.float64)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +REQUIRES(env:TORCH_DOCTEST_CUDA1)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gpu1</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cuda:1&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">gpu1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">half</span><span class="p">,</span> <span class="n">non_blocking</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1914, -0.3420],</span>
+<span class="go">        [-0.5112, -0.2324]], dtype=torch.float16, device=&#39;cuda:1&#39;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cpu</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1914, -0.3420],</span>
+<span class="go">        [-0.5112, -0.2324]], dtype=torch.float16)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">cdouble</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.3741+0.j,  0.2382+0.j],</span>
+<span class="go">        [ 0.5593+0.j, -0.4443+0.j]], dtype=torch.complex128)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">cdouble</span><span class="p">))</span>
+<span class="go">tensor([[0.6122+0.j, 0.1150+0.j],</span>
+<span class="go">        [0.6122+0.j, 0.1150+0.j],</span>
+<span class="go">        [0.6122+0.j, 0.1150+0.j]], dtype=torch.complex128)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.fc.FC.update_e">
+<span class="sig-name descname"><span class="pre">update_e</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pred</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/fc.html#FC.update_e"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.fc.FC.update_e" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Updates prediction-error (state[‘e’]) inplace between state[‘x’] and the top-down prediction of it.</div>
+<div class="line">Uses simulated annealing if temp is not None.</div>
+<div class="line">Does nothing if pred is None. This is useful so the output layer doesn’t need specific handling.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>state</strong> (<em>|</em>) – Dictionary containing ‘x’ and ‘e’ tensors for this layer.</p></li>
+<li><p><strong>pred</strong> (<em>|</em>) – Top-down prediction of state[‘x’].</p></li>
+<li><p><strong>temp</strong> (<em>|</em>) – Temperature for simulated annealing.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.layers.fc.FC.update_x">
+<span class="sig-name descname"><span class="pre">update_x</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_below</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/layers/fc.html#FC.update_x"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.layers.fc.FC.update_x" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Updates state[‘x’] inplace, using the error signal from the layer below and error of the current layer.</div>
+<div class="line">Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x) - 0.1 * x + noise).</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>state</strong> (<em>|</em>) – Dictionary containing ‘x’ and ‘e’ tensors for this layer.</p></li>
+<li><p><strong>e_below</strong> (<em>|</em>) – Error of layer below. None if input layer.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pclib.nn.layers.fc.FC.weight">
+<span class="sig-name descname"><span class="pre">weight</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code><span class="pre">[</span><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code><span class="pre">]</span></em><a class="headerlink" href="#pclib.nn.layers.fc.FC.weight" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pclib.nn.layers.fc.FC.weight_td">
+<span class="sig-name descname"><span class="pre">weight_td</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code><span class="pre">[</span><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code><span class="pre">]</span></em><a class="headerlink" href="#pclib.nn.layers.fc.FC.weight_td" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-pclib.nn.layers">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-pclib.nn.layers" title="Link to this heading"></a></h2>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pclib.nn.html" class="btn btn-neutral float-left" title="pclib.nn package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pclib.nn.models.html" class="btn btn-neutral float-right" title="pclib.nn.models package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Joe Griffith.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

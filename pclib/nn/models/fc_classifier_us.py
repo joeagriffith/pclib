@@ -12,28 +12,30 @@ class FCClassifierUs(FCClassifier):
     | Learns a feature extractor (self.layers) via unsupervised learning.
     | Also learns an mlp classifier (self.classifier) which takes the output of self.layers as input, via supervised learning.
 
-    Args:
-        | in_features (int): Number of input features
-        | num_classes (int): Number of classes
-        | hidden_sizes (list): List of hidden layer sizes
-        | steps (int): Number of steps to run inference for
-        | bias (bool): Whether to include bias in layers
-        | symmetric (bool): Whether to use same weights for top-down prediction and bottom-up error prop.
-        | actv_fn (torch.nn.functional): Activation function to use
-        | d_actv_fn (torch.nn.functional): Derivative of activation function to use
-        | gamma (float): step size for x updates
-        | device (torch.device): Device to run on
-        | dtype (torch.dtype): Data type to use
-
-    Attributes:
-        | layers (torch.nn.ModuleList): List of layers
-        | in_features (int): Number of input features
-        | num_classes (int): Number of classes
-        | hidden_sizes (list): List of hidden layer sizes
-        | steps (int): Number of steps to run inference for
-        | bias (bool): Whether to include bias in layers
-        | symmetric (bool): Whether to use same weights for top-down prediction and bottom-up error prop.
-        | classifier (torch.nn.Sequential): Classifier to use
+    Parameters
+    ----------
+        in_features : int
+            Number of input features
+        num_classes : int
+            Number of classes
+        hidden_sizes : list
+            List of hidden layer sizes
+        steps : int
+            Number of steps to run inference for
+        bias : bool
+            Whether to include bias in layers
+        symmetric : bool
+            Whether to use same weights for top-down prediction and bottom-up error prop.
+        actv_fn : callable
+            Activation function to use
+        d_actv_fn : Optional[callable]
+            Derivative of activation function to use
+        gamma : float
+            step size for x updates
+        device : torch.device
+            Device to run on
+        dtype : torch.dtype
+            Data type to use
     """
     def __init__(self, in_features, num_classes, hidden_sizes = [], steps=20, bias=True, symmetric=True, actv_fn=F.tanh, d_actv_fn=None, gamma=0.1, device=torch.device('cpu'), dtype=None):
         super().__init__(in_features, num_classes, hidden_sizes, steps, bias, symmetric, actv_fn, d_actv_fn, gamma, device, dtype)

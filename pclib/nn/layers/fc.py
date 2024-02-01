@@ -14,23 +14,26 @@ class FC(nn.Module):
     | Layer is defined such that 'x' and 'e' are the same shape, and 'x' precedes 'e' in the architecture.
     | The Layer defines predictions as: Wf(x) + Optional(bias).
 
-    Args:
-        | in_features (int): Number of input features.
-        | out_features (int): Number of output features.
-        | has_bias (bool): Whether to include a bias term.
-        | symmetric (bool): Whether to reuse top-down prediction weights, for bottom-up error propagation.
-        | actv_fn (callable): Activation function to use.
-        | d_actv_fn (callable): Derivative of activation function to use (if None, will be inferred from actv_fn).
-        | gamma (float): step size for x updates.
-        | device (torch.device): Device to use for computation.
-        | dtype (torch.dtype): Data type to use for computation.
-
-    Attributes:
-        | in_features (int): Number of input features.
-        | out_features (int): Number of output features; size of x and e vectors.
-        | weight (torch.Tensor): Weights for bottom-up error propagation
-        | weight_td (torch.Tensor): Weights for top-down predictions. (if symmetric=False)
-        | bias (torch.Tensor): Bias term (if has_bias=True).
+    Parameters
+    ----------
+        in_features : int
+            Number of input features.
+        out_features : int
+            Number of output features.
+        has_bias : bool
+            Whether to include a bias term.
+        symmetric : bool
+            Whether to reuse top-down prediction weights, for bottom-up error propagation.
+        actv_fn : callable
+            Activation function to use.
+        d_actv_fn : Optional[callable]
+            Derivative of activation function to use (if None, will be inferred from actv_fn).
+        gamma : float
+            step size for x updates.
+        device : torch.device
+            Device to use for computation.
+        dtype : torch.dtype
+            Data type to use for computation.
     """
     __constants__ = ['in_features', 'out_features']
     in_features: Optional[int]
@@ -47,8 +50,8 @@ class FC(nn.Module):
                  actv_fn: callable = F.relu,
                  d_actv_fn: callable = None,
                  gamma: float = 0.1,
-                 device=torch.device('cpu'),
-                 dtype=None
+                 device: torch.device = torch.device('cpu'),
+                 dtype: torch.dtype = None
                  ) -> None:
 
         self.factory_kwargs = {'device': device, 'dtype': dtype}
@@ -93,6 +96,13 @@ class FC(nn.Module):
         self.init_params()
 
     def __str__(self):
+        """
+        | Returns a string representation of the layer.
+
+        Returns
+        -------
+            str
+        """
         base_str = super().__str__()
 
         custom_info = "\n  (params): \n" + \
@@ -136,16 +146,19 @@ class FC(nn.Module):
             self.register_parameter('weight_td', None)
             self.register_parameter('bias', None)
             
-    def init_state(self, batch_size):
+    def init_state(self, batch_size:int):
         """
         | Builds a new state dictionary for the layer.
 
-        Args:
-            | batch_size (int): Batch size of the state.
+        Parameters
+        ----------
+            batch_size : int
+                Batch size of the state.
 
-        Returns:
-            | state (dict): Dictionary containing 'x' and 'e' tensors of shape (batch_size, out_features).
-
+        Returns
+        -------
+            dict
+                Dictionary containing 'x' and 'e' tensors of shape (batch_size, out_features).
         """
         return {
             'x': torch.zeros((batch_size, self.out_features), device=self.device),
@@ -156,45 +169,57 @@ class FC(nn.Module):
         self.device = args[0]
         return super().to(*args, **kwargs)
 
-    def predict(self, state):
+    def predict(self, state:dict):
         """
         | Calculates a prediction of state['x'] in the layer below.
 
-        Args:
-            | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
+        Parameters
+        ----------
+            state : dict
+                Dictionary containing 'x' and 'e' tensors for this layer.
         
-        Returns:
-            | pred (torch.Tensor): Prediction of state['x'] in the layer below.
+        Returns
+        -------
+            torch.Tensor
+                Prediction of state['x'] in the layer below.
         """
         weight_td = self.weight.T if self.symmetric else self.weight_td
         x = state['x'].detach() if self.symmetric else state['x']
         return F.linear(self.actv_fn(x), weight_td, self.bias)
     
     
-    def propagate(self, e_below):
+    def propagate(self, e_below:torch.Tensor):
         """
         | Propagates error from layer below, returning an update signal for state['x'].
 
-        Args:
-            | e_below (torch.Tensor): Error signal from layer below.
+        Parameters
+        ----------
+            e_below : torch.Tensor
+                Error signal from layer below.
 
-        Returns:
-            | update (torch.Tensor): Update signal for state['x'].
+        Returns
+        -------
+            torch.Tensor
+                Update signal for state['x'].
         """
         if e_below.dim() == 4:
             e_below = e_below.flatten(1)
         return F.linear(e_below, self.weight, None)
         
-    def update_e(self, state, pred, temp=None):
+    def update_e(self, state:dict, pred:torch.Tensor, temp:float = None):
         """
         | Updates prediction-error (state['e']) inplace between state['x'] and the top-down prediction of it.
         | Uses simulated annealing if temp is not None.
         | Does nothing if pred is None. This is useful so the output layer doesn't need specific handling.
 
-        Args:
-            | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
-            | pred (torch.Tensor): Top-down prediction of state['x'].
-            | temp (Optional[float]): Temperature for simulated annealing.
+        Parameters
+        ----------
+            state : dict
+                Dictionary containing 'x' and 'e' tensors for this layer.
+            pred : torch.Tensor
+                Top-down prediction of state['x'].
+            temp : Optional[float]
+                Temperature for simulated annealing.
         """
         assert pred is not None, "Prediction must be provided to update_e()."
 
@@ -209,14 +234,17 @@ class FC(nn.Module):
             eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
             state['e'] += eps
     
-    def update_x(self, state, e_below=None, temp=None):
+    def update_x(self, state:dict, e_below:torch.Tensor = None, temp:float = None):
         """
         | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x) - 0.1 * x + noise).
 
-        Args:
-            | state (dict): Dictionary containing 'x' and 'e' tensors for this layer.
-            | e_below (Optional[torch.Tensor]): Error of layer below. None if input layer.
+        Parameters
+        ----------
+            state : dict
+                Dictionary containing 'x' and 'e' tensors for this layer.
+            e_below : Optional[torch.Tensor]
+                state['e'] from the layer below. None if input layer.
         """
         if not self.symmetric:
             state['x'] = state['x'].detach()

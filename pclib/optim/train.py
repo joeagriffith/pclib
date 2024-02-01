@@ -8,18 +8,24 @@ from torch.utils.tensorboard import SummaryWriter
 from pclib.optim.eval import topk_accuracy
 from pclib.utils.functional import format_y, calc_corr, calc_sparsity
 
-def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW', no_momentum=False):
+def get_optimiser(parameters:list, lr:float, weight_decay:float, optimiser:str = 'AdamW', no_momentum:bool = False):
     """
     | Builds an optimiser from the specified arguments
 
-    Args:
-        | parameters (list): list of PyTorch parameters to optimiser. Usually model.parameters()
-        | lr (float): learning rate
-        | weight_decay (float): weight decay
-        | optimiser (str): optimiser to use. ['AdamW', 'Adam', 'SGD', 'RMSprop']
+    Parameters
+    ----------
+        parameters : list
+            list of PyTorch parameters to optimiser. Usually model.parameters()
+        lr : float
+            learning rate
+        weight_decay : float
+            weight decay
+        optimiser : str
+            optimiser to use. ['AdamW', 'Adam', 'SGD', 'RMSprop']
     
-    Returns:
-        | optimiser (torch.optim): optimiser
+    Returns
+    -------
+        torch.optim.Optimiser
     """
     assert optimiser in ['AdamW', 'Adam', 'SGD', 'RMSprop'], f"Invalid optimiser {optimiser}"
     if optimiser == 'AdamW':
@@ -43,16 +49,21 @@ def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW', no_momentum=F
         else:
             return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, momentum=0.9)
 
-def init_stats(model, minimal=False, loss=False):
+def init_stats(model:torch.nn.Module, minimal:bool = False, loss:bool = False):
     """
     | Initialises a dictionary to store statistics
     
-    Args:
-        | model (nn.Module): model to track statistics for
-        | minimal (bool): if True, only track minimal statistics (train_vfe, train_corr, val_vfe, val_acc)
+    Parameters
+    ----------
+        model : torch.nn.Module
+            model to track statistics for
+        minimal : bool
+            if True, only track minimal statistics (train_vfe, train_corr, val_vfe, val_acc)
     
-    Returns:
-        | stats (dict): dictionary to store statistics
+    Returns
+    -------
+        dict
+            dictionary to store statistics
     """
     if not minimal:
         stats = {
@@ -77,19 +88,24 @@ def init_stats(model, minimal=False, loss=False):
         stats['val_loss'] = []
     return stats
 
-def neg_pass(model, x, targets, neg_coeff):
+def neg_pass(model:torch.nn.Module, x:torch.Tensor, labels:torch.Tensor, neg_coeff:float=1.0):
     """
-    | Calculates incorrect ys and performs inference on them.
+    | Calculates incorrect y
     | Then multiply vfe by -neg_coeff and backpropagate to increase vfe for negative data.
 
-    Args:
-        | model (nn.Module): model to train
-        | x (torch.Tensor): input data
-        | targets (torch.Tensor): targets
-        | neg_coeff (float): coefficient to multiply vfe by. 1.0 for balanced positive and negative passes. Must be positive.
+    Parameters
+    ----------
+        model : torch.nn.Module
+            model to train
+        x : torch.Tensor
+            input data
+        labels : torch.Tensor
+            target labels
+        neg_coeff : float
+            coefficient to multiply vfe by. 1.0 for balanced positive and negative passes. Must be positive.
     """
     assert neg_coeff > 0, f"neg_coeff must be positive, got {neg_coeff}"
-    false_targets = (targets + torch.randint_like(targets, low=1, high=model.num_classes)) % model.num_classes
+    false_targets = (labels + torch.randint_like(labels, low=1, high=model.num_classes)) % model.num_classes
     false_y = format_y(false_targets, model.num_classes)
 
     # Forward pass
@@ -97,41 +113,44 @@ def neg_pass(model, x, targets, neg_coeff):
     loss = -neg_coeff * model.vfe(neg_state)
     loss.backward()
 
-def untr_pass(model, x, untr_coeff):
+def untr_pass(model:torch.nn.Module, x:torch.Tensor, y:torch.Tensor=None, untr_coeff:float=0.1):
     """
-    | Calculates incorrect ys and performs inference on them.
-    | Then multiply vfe by -neg_coeff and backpropagate to increase vfe for negative data.
+    | Performs an inference pass with the model, always supplying x, and y if it is not None.
+    | However, the gradients calculated with respect to 'vfe * -untr_coeff', so that the model is untrained.
+    | This function is inspired by work in the Hopfield Network literature, which aims to reduce the occurence of spurious minima.
 
-    Args:
-        | model (nn.Module): model to train
-        | x (torch.Tensor): input data
-        | targets (torch.Tensor): targets
-        | neg_coeff (float): coefficient to multiply vfe by. 1.0 for balanced positive and negative passes. Must be positive.
+    Parameters
+    ----------
+        model : torch.nn.Module
+            model to train
+        x : torch.Tensor
+            input data
+        untr_coeff : float
+            coefficient to multiply vfe by. 1.0 for balanced positive and negative passes. Must be positive.
     """
-    input = torch.randn_like(x)*2 + x
-    input = F.normalize(input, dim=1) * x.norm(dim=1).mean()
-
-    grad_before = model.layers[1].weight_td.grad.clone()
+    assert untr_coeff > 0, f"untr_coeff must be positive, got {untr_coeff}"
     # Forward pass
-    _, neg_state = model(x)
+    _, neg_state = model(x, y)
     loss = -untr_coeff * model.vfe(neg_state)
     loss.backward()
-    grad_after = model.layers[1].weight_td.grad.clone()
-    if (grad_before == grad_after).all():
-        raise RuntimeError("Untrained pass did not update gradients")
 
-def val_pass(model, val_loader, flatten=True, return_loss=False):
+def val_pass(model:torch.nn.Module, val_loader:torch.utils.data.DataLoader, flatten:bool=True, return_loss:bool=False):
     """
     | Performs a validation pass on the model
 
-    Args:
-        | model (nn.Module): model to validate
-        | val_loader (DataLoader): validation data
-        | flatten (bool): if True, flatten input data
+    Parameters
+    ----------
+        model : torch.nn.Module
+            model to validate
+        val_loader : torch.utils.data.DataLoader
+            validation data
+        flatten : bool
+            if True, flatten input data
 
-    Returns:
-        | val_vfe (float): average VFE for the validation data
-        | val_acc (float): accuracy for the validation data
+    Returns
+    -------
+        dict
+            dictionary of validation results
     """
     with torch.no_grad():
         model.eval()
@@ -157,49 +176,68 @@ def val_pass(model, val_loader, flatten=True, return_loss=False):
     return {'vfe': vfe, 'acc': acc, 'loss': loss}
 
 def train(
-    model, 
-    train_data,
-    val_data,
-    num_epochs,
-    lr = 3e-4,
-    c_lr = 1e-3,
-    back_on_step=False,
-    batch_size=1,
-    reg_coeff = 1e-2,
-    flatten=True,
-    neg_coeff=None,
-    untr_coeff=None,
-    log_dir=None,
-    model_dir=None,
-    minimal_stats=False,
-    assert_grads=False,
-    optim='AdamW',
-    scheduler=None,
-    no_momentum=False,
+    model:torch.nn.Module, 
+    train_data:torch.utils.data.Dataset,
+    val_data:torch.utils.data.Dataset,
+    num_epochs:int,
+    lr:float = 3e-4,
+    c_lr:float = 1e-3,
+    back_on_step:bool = False,
+    batch_size:int = 1,
+    reg_coeff:float = 1e-2,
+    flatten:bool = True,
+    neg_coeff:float = None,
+    untr_coeff:float = None,
+    log_dir:str = None,
+    model_dir:str = None,
+    minimal_stats:bool = False,
+    assert_grads:bool = False,
+    optim:str = 'AdamW',
+    scheduler:str = None,
+    no_momentum:bool = False,
 ):
     """
     | Trains a model with the specified parameters
     | Can train any model, supervised or unsupervised, standard, symmetric or inverted.
 
-    Args:
-        | model (nn.Module): model to train
-        | train_data (Dataset or DataLoader): training data
-        | val_data (Dataset or DataLoader): validation data
-        | num_epochs (int): number of epochs to train for
-        | lr (float): learning rate
-        | c_lr (float): learning rate for classifier. Ignored if model has no classifier.
-        | back_on_step (bool): if True, backpropagate on every model.step(), if False, backpropagate after model.forward().
-        | batch_size (int): batch size
-        | reg_coeff (float): weight decay. Also used for optimising classifier.
-        | flatten (bool): if True, flatten input data
-        | neg_coeff (float): coefficient to multiply vfe by during negative pass. 1.0 for balanced positive and negative passes. Must be positive.
-        | untr_coeff (float): coefficient to multiply vfe by during untraining pass. 1.0 for balanced positive and negative passes. Must be positive.
-        | minimal_stats (bool): if True, only track minimal statistics (train_vfe, train_corr, val_vfe, val_acc)
-        | assert_grads (bool): if True, assert that gradients are close to manual gradients. Must be false if grad_mode is 'manual'.
-        | grad_mode (str): gradient mode. ['auto', 'manual']
-        | optim (str): optimiser to use. ['AdamW', 'Adam', 'SGD', 'RMSprop']
-        | scheduler (str): scheduler to use. [None, 'ReduceLROnPlateau']
-        | no momentum (bool): if True, momentum is set to 0.0 for optimiser. Only works for AdamW, Adam, SGD, RMSprop
+    Parameters
+    ----------
+        model : torch.nn.Module
+            model to train
+        train_data : Dataset or DataLoader
+            training data
+        val_data : Dataset or DataLoader
+            validation data
+        num_epochs : int
+            number of epochs to train for
+        lr : float
+            learning rate for PC layers.
+        c_lr : float
+            learning rate for classifier. Ignored if model has no classifier.
+        back_on_step : bool
+            if True, backpropagate on every model.step(), if False, backpropagate after model.forward().
+        batch_size : int
+            batch size
+        reg_coeff : float
+            weight decay. Also used for optimising classifier.
+        flatten : bool
+            if True, flatten input data
+        neg_coeff : float
+            coefficient to multiply vfe by during negative pass. 1.0 for balanced positive and negative passes. Must be positive.
+        untr_coeff : float
+            coefficient to multiply vfe by during untraining pass. 1.0 for equal training and untraining (suggest ~0.1). Must be positive.
+        minimal_stats : bool
+            if True, only track minimal statistics (train_vfe, val_vfe, val_acc)
+        assert_grads : bool
+            if True, assert that gradients are close to manual gradients. Must be false if grad_mode is 'manual'.
+        grad_mode : str
+            gradient mode. ['auto', 'manual']
+        optim : str
+            optimiser to use. ['AdamW', 'Adam', 'SGD', 'RMSprop']
+        scheduler : str
+            scheduler to use. [None, 'ReduceLROnPlateau']
+        no momentum : bool
+            if True, momentum is set to 0.0 for optimiser. Only works for AdamW, Adam, SGD, RMSprop
     """
     assert scheduler in [None, 'ReduceLROnPlateau'], f"Invalid scheduler '{scheduler}', or not yet implemented"
     if back_on_step:

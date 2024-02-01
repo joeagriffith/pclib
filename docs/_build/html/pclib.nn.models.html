@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>pclib.nn.models package &mdash; PCLib 1.0.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=09d090fc"></script>
+        <script src="_static/doctools.js?v=888ff710"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="pclib.optim package" href="pclib.optim.html" />
+    <link rel="prev" title="pclib.nn.layers package" href="pclib.nn.layers.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PCLib
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">pclib</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="pclib.html">pclib package</a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="pclib.html#subpackages">Subpackages</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="pclib.nn.html">pclib.nn package</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pclib.optim.html">pclib.optim package</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pclib.html#module-pclib">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PCLib</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="modules.html">pclib</a></li>
+          <li class="breadcrumb-item"><a href="pclib.html">pclib package</a></li>
+          <li class="breadcrumb-item"><a href="pclib.nn.html">pclib.nn package</a></li>
+      <li class="breadcrumb-item active">pclib.nn.models package</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/pclib.nn.models.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="pclib-nn-models-package">
+<h1>pclib.nn.models package<a class="headerlink" href="#pclib-nn-models-package" title="Link to this heading"></a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading"></a></h2>
+</section>
+<section id="module-pclib.nn.models.conv_classifier">
+<span id="pclib-nn-models-conv-classifier-module"></span><h2>pclib.nn.models.conv_classifier module<a class="headerlink" href="#module-pclib.nn.models.conv_classifier" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">pclib.nn.models.conv_classifier.</span></span><span class="sig-name descname"><span class="pre">ConvClassifier</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">steps=20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">symmetric=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actv_fn=&lt;function</span> <span class="pre">relu&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d_actv_fn=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma=0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device=device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype=None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<div class="line-block">
+<div class="line">Similar to the FCClassifier, except uses convolutions instead of fully connected layers.</div>
+<div class="line">This network is not currently customisable, but requires altering the init_layers() code to change the architecture.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>steps</strong> (<em>int</em>) – Number of steps to run the network for in inference phase.</p></li>
+<li><p><strong>bias</strong> (<em>bool</em>) – Whether to include bias terms in the network.</p></li>
+<li><p><strong>symmetric</strong> (<em>bool</em>) – Whether to use symmetric weights.</p></li>
+<li><p><strong>actv_fn</strong> (<em>callable</em>) – Activation function to use in the network.</p></li>
+<li><p><strong>d_actv_fn</strong> (<em>Optional</em><em>[</em><em>callable</em><em>]</em>) – Derivative of the activation function to use in the network.</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – step size for x updates</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em>) – Device to run the network on.</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>) – Data type to use for network parameters.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier.calc_temp">
+<span class="sig-name descname"><span class="pre">calc_temp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">step_i</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.calc_temp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier.calc_temp" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Calculates the temperature for the current step.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>step_i</strong> (<em>|</em>) – Current step</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Total number of steps</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Temperature for the current step = 1 - (step_i / steps)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">temp (float)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier.classify">
+<span class="sig-name descname"><span class="pre">classify</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.classify"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier.classify" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Classifies the input obs.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>state</strong> (<em>|</em>) – List of layer state dicts, each containing ‘x’ and ‘e’</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Number of steps to run inference for</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Predicted class</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">back_on_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier.forward" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Performs inference phase of the network.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>y</strong> (<em>|</em>) – Target data</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Number of steps to run inference for</p></li>
+<li><p><strong>back_on_step</strong> (<em>|</em>) – Whether to backpropagate on each step. Default False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Output of the network
+| state (list): List of layer state dicts, each containing ‘x’ and ‘e’</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier.generate">
+<span class="sig-name descname"><span class="pre">generate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.generate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier.generate" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Generates an image from the target y.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>y</strong> (<em>|</em>) – Target data</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Number of steps to run inference for</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Generated image</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier.get_output">
+<span class="sig-name descname"><span class="pre">get_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.get_output"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier.get_output" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Returns the output of the network.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>state</strong> (<em>|</em>) – List of layer state dicts, each containing ‘x’ and ‘e’</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Output of the network</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier.in_features">
+<span class="sig-name descname"><span class="pre">in_features</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></em><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier.in_features" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier.inc_epochs">
+<span class="sig-name descname"><span class="pre">inc_epochs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.inc_epochs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier.inc_epochs" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Increments the number of epochs trained by n.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>n</strong> (<em>|</em>) – Number of epochs to increment by</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier.init_layers">
+<span class="sig-name descname"><span class="pre">init_layers</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.init_layers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier.init_layers" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Initialises the layers of the network.</div>
+<div class="line">Not currently customisable, but can be changed by altering this code.</div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier.init_state">
+<span class="sig-name descname"><span class="pre">init_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.init_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier.init_state" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Initialises the state of the network.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>y</strong> (<em>|</em>) – Target data</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of layer state dicts, each containing ‘x’ and ‘e’</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">state (list)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier.num_classes">
+<span class="sig-name descname"><span class="pre">num_classes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></em><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier.num_classes" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier.step">
+<span class="sig-name descname"><span class="pre">step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier.step" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Performs one step of inference, updating all Xs first, then calculates Errors.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>state</strong> (<em>|</em>) – List of layer state dicts, each containing ‘x’ and ‘e’</p></li>
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>y</strong> (<em>|</em>) – Target data</p></li>
+<li><p><strong>temp</strong> (<em>|</em>) – Temperature for simulated annealing</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier.to" title="Link to this definition"></a></dt>
+<dd><p>Moves and/or casts the parameters and buffers.</p>
+<p>This can be called as</p>
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">memory_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">torch.channels_last</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<p>Its signature is similar to <code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.Tensor.to()</span></code>, but only accepts
+floating point or complex <code class="xref py py-attr docutils literal notranslate"><span class="pre">dtype</span></code>s. In addition, this method will
+only cast the floating point or complex parameters and buffers to <code class="xref py py-attr docutils literal notranslate"><span class="pre">dtype</span></code>
+(if given). The integral parameters and buffers will be moved
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">device</span></code>, if that is given, but with dtypes unchanged. When
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">non_blocking</span></code> is set, it tries to convert/move asynchronously
+with respect to the host if possible, e.g., moving CPU Tensors with
+pinned memory to CUDA devices.</p>
+<p>See below for examples.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method modifies the module in-place.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>device</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.device</span></code>) – the desired device of the parameters
+and buffers in this module</p></li>
+<li><p><strong>dtype</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.dtype</span></code>) – the desired floating point or complex dtype of
+the parameters and buffers in this module</p></li>
+<li><p><strong>tensor</strong> (<em>torch.Tensor</em>) – Tensor whose dtype and device are the desired
+dtype and device for all parameters and buffers in this module</p></li>
+<li><p><strong>memory_format</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.memory_format</span></code>) – the desired memory
+format for 4D parameters and buffers in this module (keyword
+only argument)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Module</p>
+</dd>
+</dl>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +IGNORE_WANT(&quot;non-deterministic&quot;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1913, -0.3420],</span>
+<span class="go">        [-0.5113, -0.2325]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">double</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1913, -0.3420],</span>
+<span class="go">        [-0.5113, -0.2325]], dtype=torch.float64)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +REQUIRES(env:TORCH_DOCTEST_CUDA1)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gpu1</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cuda:1&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">gpu1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">half</span><span class="p">,</span> <span class="n">non_blocking</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1914, -0.3420],</span>
+<span class="go">        [-0.5112, -0.2324]], dtype=torch.float16, device=&#39;cuda:1&#39;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cpu</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1914, -0.3420],</span>
+<span class="go">        [-0.5112, -0.2324]], dtype=torch.float16)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">cdouble</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.3741+0.j,  0.2382+0.j],</span>
+<span class="go">        [ 0.5593+0.j, -0.4443+0.j]], dtype=torch.complex128)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">cdouble</span><span class="p">))</span>
+<span class="go">tensor([[0.6122+0.j, 0.1150+0.j],</span>
+<span class="go">        [0.6122+0.j, 0.1150+0.j],</span>
+<span class="go">        [0.6122+0.j, 0.1150+0.j]], dtype=torch.complex128)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier.ConvClassifier.vfe">
+<span class="sig-name descname"><span class="pre">vfe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_reduction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'mean'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unit_reduction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sum'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier.html#ConvClassifier.vfe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier.ConvClassifier.vfe" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Calculates the Variational Free Energy (VFE) of the model.</div>
+<div class="line">This is the sum of the squared prediction errors of each layer.</div>
+<div class="line">how batches and units are reduced is controlled by batch_reduction and unit_reduction.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>state</strong> (<em>|</em>) – List of layer state dicts, each containing ‘x’ and ‘e’</p></li>
+<li><p><strong>batch_reduction</strong> (<em>|</em>) – How to reduce over batches [‘sum’, ‘mean’, None]</p></li>
+<li><p><strong>unit_reduction</strong> (<em>|</em>) – How to reduce over units [‘sum’, ‘mean’]</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>VFE of the model (scalar)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">vfe (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-pclib.nn.models.conv_classifier_us">
+<span id="pclib-nn-models-conv-classifier-us-module"></span><h2>pclib.nn.models.conv_classifier_us module<a class="headerlink" href="#module-pclib.nn.models.conv_classifier_us" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier_us.ConvClassifierUs">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">pclib.nn.models.conv_classifier_us.</span></span><span class="sig-name descname"><span class="pre">ConvClassifierUs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">steps=20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">symmetric=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actv_fn=&lt;function</span> <span class="pre">relu&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d_actv_fn=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma=0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device=device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype=None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier_us.html#ConvClassifierUs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier_us.ConvClassifierUs" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pclib.nn.models.conv_classifier.ConvClassifier" title="pclib.nn.models.conv_classifier.ConvClassifier"><code class="xref py py-class docutils literal notranslate"><span class="pre">ConvClassifier</span></code></a></p>
+<div class="line-block">
+<div class="line">Similar to the ConvClassifer, except it learns an unsupervised feature extractor, and a separate backprop trained classifier.</div>
+<div class="line">This network is not currently customisable, but requires altering the init_layers() code to change the architecture.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>steps</strong> (<em>int</em>) – Number of steps to run the network for.</p></li>
+<li><p><strong>bias</strong> (<em>bool</em>) – Whether to include bias terms in the network.</p></li>
+<li><p><strong>symmetric</strong> (<em>bool</em>) – Whether to use symmetric weights.</p></li>
+<li><p><strong>actv_fn</strong> (<em>callable</em>) – Activation function to use in the network.</p></li>
+<li><p><strong>d_actv_fn</strong> (<em>Optional</em><em>[</em><em>callable</em><em>]</em>) – Derivative of the activation function to use in the network.</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – step size for x updates</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em>) – Device to run the network on.</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>) – Data type to use for network parameters.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier_us.ConvClassifierUs.classify">
+<span class="sig-name descname"><span class="pre">classify</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier_us.html#ConvClassifierUs.classify"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier_us.ConvClassifierUs.classify" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Classifies the input obs.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Number of steps to run inference for</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Predicted class</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier_us.ConvClassifierUs.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">back_on_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier_us.html#ConvClassifierUs.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier_us.ConvClassifierUs.forward" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Performs inference for the network.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Number of steps to run inference for</p></li>
+<li><p><strong>back_on_step</strong> (<em>|</em>) – Whether to backpropagate on each step. Default False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Output of the network
+| state (list): List of layer state dicts, each containing ‘x’ and ‘e’ (and ‘eps’ for FCPW)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier_us.ConvClassifierUs.generate">
+<span class="sig-name descname"><span class="pre">generate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier_us.html#ConvClassifierUs.generate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier_us.ConvClassifierUs.generate" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Not implemented as one cannot generate an input without a target, and this model does not pin targets.</div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier_us.ConvClassifierUs.get_output">
+<span class="sig-name descname"><span class="pre">get_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier_us.html#ConvClassifierUs.get_output"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier_us.ConvClassifierUs.get_output" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Returns the output of the network.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>state</strong> (<em>|</em>) – List of layer state dicts, each containing ‘x’ and ‘e’ (and ‘eps’ for FCPW)</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Output of the network</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier_us.ConvClassifierUs.init_layers">
+<span class="sig-name descname"><span class="pre">init_layers</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier_us.html#ConvClassifierUs.init_layers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier_us.ConvClassifierUs.init_layers" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Initialises the layers of the network.</div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier_us.ConvClassifierUs.reconstruct">
+<span class="sig-name descname"><span class="pre">reconstruct</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier_us.html#ConvClassifierUs.reconstruct"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier_us.ConvClassifierUs.reconstruct" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Initialises the state of the model using the observation.</div>
+<div class="line">Runs inference without pinning the observation.</div>
+<div class="line">In theory should reconstruct the observation.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Number of steps to run inference for. Uses self.steps if not provided.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Reconstructed observation
+| state (list): List of layer state dicts, each containing ‘x’ and ‘e’</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.conv_classifier_us.ConvClassifierUs.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier_us.html#ConvClassifierUs.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.conv_classifier_us.ConvClassifierUs.to" title="Link to this definition"></a></dt>
+<dd><p>Moves and/or casts the parameters and buffers.</p>
+<p>This can be called as</p>
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier_us.html#ConvClassifierUs.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier_us.html#ConvClassifierUs.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier_us.html#ConvClassifierUs.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">memory_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">torch.channels_last</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/conv_classifier_us.html#ConvClassifierUs.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<p>Its signature is similar to <code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.Tensor.to()</span></code>, but only accepts
+floating point or complex <code class="xref py py-attr docutils literal notranslate"><span class="pre">dtype</span></code>s. In addition, this method will
+only cast the floating point or complex parameters and buffers to <code class="xref py py-attr docutils literal notranslate"><span class="pre">dtype</span></code>
+(if given). The integral parameters and buffers will be moved
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">device</span></code>, if that is given, but with dtypes unchanged. When
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">non_blocking</span></code> is set, it tries to convert/move asynchronously
+with respect to the host if possible, e.g., moving CPU Tensors with
+pinned memory to CUDA devices.</p>
+<p>See below for examples.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method modifies the module in-place.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>device</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.device</span></code>) – the desired device of the parameters
+and buffers in this module</p></li>
+<li><p><strong>dtype</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.dtype</span></code>) – the desired floating point or complex dtype of
+the parameters and buffers in this module</p></li>
+<li><p><strong>tensor</strong> (<em>torch.Tensor</em>) – Tensor whose dtype and device are the desired
+dtype and device for all parameters and buffers in this module</p></li>
+<li><p><strong>memory_format</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.memory_format</span></code>) – the desired memory
+format for 4D parameters and buffers in this module (keyword
+only argument)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Module</p>
+</dd>
+</dl>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +IGNORE_WANT(&quot;non-deterministic&quot;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1913, -0.3420],</span>
+<span class="go">        [-0.5113, -0.2325]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">double</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1913, -0.3420],</span>
+<span class="go">        [-0.5113, -0.2325]], dtype=torch.float64)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +REQUIRES(env:TORCH_DOCTEST_CUDA1)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gpu1</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cuda:1&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">gpu1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">half</span><span class="p">,</span> <span class="n">non_blocking</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1914, -0.3420],</span>
+<span class="go">        [-0.5112, -0.2324]], dtype=torch.float16, device=&#39;cuda:1&#39;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cpu</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1914, -0.3420],</span>
+<span class="go">        [-0.5112, -0.2324]], dtype=torch.float16)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">cdouble</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.3741+0.j,  0.2382+0.j],</span>
+<span class="go">        [ 0.5593+0.j, -0.4443+0.j]], dtype=torch.complex128)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">cdouble</span><span class="p">))</span>
+<span class="go">tensor([[0.6122+0.j, 0.1150+0.j],</span>
+<span class="go">        [0.6122+0.j, 0.1150+0.j],</span>
+<span class="go">        [0.6122+0.j, 0.1150+0.j]], dtype=torch.complex128)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-pclib.nn.models.fc_classifier">
+<span id="pclib-nn-models-fc-classifier-module"></span><h2>pclib.nn.models.fc_classifier module<a class="headerlink" href="#module-pclib.nn.models.fc_classifier" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">pclib.nn.models.fc_classifier.</span></span><span class="sig-name descname"><span class="pre">FCClassifier</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_sizes=[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps=20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">symmetric=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actv_fn=&lt;function</span> <span class="pre">tanh&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d_actv_fn=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma=0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device=device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype=None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<div class="line-block">
+<div class="line">The standard PC model which stacks FC layers.</div>
+<div class="line">Predictions flow from targets to inputs (top-down).</div>
+<div class="line">Heavily customisable, however, the default settings usually give best results.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>in_features</strong> (<em>int</em>) – Number of input features</p></li>
+<li><p><strong>num_classes</strong> (<em>int</em>) – Number of classes</p></li>
+<li><p><strong>hidden_sizes</strong> (<em>list</em>) – List of hidden layer sizes</p></li>
+<li><p><strong>steps</strong> (<em>int</em>) – Number of steps to run inference for</p></li>
+<li><p><strong>bias</strong> (<em>bool</em>) – Whether to include bias in layers</p></li>
+<li><p><strong>symmetric</strong> (<em>bool</em>) – Whether to use same weights for top-down prediction and bottom-up error prop.</p></li>
+<li><p><strong>actv_fn</strong> (<em>callable</em>) – Activation function to use</p></li>
+<li><p><strong>d_actv_fn</strong> (<em>Optional</em><em>[</em><em>callable</em><em>]</em>) – Derivative of activation function to use</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – step size for x updates</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em>) – Device to run on</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>) – Data type to use</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.assert_grads">
+<span class="sig-name descname"><span class="pre">assert_grads</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.assert_grads"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.assert_grads" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Uses assertions to compare current gradients of each layer to manually calculated gradients.</div>
+<div class="line">Only useful if using autograd=True in training, otherwise comparing manual grads to themselves.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>state</strong> (<em>|</em>) – List of layer state dicts, each containing ‘x’ and ‘e’</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.calc_temp">
+<span class="sig-name descname"><span class="pre">calc_temp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">step_i</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.calc_temp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.calc_temp" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Calculates the temperature for the current step.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>step_i</strong> (<em>|</em>) – Current step</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Total number of steps</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Temperature for the current step = 1 - (step_i / steps)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">temp (float)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.classify">
+<span class="sig-name descname"><span class="pre">classify</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.classify"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.classify" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Performs inference on the obs once with each possible target pinned.</div>
+<div class="line">Returns the target with the lowest VFE.</div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">back_on_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.forward" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Performs inference phase of the model.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>y</strong> (<em>|</em>) – Target data</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Number of steps to run inference for. Uses self.steps if not provided.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Output of the model
+| state (list): List of layer state dicts, each containing ‘x’ and ‘e’ (and ‘eps’ for FCPW)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.generate">
+<span class="sig-name descname"><span class="pre">generate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.generate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.generate" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Performs inference with target pinned and input free to relax.</div>
+<div class="line">In theory, should generate an input from a target.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>y</strong> (<em>|</em>) – Target data</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Number of steps to run inference for. Uses self.steps if not provided.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Generated input</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.get_output">
+<span class="sig-name descname"><span class="pre">get_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.get_output"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.get_output" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Gets the output of the model.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>state</strong> (<em>|</em>) – List of layer state dicts, each containing ‘x’ and ‘e’ (and ‘eps’ for FCPW)</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Output of the model</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.in_features">
+<span class="sig-name descname"><span class="pre">in_features</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></em><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.in_features" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.inc_epochs">
+<span class="sig-name descname"><span class="pre">inc_epochs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.inc_epochs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.inc_epochs" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Increments the number of epochs trained by n.</div>
+<div class="line">Used by the trainer to keep track of the number of epochs trained.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>n</strong> (<em>|</em>) – Number of epochs to increment by.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.init_layers">
+<span class="sig-name descname"><span class="pre">init_layers</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.init_layers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.init_layers" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Initialises self.layers based on input parameters.</div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.init_state">
+<span class="sig-name descname"><span class="pre">init_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.init_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.init_state" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Initialises the state of the model. Xs are calculated using _init_xs().</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>y</strong> (<em>|</em>) – Target data</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of layer state dicts, each containing ‘x’ and ‘e’</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">state (list)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.num_classes">
+<span class="sig-name descname"><span class="pre">num_classes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></em><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.num_classes" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.reconstruct">
+<span class="sig-name descname"><span class="pre">reconstruct</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.reconstruct"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.reconstruct" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Initialises the state of the model using the observation (and target if supplied).</div>
+<div class="line">Runs inference without pinning the observation.</div>
+<div class="line">In theory should reconstruct the observation.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>y</strong> (<em>|</em>) – Target data</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Number of steps to run inference for. Uses self.steps if not provided.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Reconstructed observation</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.step">
+<span class="sig-name descname"><span class="pre">step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.step" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Performs one step of inference. Updates Xs first, then Es.</div>
+<div class="line">Both are updated from bottom to top.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>state</strong> (<em>|</em>) – List of layer state dicts, each containing ‘x’ and ‘e; (and ‘eps’ for FCPW)</p></li>
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>y</strong> (<em>|</em>) – Target data</p></li>
+<li><p><strong>temp</strong> (<em>|</em>) – Temperature to use for update</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.to" title="Link to this definition"></a></dt>
+<dd><p>Moves and/or casts the parameters and buffers.</p>
+<p>This can be called as</p>
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">memory_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">torch.channels_last</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<p>Its signature is similar to <code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.Tensor.to()</span></code>, but only accepts
+floating point or complex <code class="xref py py-attr docutils literal notranslate"><span class="pre">dtype</span></code>s. In addition, this method will
+only cast the floating point or complex parameters and buffers to <code class="xref py py-attr docutils literal notranslate"><span class="pre">dtype</span></code>
+(if given). The integral parameters and buffers will be moved
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">device</span></code>, if that is given, but with dtypes unchanged. When
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">non_blocking</span></code> is set, it tries to convert/move asynchronously
+with respect to the host if possible, e.g., moving CPU Tensors with
+pinned memory to CUDA devices.</p>
+<p>See below for examples.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method modifies the module in-place.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>device</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.device</span></code>) – the desired device of the parameters
+and buffers in this module</p></li>
+<li><p><strong>dtype</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.dtype</span></code>) – the desired floating point or complex dtype of
+the parameters and buffers in this module</p></li>
+<li><p><strong>tensor</strong> (<em>torch.Tensor</em>) – Tensor whose dtype and device are the desired
+dtype and device for all parameters and buffers in this module</p></li>
+<li><p><strong>memory_format</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.memory_format</span></code>) – the desired memory
+format for 4D parameters and buffers in this module (keyword
+only argument)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Module</p>
+</dd>
+</dl>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +IGNORE_WANT(&quot;non-deterministic&quot;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1913, -0.3420],</span>
+<span class="go">        [-0.5113, -0.2325]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">double</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1913, -0.3420],</span>
+<span class="go">        [-0.5113, -0.2325]], dtype=torch.float64)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +REQUIRES(env:TORCH_DOCTEST_CUDA1)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gpu1</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cuda:1&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">gpu1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">half</span><span class="p">,</span> <span class="n">non_blocking</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1914, -0.3420],</span>
+<span class="go">        [-0.5112, -0.2324]], dtype=torch.float16, device=&#39;cuda:1&#39;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cpu</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1914, -0.3420],</span>
+<span class="go">        [-0.5112, -0.2324]], dtype=torch.float16)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">cdouble</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.3741+0.j,  0.2382+0.j],</span>
+<span class="go">        [ 0.5593+0.j, -0.4443+0.j]], dtype=torch.complex128)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">cdouble</span><span class="p">))</span>
+<span class="go">tensor([[0.6122+0.j, 0.1150+0.j],</span>
+<span class="go">        [0.6122+0.j, 0.1150+0.j],</span>
+<span class="go">        [0.6122+0.j, 0.1150+0.j]], dtype=torch.complex128)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier.FCClassifier.vfe">
+<span class="sig-name descname"><span class="pre">vfe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_reduction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'mean'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unit_reduction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sum'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier.html#FCClassifier.vfe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier.FCClassifier.vfe" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Calculates the Variational Free Energy (VFE) of the model.</div>
+<div class="line">This is the sum of the squared prediction errors of each layer.</div>
+<div class="line">how batches and units are reduced is controlled by batch_reduction and unit_reduction.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>state</strong> (<em>|</em>) – List of layer state dicts, each containing ‘x’ and ‘e’</p></li>
+<li><p><strong>batch_reduction</strong> (<em>|</em>) – How to reduce over batches [‘sum’, ‘mean’, None], default=’mean’</p></li>
+<li><p><strong>unit_reduction</strong> (<em>|</em>) – How to reduce over units [‘sum’, ‘mean’], default=’sum’</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>VFE of the model (scalar)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">vfe (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-pclib.nn.models.fc_classifier_inv">
+<span id="pclib-nn-models-fc-classifier-inv-module"></span><h2>pclib.nn.models.fc_classifier_inv module<a class="headerlink" href="#module-pclib.nn.models.fc_classifier_inv" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_inv.FCClassifierInv">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">pclib.nn.models.fc_classifier_inv.</span></span><span class="sig-name descname"><span class="pre">FCClassifierInv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_sizes=[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps=20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">symmetric=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actv_fn=&lt;function</span> <span class="pre">tanh&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d_actv_fn=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma=0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device=device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype=None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_inv.html#FCClassifierInv"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_inv.FCClassifierInv" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pclib.nn.models.fc_classifier.FCClassifier" title="pclib.nn.models.fc_classifier.FCClassifier"><code class="xref py py-class docutils literal notranslate"><span class="pre">FCClassifier</span></code></a></p>
+<div class="line-block">
+<div class="line">Inherits most functionality from FCClassifier, except it predictions from inputs to targets (inputs at top, targets at bottom).</div>
+<div class="line">Based on Whittington and Bogacz 2017.</div>
+<div class="line">This model is the most effective classifier, achieving &gt;98% val accuracy on MNIST.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>in_features</strong> (<em>int</em>) – Number of input features</p></li>
+<li><p><strong>num_classes</strong> (<em>int</em>) – Number of classes</p></li>
+<li><p><strong>hidden_sizes</strong> (<em>list</em>) – List of hidden layer sizes</p></li>
+<li><p><strong>steps</strong> (<em>int</em>) – Number of steps to run inference for</p></li>
+<li><p><strong>bias</strong> (<em>bool</em>) – Whether to include bias in layers</p></li>
+<li><p><strong>symmetric</strong> (<em>bool</em>) – Whether to use same weights for top-down prediction and bottom-up error prop.</p></li>
+<li><p><strong>actv_fn</strong> (<em>callable</em>) – Activation function to use</p></li>
+<li><p><strong>d_actv_fn</strong> (<em>Optional</em><em>[</em><em>callable</em><em>]</em>) – Derivative of activation function to use</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – step size for x updates</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em>) – Device to run on</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>) – Data type to use</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_inv.FCClassifierInv.get_output">
+<span class="sig-name descname"><span class="pre">get_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_inv.html#FCClassifierInv.get_output"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_inv.FCClassifierInv.get_output" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Gets the output of the model.</div>
+<div class="line">Output is pulled from bottom layer, instead of top layer.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>state</strong> (<em>|</em>) – List of layer state dicts, each containing ‘x’ and ‘e’ (and ‘eps’ for FCPW)</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Output of the model</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_inv.FCClassifierInv.init_layers">
+<span class="sig-name descname"><span class="pre">init_layers</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_inv.html#FCClassifierInv.init_layers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_inv.FCClassifierInv.init_layers" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Almost identical to FCClassifier, except it swaps the position of in_features and num_classes.</div>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-pclib.nn.models.fc_classifier_us">
+<span id="pclib-nn-models-fc-classifier-us-module"></span><h2>pclib.nn.models.fc_classifier_us module<a class="headerlink" href="#module-pclib.nn.models.fc_classifier_us" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_us.FCClassifierUs">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">pclib.nn.models.fc_classifier_us.</span></span><span class="sig-name descname"><span class="pre">FCClassifierUs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_sizes=[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps=20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">symmetric=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actv_fn=&lt;function</span> <span class="pre">tanh&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d_actv_fn=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma=0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device=device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype=None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us.html#FCClassifierUs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_us.FCClassifierUs" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pclib.nn.models.fc_classifier.FCClassifier" title="pclib.nn.models.fc_classifier.FCClassifier"><code class="xref py py-class docutils literal notranslate"><span class="pre">FCClassifier</span></code></a></p>
+<div class="line-block">
+<div class="line">A Unsupervised version of FCClassifier.</div>
+<div class="line">Learns a feature extractor (self.layers) via unsupervised learning.</div>
+<div class="line">Also learns an mlp classifier (self.classifier) which takes the output of self.layers as input, via supervised learning.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>in_features</strong> (<em>int</em>) – Number of input features</p></li>
+<li><p><strong>num_classes</strong> (<em>int</em>) – Number of classes</p></li>
+<li><p><strong>hidden_sizes</strong> (<em>list</em>) – List of hidden layer sizes</p></li>
+<li><p><strong>steps</strong> (<em>int</em>) – Number of steps to run inference for</p></li>
+<li><p><strong>bias</strong> (<em>bool</em>) – Whether to include bias in layers</p></li>
+<li><p><strong>symmetric</strong> (<em>bool</em>) – Whether to use same weights for top-down prediction and bottom-up error prop.</p></li>
+<li><p><strong>actv_fn</strong> (<em>callable</em>) – Activation function to use</p></li>
+<li><p><strong>d_actv_fn</strong> (<em>Optional</em><em>[</em><em>callable</em><em>]</em>) – Derivative of activation function to use</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – step size for x updates</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em>) – Device to run on</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>) – Data type to use</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_us.FCClassifierUs.classify">
+<span class="sig-name descname"><span class="pre">classify</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us.html#FCClassifierUs.classify"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_us.FCClassifierUs.classify" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Performs inference on the observation and passes the output through the classifier.</div>
+<div class="line">Returns the argmax of the classifier output.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Number of steps to run inference for. Uses self.steps if not provided.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Argmax(dim=1) output of the classifier</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_us.FCClassifierUs.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">back_on_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us.html#FCClassifierUs.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_us.FCClassifierUs.forward" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Performs inference phase of the model.</div>
+<div class="line">Uses self.classifier to get output.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Number of steps to run inference for. Uses self.steps if not provided.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Output of the model
+| state (list): List of layer state dicts, each containing ‘x’ and ‘e’</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_us.FCClassifierUs.generate">
+<span class="sig-name descname"><span class="pre">generate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us.html#FCClassifierUs.generate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_us.FCClassifierUs.generate" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Not implemented as one cannot generate an input without a target, and this model does not pin targets.</div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_us.FCClassifierUs.get_output">
+<span class="sig-name descname"><span class="pre">get_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us.html#FCClassifierUs.get_output"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_us.FCClassifierUs.get_output" title="Link to this definition"></a></dt>
+<dd><p>Takes the output of the last layer from the feature extractor and passes it through the classifier.
+Returns the output of the classifier.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>state</strong> (<em>|</em>) – List of layer state dicts, each containing ‘x’ and ‘e’</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Output of the classifier</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_us.FCClassifierUs.init_layers">
+<span class="sig-name descname"><span class="pre">init_layers</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us.html#FCClassifierUs.init_layers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_us.FCClassifierUs.init_layers" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Initialises self.layers based on input parameters.</div>
+<div class="line">Initialises self.classifier as a simple MLP, to classify the output of self.layers.</div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_us.FCClassifierUs.reconstruct">
+<span class="sig-name descname"><span class="pre">reconstruct</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us.html#FCClassifierUs.reconstruct"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_us.FCClassifierUs.reconstruct" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Initialises the state of the model using the observation.</div>
+<div class="line">Runs inference without pinning the observation.</div>
+<div class="line">In theory should reconstruct the observation.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Number of steps to run inference for. Uses self.steps if not provided.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Reconstructed observation
+| state (list): List of layer state dicts, each containing ‘x’ and ‘e’</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_us.FCClassifierUs.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us.html#FCClassifierUs.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_us.FCClassifierUs.to" title="Link to this definition"></a></dt>
+<dd><p>Moves and/or casts the parameters and buffers.</p>
+<p>This can be called as</p>
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us.html#FCClassifierUs.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us.html#FCClassifierUs.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us.html#FCClassifierUs.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">memory_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">torch.channels_last</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us.html#FCClassifierUs.to"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd></dd></dl>
+
+<p>Its signature is similar to <code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.Tensor.to()</span></code>, but only accepts
+floating point or complex <code class="xref py py-attr docutils literal notranslate"><span class="pre">dtype</span></code>s. In addition, this method will
+only cast the floating point or complex parameters and buffers to <code class="xref py py-attr docutils literal notranslate"><span class="pre">dtype</span></code>
+(if given). The integral parameters and buffers will be moved
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">device</span></code>, if that is given, but with dtypes unchanged. When
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">non_blocking</span></code> is set, it tries to convert/move asynchronously
+with respect to the host if possible, e.g., moving CPU Tensors with
+pinned memory to CUDA devices.</p>
+<p>See below for examples.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method modifies the module in-place.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>device</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.device</span></code>) – the desired device of the parameters
+and buffers in this module</p></li>
+<li><p><strong>dtype</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.dtype</span></code>) – the desired floating point or complex dtype of
+the parameters and buffers in this module</p></li>
+<li><p><strong>tensor</strong> (<em>torch.Tensor</em>) – Tensor whose dtype and device are the desired
+dtype and device for all parameters and buffers in this module</p></li>
+<li><p><strong>memory_format</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">torch.memory_format</span></code>) – the desired memory
+format for 4D parameters and buffers in this module (keyword
+only argument)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Module</p>
+</dd>
+</dl>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +IGNORE_WANT(&quot;non-deterministic&quot;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1913, -0.3420],</span>
+<span class="go">        [-0.5113, -0.2325]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">double</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1913, -0.3420],</span>
+<span class="go">        [-0.5113, -0.2325]], dtype=torch.float64)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +REQUIRES(env:TORCH_DOCTEST_CUDA1)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gpu1</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cuda:1&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">gpu1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">half</span><span class="p">,</span> <span class="n">non_blocking</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1914, -0.3420],</span>
+<span class="go">        [-0.5112, -0.2324]], dtype=torch.float16, device=&#39;cuda:1&#39;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cpu</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">cpu</span><span class="p">)</span>
+<span class="go">Linear(in_features=2, out_features=2, bias=True)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.1914, -0.3420],</span>
+<span class="go">        [-0.5112, -0.2324]], dtype=torch.float16)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">cdouble</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="o">.</span><span class="n">weight</span>
+<span class="go">Parameter containing:</span>
+<span class="go">tensor([[ 0.3741+0.j,  0.2382+0.j],</span>
+<span class="go">        [ 0.5593+0.j, -0.4443+0.j]], dtype=torch.complex128)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">linear</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">cdouble</span><span class="p">))</span>
+<span class="go">tensor([[0.6122+0.j, 0.1150+0.j],</span>
+<span class="go">        [0.6122+0.j, 0.1150+0.j],</span>
+<span class="go">        [0.6122+0.j, 0.1150+0.j]], dtype=torch.complex128)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-pclib.nn.models.fc_classifier_us_inv">
+<span id="pclib-nn-models-fc-classifier-us-inv-module"></span><h2>pclib.nn.models.fc_classifier_us_inv module<a class="headerlink" href="#module-pclib.nn.models.fc_classifier_us_inv" title="Link to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_us_inv.FCClassifierUsInv">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">pclib.nn.models.fc_classifier_us_inv.</span></span><span class="sig-name descname"><span class="pre">FCClassifierUsInv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_features</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_sizes=[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps=20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">symmetric=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">actv_fn=&lt;function</span> <span class="pre">tanh&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d_actv_fn=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma=0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device=device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype=None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us_inv.html#FCClassifierUsInv"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_us_inv.FCClassifierUsInv" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pclib.nn.models.fc_classifier_us.FCClassifierUs" title="pclib.nn.models.fc_classifier_us.FCClassifierUs"><code class="xref py py-class docutils literal notranslate"><span class="pre">FCClassifierUs</span></code></a></p>
+<div class="line-block">
+<div class="line">Inherits most functionality from FCClassifierUs, except it predictions from inputs to targets (inputs at top, targets at bottom).</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>in_features</strong> (<em>int</em>) – Number of input features</p></li>
+<li><p><strong>num_classes</strong> (<em>int</em>) – Number of classes</p></li>
+<li><p><strong>hidden_sizes</strong> (<em>list</em>) – List of hidden layer sizes</p></li>
+<li><p><strong>steps</strong> (<em>int</em>) – Number of steps to run inference for</p></li>
+<li><p><strong>bias</strong> (<em>bool</em>) – Whether to include bias in layers</p></li>
+<li><p><strong>symmetric</strong> (<em>bool</em>) – Whether to use same weights for top-down prediction and bottom-up error prop.</p></li>
+<li><p><strong>actv_fn</strong> (<em>callable</em>) – Activation function to use</p></li>
+<li><p><strong>d_actv_fn</strong> (<em>Optional</em><em>[</em><em>callable</em><em>]</em>) – Derivative of activation function to use</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – step size for x updates</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em>) – Device to run on</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>) – Data type to use</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_us_inv.FCClassifierUsInv.get_output">
+<span class="sig-name descname"><span class="pre">get_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us_inv.html#FCClassifierUsInv.get_output"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_us_inv.FCClassifierUsInv.get_output" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Takes the output from the feature extractor (bottom layer) and passes it through the classifier.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>state</strong> (<em>|</em>) – List of layer state dicts, each containing ‘x’ and ‘e’</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Output of the classifier</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_us_inv.FCClassifierUsInv.init_layers">
+<span class="sig-name descname"><span class="pre">init_layers</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us_inv.html#FCClassifierUsInv.init_layers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_us_inv.FCClassifierUsInv.init_layers" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Initialises self.layers based on input parameters.</div>
+<div class="line">Doesn’t include num_classes layer in self.layers.</div>
+<div class="line">Initialises self.classifier as a simple MLP, to classify the output of self.layers.</div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pclib.nn.models.fc_classifier_us_inv.FCClassifierUsInv.reconstruct">
+<span class="sig-name descname"><span class="pre">reconstruct</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pclib/nn/models/fc_classifier_us_inv.html#FCClassifierUsInv.reconstruct"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pclib.nn.models.fc_classifier_us_inv.FCClassifierUsInv.reconstruct" title="Link to this definition"></a></dt>
+<dd><div class="line-block">
+<div class="line">Initialises the state of the model using the observation.</div>
+<div class="line">Runs inference without pinning the observation.</div>
+<div class="line">In theory should reconstruct the observation.</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>obs</strong> (<em>|</em>) – Input data</p></li>
+<li><p><strong>steps</strong> (<em>|</em>) – Number of steps to run inference for. Uses self.steps if not provided.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Reconstructed observation
+| state (list): List of layer state dicts, each containing ‘x’ and ‘e’</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><div class="line-block">
+<div class="line">out (torch.Tensor)</div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-pclib.nn.models">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-pclib.nn.models" title="Link to this heading"></a></h2>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pclib.nn.layers.html" class="btn btn-neutral float-left" title="pclib.nn.layers package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pclib.optim.html" class="btn btn-neutral float-right" title="pclib.optim package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Joe Griffith.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
