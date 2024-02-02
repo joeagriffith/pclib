@@ -1,8 +1,8 @@
 # PCLib
 
 
-PCLib is a python package with a torch-like API for building and training Predictive Coding Networks. 
-Documentation can be found [here](joeagriffith.github.io/pclib/).
+PCLib is a python package with a torch-like API for building and training Predictive Coding Networks.<br> 
+Documentation can be found [here](https://joeagriffith.github.io/pclib/).
 
 The package includes a fully-connected layer implementation, as well as a convolutional one. Both are customisable and can be jointly, or separately used for construction neural networks.
 
