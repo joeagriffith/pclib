@@ -1,8 +1,5 @@
-pclib.nn.layers package
-=======================
-
-Submodules
-----------
+pclib.nn.layers
+===============
 
 pclib.nn.layers.conv module
 ---------------------------

@@ -1,5 +1,5 @@
-pclib.nn.models package
-=======================
+pclib.nn.models
+===============
 
 Submodules
 ----------

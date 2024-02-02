@@ -1,8 +1,5 @@
-pclib.nn package
-================
-
-Subpackages
------------
+pclib.nn
+========
 
 .. toctree::
    :maxdepth: 4

@@ -1,8 +1,5 @@
-pclib.optim package
-===================
-
-Submodules
-----------
+pclib.optim
+===========
 
 pclib.optim.eval module
 -----------------------
