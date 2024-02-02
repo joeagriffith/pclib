@@ -148,7 +148,7 @@ class FC(nn.Module):
             
     def init_state(self, batch_size:int):
         """
-        | Builds a new state dictionary for the layer.
+        | Builds a new state dictionary for the layer, containing torch.tensors for 'x' and 'e'.
 
         Parameters
         ----------
