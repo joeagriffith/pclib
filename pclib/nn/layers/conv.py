@@ -183,7 +183,7 @@ class Conv2d(nn.Module):
 
     def predict(self, state:dict):
         """
-        | Calculates the prediction of state['x] the layer below.
+        | Calculates the prediction of state['x'] the layer below.
 
         Parameters
         ----------
