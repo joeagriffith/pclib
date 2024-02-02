@@ -10,8 +10,11 @@ The package also includes some predesigned classification models, each with vary
 
 Both models and layers are largely customiseable via their initialisation arguments. The fully connected networks are customisable in both width and depth via the initialisation arguments, however the convolutional networks are not. It is worth referring to the documentation to get a better understanding of the API.
 
-## Import
+## Installation
+```
 pip install pclib
+```
+
 
 ## Example usage
 
