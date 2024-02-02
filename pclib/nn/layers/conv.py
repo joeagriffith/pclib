@@ -80,6 +80,7 @@ class Conv2d(nn.Module):
         self.stride = stride
         self.padding = padding
         self.has_bias = has_bias
+        self.symmetric = symmetric
         self.maxpool = maxpool
 
         # Automatically set d_actv_fn if not provided
@@ -131,6 +132,7 @@ class Conv2d(nn.Module):
             f"    stride: {self.stride}\n" + \
             f"    padding: {self.padding}\n" + \
             f"    has_bias: {self.has_bias}\n" + \
+            f"    symmetric: {self.symmetric}\n" + \
             f"    maxpool: {self.maxpool}\n"
         
         string = base_str[:base_str.find('\n')] + custom_info + base_str[base_str.find('\n'):]
@@ -194,7 +196,8 @@ class Conv2d(nn.Module):
                 The layers prediction of 'x' in the layer below.
         """
 
-        x = F.interpolate(state['x'].detach(), scale_factor=self.maxpool, mode='nearest')
+        x = state['x'].detach() if self.symmetric else state['x']
+        x = F.interpolate(x, scale_factor=self.maxpool, mode='nearest')
         prev_shape = (x.shape[0], self.prev_shape[0], self.prev_shape[1], self.prev_shape[2])
         actv = conv2d_input(prev_shape, self.conv[0].weight, self.actv_fn(x), stride=self.stride, padding=self.padding, dilation=1, groups=1)
         if self.has_bias:
@@ -234,12 +237,15 @@ class Conv2d(nn.Module):
 
         assert pred is not None, "Prediction must be provided to update_e()."
 
+        if self.symmetric:
+            state['x'] = state['x'].detach()
+
         if pred.dim() == 2:
             pred = pred.unsqueeze(-1).unsqueeze(-1)
-        state['e'] = state['x'].detach() - pred
+        state['e'] = state['x'] - pred
 
         if temp is not None:
-            eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
+            eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
             state['e'] += eps
 
     def update_x(self, state:dict, e_below:torch.Tensor=None, temp:float=None):
@@ -253,13 +259,14 @@ class Conv2d(nn.Module):
         """
         dx = torch.zeros_like(state['x'], device=self.device)
         if e_below is not None:
+            e_below = e_below.detach()
             if e_below.dim() == 2:
                 e_below = e_below.unsqueeze(-1).unsqueeze(-1)
             dx += self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
 
-        dx += -state['e']
+        dx += -state['e'].detach()
 
-        dx += 0.1 * -state['x']
+        dx += 0.1 * -state['x'].detach()
         
         if temp is not None:
             dx += torch.randn_like(state['x'], device=self.device) * 0.034 * temp

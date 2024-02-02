@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from pclib.nn.layers import FC
 from pclib.utils.functional import format_y
+from typing import List, Optional
 
 
 class FCClassifier(nn.Module):
@@ -41,7 +42,20 @@ class FCClassifier(nn.Module):
     in_features: int
     num_classes: int
 
-    def __init__(self, in_features, num_classes, hidden_sizes = [], steps=20, bias=True, symmetric=True, actv_fn=F.tanh, d_actv_fn=None, gamma=0.1, device=torch.device('cpu'), dtype=None):
+    def __init__(
+            self, 
+            in_features:int, 
+            num_classes:int, 
+            hidden_sizes:List[int] = [], 
+            steps:int = 20, 
+            bias:bool = True, 
+            symmetric:bool = True, 
+            actv_fn:callable = F.tanh, 
+            d_actv_fn:callable = None, 
+            gamma:float = 0.1, 
+            device:torch.device = torch.device('cpu'), 
+            dtype:torch.dtype = None
+        ):
         super().__init__()
 
         self.factory_kwargs = {'actv_fn': actv_fn, 'd_actv_fn': d_actv_fn, 'gamma': gamma, 'has_bias': bias, 'symmetric': symmetric, 'dtype': dtype}
@@ -91,29 +105,37 @@ class FCClassifier(nn.Module):
             in_features = out_features
         self.layers = nn.ModuleList(layers)
     
-    def inc_epochs(self, n=1):
+    def inc_epochs(self, n:int=1):
         """
         | Increments the number of epochs trained by n.
         | Used by the trainer to keep track of the number of epochs trained.
 
-        Args:
-            | n (int): Number of epochs to increment by.
+        Parameters
+        ----------
+            n : int
+                Number of epochs to increment by.
         """
         self.epochs_trained += n    
 
-    def vfe(self, state, batch_reduction='mean', unit_reduction='sum'):
+    def vfe(self, state:List[dict], batch_reduction:str = 'mean', unit_reduction:str = 'sum'):
         """
         | Calculates the Variational Free Energy (VFE) of the model.
         | This is the sum of the squared prediction errors of each layer.
         | how batches and units are reduced is controlled by batch_reduction and unit_reduction.
 
-        Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e'
-            | batch_reduction (str): How to reduce over batches ['sum', 'mean', None], default='mean'
-            | unit_reduction (str): How to reduce over units ['sum', 'mean'], default='sum'
+        Parameters
+        ----------
+            state : List[dict] 
+                List of layer state dicts, each containing 'x' and 'e'
+            batch_reduction : str 
+                How to reduce over batches ['sum', 'mean', None], default='mean'
+            unit_reduction : str
+                How to reduce over units ['sum', 'mean'], default='sum'
 
-        Returns:
-            | vfe (torch.Tensor): VFE of the model (scalar)
+        Returns
+        -------
+            torch.Tensor
+                VFE of the model (scalar)
         """
         # Reduce units for each layer
         if unit_reduction == 'sum':
@@ -130,16 +152,21 @@ class FCClassifier(nn.Module):
 
         return vfe
 
-    def step(self, state, obs=None, y=None, temp=None):
+    def step(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None, temp:float = None):
         """
         | Performs one step of inference. Updates Xs first, then Es.
         | Both are updated from bottom to top.
 
-        Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e; (and 'eps' for FCPW)
-            | obs (Optional[torch.Tensor]): Input data
-            | y (Optional[torch.Tensor]): Target data
-            | temp (Optional[float]): Temperature to use for update
+        Parameters
+        ----------
+            state : List[dict]
+                List of layer state dicts, each containing 'x' and 'e; (and 'eps' for FCPW)
+            obs : Optional[torch.Tensor]
+                Input data
+            y : Optional[torch.Tensor]
+                Target data
+            temp : Optional[float]
+                Temperature to use for update
         """
         for i, layer in enumerate(self.layers):
             if i > 0 or obs is None: # Don't update bottom x if obs is given
@@ -151,16 +178,20 @@ class FCClassifier(nn.Module):
                 pred = self.layers[i+1].predict(state[i+1])
                 layer.update_e(state[i], pred, temp=temp)
 
-    def _init_xs(self, state, obs=None, y=None):
+    def _init_xs(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None):
         """
         | Initialises xs using either y or obs if provided.
         | If y is provided, then top down predictions are calculated and used as initial xs.
         | Else if obs is provided, then bottom up error propagations (pred=0) are calculated and used as initial xs.
 
-        Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e'
-            | obs (Optional[torch.Tensor]): Input data
-            | y (Optional[torch.Tensor]): Target data
+        Parameters
+        ----------
+            state : List[dict]
+                List of layer state dicts, each containing 'x' and 'e'
+            obs : Optional[torch.Tensor]
+                Input data
+            y : Optional[torch.Tensor]
+                Target data
         """
         with torch.no_grad():
             if y is not None:
@@ -181,17 +212,37 @@ class FCClassifier(nn.Module):
                         # Found that using actv_fn here gives better results
                         state[i]['x'] = layer.actv_fn(layer.propagate(x_below))
 
+    def _init_es(self, state:List[dict]):
+        """
+        | Calculates the initial errors for each layer.
+        | Assumes that Xs have already been initialised.
 
-    def init_state(self, obs=None, y=None):
+        Parameters
+        ----------
+            state : List[dict]
+                List of state dicts for each layer, each containing 'x' and 'e' tensors.
+        """
+        with torch.no_grad():
+            for i, layer in enumerate(self.layers):
+                if i < len(self.layers) - 1:
+                    pred = self.layers[i+1].predict(state[i+1])
+                    layer.update_e(state[i], pred, temp=1.0)
+
+    def init_state(self, obs:torch.Tensor = None, y:torch.Tensor = None):
         """
         | Initialises the state of the model. Xs are calculated using _init_xs().
 
-        Args:
-            | obs (Optional[torch.Tensor]): Input data
-            | y (Optional[torch.Tensor]): Target data
+        Parameters
+        ----------
+            obs : Optional[torch.Tensor]
+                Input data
+            y : Optional[torch.Tensor]
+                Target data
 
-        Returns:
-            | state (list): List of layer state dicts, each containing 'x' and 'e'
+        Returns
+        -------
+            List[dict]
+                List of state dicts for each layer, each containing 'x' and 'e'
         """
         if obs is not None:
             b_size = obs.shape[0]
@@ -204,6 +255,7 @@ class FCClassifier(nn.Module):
             state.append(layer.init_state(b_size))
             
         self._init_xs(state, obs, y)
+        self._init_es(state)
 
         return state
 
@@ -213,43 +265,58 @@ class FCClassifier(nn.Module):
             layer.to(device)
         return self
 
-    def get_output(self, state):
+    def get_output(self, state:List[dict]):
         """
         | Gets the output of the model.
 
-        Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+        Parameters
+        ----------
+            state : List[dict] 
+                List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
 
-        Returns:
-            | out (torch.Tensor): Output of the model
+        Returns
+        -------
+            torch.Tensor
+                Output of the model
         """
         return state[-1]['x']
 
-    def calc_temp(self, step_i, steps):
+    def calc_temp(self, step_i:int, steps:int):
         """
         | Calculates the temperature for the current step.
 
-        Args:
-            | step_i (int): Current step
-            | steps (int): Total number of steps
+        Parameters
+        ----------
+            step_i : int
+                Current step
+            steps : int
+                Total number of steps
 
-        Returns:
-            | temp (float): Temperature for the current step = 1 - (step_i / steps)
+        Returns
+        -------
+            float
+                Temperature for the current step = 1 - (step_i / steps)
         """
         return 1 - (step_i / steps)
 
-    def forward(self, obs=None, y=None, steps=None, back_on_step=False):
+    def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, steps:int = None, back_on_step:bool = False):
         """
         | Performs inference phase of the model.
         
-        Args:
-            | obs (Optional[torch.Tensor]): Input data
-            | y (Optional[torch.Tensor]): Target data
-            | steps (Optional[int]): Number of steps to run inference for. Uses self.steps if not provided.
+        Parameters
+            obs : Optional[torch.Tensor]
+                Input data
+            y : Optional[torch.Tensor]
+                Target data
+            steps : Optional[int]
+                Number of steps to run inference for. Uses self.steps if not provided.
 
-        Returns:
-            | out (torch.Tensor): Output of the model
-            | state (list): List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+        Returns
+        -------
+            torch.Tensor
+                Output of the model
+            List[dict]
+                List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
         """
         if steps is None:
             steps = self.steps
@@ -266,13 +333,15 @@ class FCClassifier(nn.Module):
             
         return out, state
 
-    def assert_grads(model, state):
+    def assert_grads(model, state:List[dict]):
         """
         | Uses assertions to compare current gradients of each layer to manually calculated gradients.
         | Only useful if using autograd=True in training, otherwise comparing manual grads to themselves.
 
-        Args:
-            | state (list): List of layer state dicts, each containing 'x' and 'e'
+        Parameters
+        ----------
+            state : List[dict]
+                List of state dicts for each layer, each containing 'x' and 'e'
         """
         for i, layer in enumerate(model.layers):
             if i > 0:
@@ -283,30 +352,41 @@ class FCClassifier(nn.Module):
         | Performs inference with target pinned and input free to relax.
         | In theory, should generate an input from a target.
 
-        Args:
-            | y (torch.Tensor): Target data
-            | steps (Optional[int]): Number of steps to run inference for. Uses self.steps if not provided.
+        Parameters
+        ----------
+            y : torch.Tensor    
+                Target data
+            steps : Optional[int]
+                Number of steps to run inference for. Uses self.steps if not provided.
         
-        Returns:
-            | out (torch.Tensor): Generated input
+        Returns
+        -------
+            torch.Tensor
+                Generated input
         """
         y = format_y(y, self.num_classes)
         _, state = self.forward(y=y, steps=steps)
         return state[0]['x']
 
-    def reconstruct(self, obs, y=None, steps=None):
+    def reconstruct(self, obs:torch.Tensor, y:torch.Tensor = None, steps:int = None):
         """
         | Initialises the state of the model using the observation (and target if supplied).
         | Runs inference without pinning the observation.
         | In theory should reconstruct the observation.
 
-        Args:
-            | obs (torch.Tensor): Input data
-            | y (Optional[torch.Tensor]): Target data
-            | steps (Optional[int]): Number of steps to run inference for. Uses self.steps if not provided.
+        Parameters
+        ----------
+            obs : torch.Tensor
+                Input data
+            y : Optional[torch.Tensor]
+                Target data
+            steps : Optional[int]
+                Number of steps to run inference for. Uses self.steps if not provided.
 
-        Returns:
-            | out (torch.Tensor): Reconstructed observation
+        Returns
+        -------
+            torch.Tensor
+                Reconstructed observation
         """
         if steps is None:
             steps = self.steps
@@ -321,10 +401,22 @@ class FCClassifier(nn.Module):
 
         return out
     
-    def classify(self, obs, steps=None):
+    def classify(self, obs:torch.Tensor, steps:int=None):
         """
         | Performs inference on the obs once with each possible target pinned.
         | Returns the target with the lowest VFE.
+        
+        Parameters
+        ----------
+            obs : torch.Tensor
+                Input data
+            steps : Optional[int]
+                Number of steps to run inference for. Uses self.steps if not provided.
+
+        Returns
+        -------
+            torch.Tensor
+                Argmax(dim=1) output of the classifier
         """
         assert len(obs.shape) == 2, f"Input must be 2D, got {len(obs.shape)}D"
     

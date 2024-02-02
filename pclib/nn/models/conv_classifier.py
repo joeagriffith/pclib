@@ -111,7 +111,7 @@ class ConvClassifier(nn.Module):
 
         Parameters
         ----------
-            state : list
+            state : List[dict]
                 List of state dicts for each layer, each containing 'x' and 'e' tensors.
             batch_reduction : str
                 How to reduce over batches ['sum', 'mean', None]
@@ -201,6 +201,22 @@ class ConvClassifier(nn.Module):
                         x_below = state[i-1]['x'].detach()
                         state[i]['x'] = layer.propagate(x_below)
 
+    def _init_es(self, state:List[dict]):
+        """
+        | Calculates the initial errors for each layer.
+        | Assumes that Xs have already been initialised.
+
+        Parameters
+        ----------
+            state : List[dict]
+                List of state dicts for each layer, each containing 'x' and 'e' tensors.
+        """
+        with torch.no_grad():
+            for i, layer in enumerate(self.layers):
+                if i < len(self.layers) - 1:
+                    pred = self.layers[i+1].predict(state[i+1])
+                    layer.update_e(state[i], pred, temp=1.0)
+
     def init_state(self, obs:torch.Tensor = None, y:torch.Tensor = None):
         """
         | Initialises the state of the network.
@@ -228,6 +244,7 @@ class ConvClassifier(nn.Module):
             state.append(layer.init_state(b_size))
         
         self._init_xs(state, obs, y)
+        self._init_es(state)
         
         return state
 
@@ -266,7 +283,7 @@ class ConvClassifier(nn.Module):
         
         Returns
         -------
-            temp : float
+            float
                 Temperature for the current step = 1 - (step_i / steps)
         """
         return 1 - (step_i / steps)
@@ -288,10 +305,10 @@ class ConvClassifier(nn.Module):
         
         Returns
         -------
-            out : torch.Tensor
+            torch.Tensor
                 Output of the network
-            state : list
-                List of layer state dicts, each containing 'x' and 'e'
+            List[dict]
+                List of state dicts for each layer, each containing 'x' and 'e'
         """
         if steps is None:
             steps = self.steps

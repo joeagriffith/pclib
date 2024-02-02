@@ -183,8 +183,8 @@ class FC(nn.Module):
             torch.Tensor
                 Prediction of state['x'] in the layer below.
         """
-        weight_td = self.weight.T if self.symmetric else self.weight_td
         x = state['x'].detach() if self.symmetric else state['x']
+        weight_td = self.weight.T if self.symmetric else self.weight_td
         return F.linear(self.actv_fn(x), weight_td, self.bias)
     
     
@@ -246,23 +246,19 @@ class FC(nn.Module):
             e_below : Optional[torch.Tensor]
                 state['e'] from the layer below. None if input layer.
         """
-        if not self.symmetric:
-            state['x'] = state['x'].detach()
-            state['e'] = state['e'].detach()
-
         # If not input layer, propagate error from layer below
         dx = torch.zeros_like(state['x'], device=self.device)
         if e_below is not None:
             e_below = e_below.detach()
             if e_below.dim() == 4:
                 e_below = e_below.flatten(1)
-            dx += self.propagate(e_below) * self.d_actv_fn(state['x'])
+            dx += self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
 
-        dx += -state['e']
+        dx += -state['e'].detach()
 
-        dx += 0.1 * -state['x']
+        dx += 0.1 * -state['x'].detach()
 
         if temp is not None:
             dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034
 
-        state['x'] = state['x'] + self.gamma * dx
+        state['x'] = state['x'].detach() + self.gamma * dx

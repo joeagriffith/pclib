@@ -118,7 +118,7 @@ class ConvClassifierUs(ConvClassifier):
         -------
             torch.Tensor
                 Output of the network
-            list
+            List[dict]
                 List of layer state dicts, each containing 'x' and 'e'
         """
         if steps is None:
@@ -171,7 +171,7 @@ class ConvClassifierUs(ConvClassifier):
         Returns:
             torch.Tensor
                 Reconstructed observation
-            list
+            List[dict]
                 List of states for each layer, each is a dict containing 'x' and 'e'.
         """
         if steps is None:
