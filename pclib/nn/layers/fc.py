@@ -262,3 +262,16 @@ class FC(nn.Module):
             dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034
 
         state['x'] = state['x'].detach() + self.gamma * dx
+
+    def assert_grads(self, state, e_below):
+        """
+        | Assert grads are correct.
+        """
+
+        true_weight_grad = -(self.actv_fn(state['x']).T @ e_below) / state['x'].size(0)
+        assert torch.allclose(self.weight.grad, true_weight_grad), f"Back Weight grad:\n{self.weight.grad}\nCalc weight grad:\n{true_weight_grad}"
+
+        if self.memory_vector is not None:
+            true_memory_grad = -state['e'].mean(0)
+        assert torch.allclose(self.memory_vector.grad, true_memory_grad)
+        

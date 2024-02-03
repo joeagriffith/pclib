@@ -139,9 +139,9 @@ class FCClassifier(nn.Module):
         """
         # Reduce units for each layer
         if unit_reduction == 'sum':
-            vfe = [state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+            vfe = [0.5 * state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
         elif unit_reduction =='mean':
-            vfe = [state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+            vfe = [0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
         # Reduce layers
         vfe = sum(vfe)
         # Reduce batches
@@ -151,32 +151,6 @@ class FCClassifier(nn.Module):
             vfe = vfe.mean()
 
         return vfe
-
-    def step(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None, temp:float = None):
-        """
-        | Performs one step of inference. Updates Xs first, then Es.
-        | Both are updated from bottom to top.
-
-        Parameters
-        ----------
-            state : List[dict]
-                List of layer state dicts, each containing 'x' and 'e; (and 'eps' for FCPW)
-            obs : Optional[torch.Tensor]
-                Input data
-            y : Optional[torch.Tensor]
-                Target data
-            temp : Optional[float]
-                Temperature to use for update
-        """
-        for i, layer in enumerate(self.layers):
-            if i > 0 or obs is None: # Don't update bottom x if obs is given
-                if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
-                    e_below = state[i-1]['e'] if i > 0 else None
-                    layer.update_x(state[i], e_below, temp=temp)
-        for i, layer in enumerate(self.layers):
-            if i < len(self.layers) - 1:
-                pred = self.layers[i+1].predict(state[i+1])
-                layer.update_e(state[i], pred, temp=temp)
 
     def _init_xs(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None):
         """
@@ -299,6 +273,35 @@ class FCClassifier(nn.Module):
         """
         return 1 - (step_i / steps)
 
+    def step(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None, temp:float = None):
+        """
+        | Performs one step of inference. Updates Xs first, then Es.
+        | Both are updated from bottom to top.
+
+        Parameters
+        ----------
+            state : List[dict]
+                List of layer state dicts, each containing 'x' and 'e; (and 'eps' for FCPW)
+            obs : Optional[torch.Tensor]
+                Input data
+            y : Optional[torch.Tensor]
+                Target data
+            temp : Optional[float]
+                Temperature to use for update
+        """
+        for i, layer in enumerate(self.layers):
+            if i > 0 or obs is None: # Don't update bottom x if obs is given
+                if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
+                    e_below = state[i-1]['e'] if i > 0 else None
+                    layer.update_x(state[i], e_below, temp=temp)
+        for i, layer in enumerate(self.layers):
+            if i < len(self.layers) - 1:
+                pred = self.layers[i+1].predict(state[i+1])
+                layer.update_e(state[i], pred, temp=temp)
+            elif i == len(self.layers) - 1:
+                pred = self.layers[i].mem_predict(state[i])
+                layer.update_e(state[i], pred, temp=temp)
+
     def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, steps:int = None, back_on_step:bool = False):
         """
         | Performs inference phase of the model.
@@ -345,7 +348,7 @@ class FCClassifier(nn.Module):
         """
         for i, layer in enumerate(model.layers):
             if i > 0:
-                layer.assert_grad(state[i], state[i-1]['e'])                
+                layer.assert_grads(state[i], state[i-1]['e'])                
     
     def generate(self, y, steps=None):
         """

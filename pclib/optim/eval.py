@@ -67,7 +67,7 @@ def track_vfe(model:torch.nn.Module, x:torch.Tensor = None, y:torch.Tensor = Non
         model.step(state, x, y, temp)
         vfes.append(model.vfe(state).item())
         for i in range(len(model.layers)):
-            E[i].append(state[i]['e'].square().sum(dim=1).mean().item())
+            E[i].append(0.5 * state[i]['e'].square().sum(dim=1).mean().item())
             X[i].append(state[i]['x'].square().sum(dim=1).mean().item())
         
     plt.plot(vfes, label='VFE')
