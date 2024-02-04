@@ -43,17 +43,18 @@ class FCClassifierInv(FCClassifier):
             self, 
             in_features:int, 
             num_classes:int, 
-            hidden_sizes:List = [], 
-            steps=20, 
-            bias=True, 
-            symmetric=True, 
-            actv_fn=F.tanh, 
-            d_actv_fn=None, 
-            gamma=0.1, 
-            device=torch.device('cpu'), 
-            dtype=None
+            hidden_sizes:List[int] = [], 
+            steps:int = 20, 
+            bias:bool = True, 
+            symmetric:bool = True, 
+            actv_fn:callable = F.tanh, 
+            d_actv_fn:callable = None, 
+            gamma:float=0.1, 
+            temp_k:float=1.0,
+            device:torch.device = torch.device('cpu'), 
+            dtype:torch.dtype = None
         ):
-        super().__init__(in_features, num_classes, hidden_sizes, steps, bias, symmetric, actv_fn, d_actv_fn, gamma, device, dtype)
+        super().__init__(in_features, num_classes, hidden_sizes, steps, bias, symmetric, actv_fn, d_actv_fn, gamma, temp_k, device, dtype)
 
     def init_layers(self):
         """

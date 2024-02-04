@@ -33,6 +33,8 @@ class FCClassifier(nn.Module):
             Derivative of activation function to use
         gamma : float
             step size for x updates
+        temp_k : float
+            Temperature constant for inference
         device : torch.device
             Device to run on
         dtype : torch.dtype
@@ -53,6 +55,7 @@ class FCClassifier(nn.Module):
             actv_fn:callable = F.tanh, 
             d_actv_fn:callable = None, 
             gamma:float = 0.1, 
+            temp_k:float = 1.0,
             device:torch.device = torch.device('cpu'), 
             dtype:torch.dtype = None
         ):
@@ -65,8 +68,10 @@ class FCClassifier(nn.Module):
         self.bias = bias
         self.symmetric = symmetric
         self.gamma = gamma
+        self.temp_k = temp_k
         self.steps = steps
         self.device = device
+        self.dtype = dtype
 
         self.init_layers()
         self.register_buffer('epochs_trained', torch.tensor(0, dtype=torch.long))
@@ -258,6 +263,9 @@ class FCClassifier(nn.Module):
     def calc_temp(self, step_i:int, steps:int):
         """
         | Calculates the temperature for the current step.
+        | Uses a geometric sequence to decay the temperature.
+        | temp = self.temp_k * \alpha^{step_i}
+        | where \alpha = (\frac{0.001}{1})^{\frac{1}{steps}}
 
         Parameters
         ----------
@@ -269,9 +277,10 @@ class FCClassifier(nn.Module):
         Returns
         -------
             float
-                Temperature for the current step = 1 - (step_i / steps)
+                Temperature for the current step
         """
-        return 1 - (step_i / steps)
+        alpha = (0.001/1)**(1/steps)
+        return self.temp_k * alpha**step_i
 
     def step(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None, temp:float = None):
         """
@@ -297,9 +306,6 @@ class FCClassifier(nn.Module):
         for i, layer in enumerate(self.layers):
             if i < len(self.layers) - 1:
                 pred = self.layers[i+1].predict(state[i+1])
-                layer.update_e(state[i], pred, temp=temp)
-            elif i == len(self.layers) - 1:
-                pred = self.layers[i].mem_predict(state[i])
                 layer.update_e(state[i], pred, temp=temp)
 
     def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, steps:int = None, back_on_step:bool = False):
