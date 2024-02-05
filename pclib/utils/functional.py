@@ -56,10 +56,10 @@ def calc_corr(state):
     # Normalize activations
     activations = [F.normalize(state_i['x'].flatten(1), dim=1) for state_i in state]
     # Calculate correlations
-    correlations = [torch.corrcoef(activations_i.t()) for activations_i in activations]
+    correlations = [torch.corrcoef(activations_i.T) for activations_i in activations]
     # Mask to exclude self-correlations
     masks = [torch.eye(corr.shape[0]).to(correlations[0].device) for corr in correlations]
-    masked_correlations = [corr.masked_select(mask == 0).abs().mean() for corr, mask in zip(correlations, masks)]
+    masked_correlations = [torch.nanmean(corr.masked_select(mask == 0).abs()) for corr, mask in zip(correlations, masks)]
     # Return average absolute correlation
     return sum(masked_correlations) / len(masked_correlations)
 

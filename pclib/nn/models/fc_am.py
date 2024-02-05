@@ -3,15 +3,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from pclib.nn.layers import FC
-from pclib.nn.models import FCClassifier
+from pclib.nn.models import FCClassifierUs
 from typing import List
 
-# Based on Whittington and Bogacz 2017, but with targets predicting inputs
-class FCClassifierUs(FCClassifier):
+class FCAM(FCClassifierUs):
     """
-    | An Unsupervised version of FCClassifier.
-    | Learns a feature extractor (self.layers) via unsupervised learning.
-    | Also learns an mlp classifier (self.classifier) which takes the output of self.layers as input, via supervised learning.
+    | A model of associative memory, based on 'ASSOCIATIVE MEMORIES VIA PREDICTIVE CODING' 2021, Salvatori et al.
+    | Stores data by learning to predict it, minimising VFE.
 
     Parameters
     ----------
@@ -69,39 +67,46 @@ class FCClassifierUs(FCClassifier):
             layers.append(FC(in_features, out_features, device=self.device, **self.factory_kwargs))
             in_features = out_features
         self.layers = nn.ModuleList(layers)
-        
-        self.classifier = nn.Sequential(
-            nn.Linear(self.sizes[-1], 200, bias=True, device=self.device, dtype=self.factory_kwargs['dtype']),
-            nn.ReLU(),
-            nn.Linear(200, self.num_classes, bias=False, device=self.device, dtype=self.factory_kwargs['dtype']),
-        )
+
+        self.memory_vector = nn.Parameter(torch.empty(self.hidden_sizes[-1], device=self.device, dtype=self.dtype))
+        fan_in = self.hidden_sizes[-1]
+        bound = 1 / fan_in if fan_in > 0 else 0
+        nn.init.uniform_(self.memory_vector, -bound, bound)
 
     def to(self, device):
         self.device = device
         for layer in self.layers:
             layer.to(device)
-        for layer in self.classifier:
-            layer.to(device)
+        self.memory_vector = nn.Parameter(self.memory_vector.to(device))
         return self
 
-    def get_output(self, state:List[dict]):
+    def step(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None, temp:float = None, gamma:float = None):
         """
-        Takes the output of the last layer from the feature extractor and passes it through the classifier.
-        Returns the output of the classifier.
+        | Performs one step of inference. Updates Xs first, then Es.
+        | Both are updated from bottom to top.
 
         Parameters
         ----------
             state : List[dict]
-                List of layer state dicts, each containing 'x' and 'e'
-
-        Returns
-        -------
-            torch.Tensor
-                Output of the classifier
+                List of layer state dicts, each containing 'x' and 'e; (and 'eps' for FCPW)
+            obs : Optional[torch.Tensor]
+                Input data
+            y : Optional[torch.Tensor]
+                Target data
+            temp : Optional[float]
+                Temperature to use for update
         """
-        x = state[-1]['x']
-        out = self.classifier(x.detach())
-        return out
+        for i, layer in enumerate(self.layers):
+            if i > 0 or obs is None: # Don't update bottom x if obs is given
+                if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
+                    e_below = state[i-1]['e'] if i > 0 else None
+                    layer.update_x(state[i], e_below, temp=temp, gamma=gamma)
+        for i, layer in enumerate(self.layers):
+            if i < len(self.layers) - 1:
+                pred = self.layers[i+1].predict(state[i+1])
+                layer.update_e(state[i], pred, temp=temp)
+            elif i == len(self.layers) - 1:
+                layer.update_e(state[i], self.memory_vector, temp=temp)
 
     def forward(self, obs:torch.Tensor = None, steps:int = None, back_on_step:bool = False):
         """
@@ -144,52 +149,42 @@ class FCClassifierUs(FCClassifier):
         return out, state
 
 
-    def classify(self, obs:torch.Tensor, steps:int = None):
+
+    def get_output(self, state:List[dict]):
         """
-        | Performs inference on the observation and passes the output through the classifier.
-        | Returns the argmax of the classifier output.
+        Takes the output of the last layer from the feature extractor and passes it through the classifier.
+        Returns the output of the classifier.
 
         Parameters
         ----------
-            obs : torch.Tensor
-                Input data
-            steps : Optional[int]
-                Number of steps to run inference for. Uses self.steps if not provided.
+            state : List[dict]
+                List of layer state dicts, each containing 'x' and 'e'
 
         Returns
         -------
             torch.Tensor
-                Argmax(dim=1) output of the classifier
+                Output of the classifier
         """
-        return self.forward(obs, steps)[0].argmax(dim=1)
+        out = self.layers[1].predict(state[1])
+        return out
 
+    def assert_grads(model, state:List[dict]):
+        """
+        | Uses assertions to compare current gradients of each layer to manually calculated gradients.
+        | Only useful if using autograd=True in training, otherwise comparing manual grads to themselves.
+
+        Parameters
+        ----------
+            state : List[dict]
+                List of state dicts for each layer, each containing 'x' and 'e'
+        """
+        for i, layer in enumerate(model.layers):
+            if i > 0:
+                layer.assert_grads(state[i], state[i-1]['e'])                
+            
 
     def reconstruct(self, obs:torch.Tensor, steps:int = None):
-        """
-        | Initialises the state of the model using the observation.
-        | Runs inference without pinning the observation.
-        | In theory should reconstruct the observation.
-
-        Args:
-            | obs (torch.Tensor): Input data
-            | steps (Optional[int]): Number of steps to run inference for. Uses self.steps if not provided.
-
-        Returns:
-            | out (torch.Tensor): Reconstructed observation
-            | state (list): List of layer state dicts, each containing 'x' and 'e'
-        """
-        if steps is None:
-            steps = self.steps
-        
-        state = self.init_state(obs)
-
-        for i in range(steps):
-            temp = self.calc_temp(i, steps)
-            self.step(state, temp=temp)
-        
-        out = state[0]['x']
-
-        return out, state
+        raise(NotImplementedError, "Use .forward() instead.")
 
     
     def generate(self, y:torch.Tensor, steps:int = None):

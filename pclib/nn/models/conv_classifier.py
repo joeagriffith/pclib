@@ -26,6 +26,8 @@ class ConvClassifier(nn.Module):
             Derivative of the activation function to use in the network.
         gamma : float
             step size for x updates
+        temp_k : float
+            Temperature constant for inference
         device : torch.device
             Device to run the network on.
         dtype : torch.dtype
@@ -35,17 +37,31 @@ class ConvClassifier(nn.Module):
     in_features: int
     num_classes: int
 
-    def __init__(self, steps=20, bias=True, symmetric=True, actv_fn=F.relu, d_actv_fn=None, gamma=0.1, device=torch.device('cpu'), dtype=None):
+    def __init__(
+            self, 
+            steps:int = 20, 
+            bias:bool = True, 
+            symmetric:bool = True, 
+            actv_fn:callable = F.relu, 
+            d_actv_fn:callable = None, 
+            gamma:float = 0.1, 
+            temp_k:float = 1.0, 
+            device:torch.device = torch.device('cpu'), 
+            dtype:torch.dtype = None
+        ):
         self.factory_kwargs = {'actv_fn': actv_fn, 'd_actv_fn': d_actv_fn, 'gamma': gamma, 'has_bias': bias, 'symmetric': symmetric, 'dtype': dtype}
         super().__init__()
 
         self.num_classes = 10
         self.steps = steps
+        self.gamma = gamma
+        self.temp_k = temp_k
         self.device = device
+        self.dtype = dtype
 
         self.init_layers()
         self.register_buffer('epochs_trained', torch.tensor(0, dtype=torch.long))
-        self.register_buffer('min_vfe', torch.tensor(float('inf'), dtype=torch.float32))
+        self.register_buffer('max_vfe', torch.tensor(-float('inf'), dtype=torch.float32))
 
     def __str__(self):
         """
@@ -68,7 +84,7 @@ class ConvClassifier(nn.Module):
             f"    device: {self.device}" + \
             f"    dtype: {self.factory_kwargs['dtype']}" + \
             f"    epochs_trained: {self.epochs_trained}" + \
-            f"    min_vfe: {self.min_vfe}\n"
+            f"    max_vfe: {self.max_vfe}\n"
         
         string = base_str[:base_str.find('\n')] + custom_info + base_str[base_str.find('\n'):]
         
@@ -125,9 +141,9 @@ class ConvClassifier(nn.Module):
         """
         # Reduce units for each layer
         if unit_reduction == 'sum':
-            vfe = [state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+            vfe = [-0.5 * state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
         elif unit_reduction =='mean':
-            vfe = [state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+            vfe = [-0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
         # Reduce layers
         vfe = sum(vfe)
         # Reduce batches
@@ -137,32 +153,6 @@ class ConvClassifier(nn.Module):
             vfe = vfe.mean()
 
         return vfe
-
-    def step(self, state:List[dict], obs:torch.Tensor=None, y:torch.Tensor=None, temp:float=None):
-        """
-        Performs one step of inference, updating all Xs first, then calculates Errors.
-
-        Parameters
-        ----------
-            state : List[dict]
-                List of state dicts for each layer, each containing 'x' and 'e' tensors.
-            obs : Optional[torch.Tensor]
-                Input data
-            y : Optional[torch.Tensor]
-                Target data
-            temp : Optional[float]
-                Temperature for simulated annealing
-        """
-        for i, layer in enumerate(self.layers):
-            if i > 0 or obs is None:
-                if i < len(self.layers) - 1 or y is None:
-                    e_below = state[i-1]['e'] if i > 0 else None
-                    layer.update_x(state[i], e_below, temp=temp)
-        for i, layer in enumerate(self.layers):
-            if i < len(self.layers) - 1:
-                pred = self.layers[i+1].predict(state[i+1])
-                layer.update_e(state[i], pred, temp=temp)
-
 
     def _init_xs(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None):
         """
@@ -270,9 +260,13 @@ class ConvClassifier(nn.Module):
         """
         return state[-1]['x']
 
+
     def calc_temp(self, step_i:int, steps:int):
         """
         | Calculates the temperature for the current step.
+        | Uses a geometric sequence to decay the temperature.
+        | temp = self.temp_k * \alpha^{step_i}
+        | where \alpha = (\frac{0.001}{1})^{\frac{1}{steps}}
 
         Parameters
         ----------
@@ -280,13 +274,44 @@ class ConvClassifier(nn.Module):
                 Current step
             steps : int
                 Total number of steps
-        
+
         Returns
         -------
             float
-                Temperature for the current step = 1 - (step_i / steps)
+                Temperature for the current step
         """
-        return 1 - (step_i / steps)
+        alpha = (0.001/1)**(1/steps)
+        return self.temp_k * alpha**step_i
+
+
+    def step(self, state:List[dict], obs:torch.Tensor=None, y:torch.Tensor=None, temp:float=None, gamma:float=None):
+        """
+        Performs one step of inference, updating all Xs first, then calculates Errors.
+
+        Parameters
+        ----------
+            state : List[dict]
+                List of state dicts for each layer, each containing 'x' and 'e' tensors.
+            obs : Optional[torch.Tensor]
+                Input data
+            y : Optional[torch.Tensor]
+                Target data
+            temp : Optional[float]
+                Temperature for simulated annealing
+            gamma : Optional[float]
+                Step size for x updates
+        """
+
+        for i, layer in enumerate(self.layers):
+            if i > 0 or obs is None:
+                if i < len(self.layers) - 1 or y is None:
+                    e_below = state[i-1]['e'] if i > 0 else None
+                    layer.update_x(state[i], e_below, temp=temp, gamma=gamma)
+        for i, layer in enumerate(self.layers):
+            if i < len(self.layers) - 1:
+                pred = self.layers[i+1].predict(state[i+1])
+                layer.update_e(state[i], pred, temp=temp)
+
 
     def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, steps:int = None, back_on_step:bool = False):
         """
@@ -314,12 +339,18 @@ class ConvClassifier(nn.Module):
             steps = self.steps
 
         state = self.init_state(obs, y)
-
+    
+        prev_vfe = None
+        gamma = self.gamma
         for i in range(steps):
             temp = self.calc_temp(i, steps)
-            self.step(state, obs, y, temp)
+            self.step(state, obs, y, temp, gamma)
+            vfe = self.vfe(state)
             if back_on_step:
-                self.vfe(state).backward()
+                vfe.backward()
+            if prev_vfe is not None and vfe < prev_vfe:
+                gamma = gamma * 0.9
+            prev_vfe = vfe
             
         out = self.get_output(state)
             

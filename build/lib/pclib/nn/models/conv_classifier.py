@@ -43,7 +43,7 @@ class ConvClassifier(nn.Module):
 
         self.init_layers()
         self.register_buffer('epochs_trained', torch.tensor(0, dtype=torch.long))
-        self.register_buffer('min_vfe', torch.tensor(float('inf'), dtype=torch.float32))
+        self.register_buffer('max_vfe', torch.tensor(-float('inf'), dtype=torch.float32))
 
     def __str__(self):
         base_str = super().__str__()
@@ -59,7 +59,7 @@ class ConvClassifier(nn.Module):
             f"    device: {self.device}" + \
             f"    dtype: {self.factory_kwargs['dtype']}" + \
             f"    epochs_trained: {self.epochs_trained}" + \
-            f"    min_vfe: {self.min_vfe}\n"
+            f"    max_vfe: {self.max_vfe}\n"
         
         string = base_str[:base_str.find('\n')] + custom_info + base_str[base_str.find('\n'):]
         

@@ -75,7 +75,7 @@ class FCClassifier(nn.Module):
 
         self.init_layers()
         self.register_buffer('epochs_trained', torch.tensor(0, dtype=torch.long))
-        self.register_buffer('min_vfe', torch.tensor(float('inf'), dtype=torch.float32))
+        self.register_buffer('max_vfe', torch.tensor(-float('inf'), dtype=torch.float32))
 
     def __str__(self):
         base_str = super().__str__()
@@ -92,7 +92,7 @@ class FCClassifier(nn.Module):
             f"    device: {self.device}\n" + \
             f"    dtype: {self.factory_kwargs['dtype']}\n" + \
             f"    epochs_trained: {self.epochs_trained}\n" + \
-            f"    min_vfe: {self.min_vfe}\n"
+            f"    max_vfe: {self.max_vfe}\n"
         
         string = base_str[:base_str.find('\n')] + custom_info + base_str[base_str.find('\n'):]
         
@@ -144,9 +144,9 @@ class FCClassifier(nn.Module):
         """
         # Reduce units for each layer
         if unit_reduction == 'sum':
-            vfe = [0.5 * state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+            vfe = [-0.5 * state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
         elif unit_reduction =='mean':
-            vfe = [0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+            vfe = [-0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
         # Reduce layers
         vfe = sum(vfe)
         # Reduce batches
@@ -282,7 +282,7 @@ class FCClassifier(nn.Module):
         alpha = (0.001/1)**(1/steps)
         return self.temp_k * alpha**step_i
 
-    def step(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None, temp:float = None):
+    def step(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None, temp:float = None, gamma:float = None):
         """
         | Performs one step of inference. Updates Xs first, then Es.
         | Both are updated from bottom to top.
@@ -302,7 +302,7 @@ class FCClassifier(nn.Module):
             if i > 0 or obs is None: # Don't update bottom x if obs is given
                 if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
                     e_below = state[i-1]['e'] if i > 0 else None
-                    layer.update_x(state[i], e_below, temp=temp)
+                    layer.update_x(state[i], e_below, temp=temp, gamma=gamma)
         for i, layer in enumerate(self.layers):
             if i < len(self.layers) - 1:
                 pred = self.layers[i+1].predict(state[i+1])
@@ -332,11 +332,17 @@ class FCClassifier(nn.Module):
 
         state = self.init_state(obs, y)
 
+        prev_vfe = None
+        gamma = self.gamma
         for i in range(steps):
             temp = self.calc_temp(i, steps)
-            self.step(state, obs, y, temp)
+            self.step(state, obs, y, temp, gamma)
+            vfe = self.vfe(state)
             if back_on_step:
-                self.vfe(state).backward()
+                vfe.backward()
+            if prev_vfe is not None and vfe < prev_vfe:
+                gamma = gamma * 0.9
+            prev_vfe = vfe
             
         out = self.get_output(state)
             

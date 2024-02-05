@@ -30,6 +30,8 @@ class FCClassifierUsInv(FCClassifierUs):
             Derivative of activation function to use
         gamma : float
             step size for x updates
+        temp_k : float
+            Temperature constant for inference
         device : torch.device
             Device to run on
         dtype : torch.dtype
@@ -46,10 +48,24 @@ class FCClassifierUsInv(FCClassifierUs):
             actv_fn:callable = F.tanh, 
             d_actv_fn:bool = None, 
             gamma:float = 0.1, 
+            temp_k:float = 1.0,
             device:torch.device = torch.device('cpu'), 
             dtype:torch.dtype = None
         ):
-        super().__init__(in_features, num_classes, hidden_sizes, steps, bias, symmetric, actv_fn, d_actv_fn, gamma, device, dtype)
+        super().__init__(
+            in_features, 
+            num_classes, 
+            hidden_sizes, 
+            steps, 
+            bias, 
+            symmetric, 
+            actv_fn, 
+            d_actv_fn, 
+            gamma, 
+            temp_k,
+            device, 
+            dtype
+        )
 
     def init_layers(self):
         """
@@ -139,9 +155,15 @@ class FCClassifierUsInv(FCClassifierUs):
         
         state = self.init_state(obs)
 
+        prev_vfe = None
+        gamma = self.gamma
         for i in range(steps):
             temp = self.calc_temp(i, steps)
-            self.step(state, temp=temp)
+            self.step(state, temp=temp, gamma=gamma)
+            vfe = self.vfe(state)
+            if prev_vfe is not None and vfe < prev_vfe:
+                gamma = gamma * 0.9
+            prev_vfe = vfe
         
         out = state[-1]['x']
 

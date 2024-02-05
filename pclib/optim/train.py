@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 from pclib.optim.eval import topk_accuracy
 from pclib.utils.functional import format_y, calc_corr, calc_sparsity
 
-def get_optimiser(parameters:list, lr:float, weight_decay:float, optimiser:str = 'AdamW', no_momentum:bool = False):
+def get_optimiser(parameters:list, lr:float, weight_decay:float, maximize:bool, optimiser:str = 'AdamW', no_momentum:bool = False):
     """
     | Builds an optimiser from the specified arguments
 
@@ -30,24 +30,24 @@ def get_optimiser(parameters:list, lr:float, weight_decay:float, optimiser:str =
     assert optimiser in ['AdamW', 'Adam', 'SGD', 'RMSprop'], f"Invalid optimiser {optimiser}"
     if optimiser == 'AdamW':
         if no_momentum:
-            return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay, betas=(0.0, 0.0))
+            return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize, betas=(0.0, 0.0))
         else:
-            return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay)
+            return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize)
     elif optimiser == 'Adam':
         if no_momentum:
-            return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay, betas=(0.0, 0.0))
+            return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize, betas=(0.0, 0.0))
         else:
-            return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay)
+            return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize)
     elif optimiser == 'SGD':
         if no_momentum:
-            return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay, momentum=0.0)
+            return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize, momentum=0.0)
         else:
-            return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay, momentum=0.9)
+            return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize, momentum=0.8)
     elif optimiser == 'RMSprop':
         if no_momentum:
-            return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, momentum=0.0)
+            return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize, momentum=0.0)
         else:
-            return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, momentum=0.9)
+            return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize, momentum=0.8)
 
 def init_stats(model:torch.nn.Module, minimal:bool = False, loss:bool = False):
     """
@@ -130,7 +130,12 @@ def untr_pass(model:torch.nn.Module, x:torch.Tensor, y:torch.Tensor=None, untr_c
     """
     assert untr_coeff > 0, f"untr_coeff must be positive, got {untr_coeff}"
     # Forward pass
-    _, neg_state = model(x, y)
+    x = torch.rand_like(x)
+    try:
+        _, neg_state = model(x, y=y)
+    # catch typeerror if model is not supervised
+    except TypeError:
+        _, neg_state = model(x)
     loss = -untr_coeff * model.vfe(neg_state)
     loss.backward()
 
@@ -195,6 +200,7 @@ def train(
     optim:str = 'AdamW',
     scheduler:str = None,
     no_momentum:bool = False,
+    norm_grads:bool = False,
 ):
     """
     | Trains a model with the specified parameters
@@ -238,18 +244,20 @@ def train(
             scheduler to use. [None, 'ReduceLROnPlateau']
         no momentum : bool
             if True, momentum is set to 0.0 for optimiser. Only works for AdamW, Adam, SGD, RMSprop
+        norm_grads : bool
+            if True, normalise gradients to have norm 1.0 along last dimension.
     """
     assert scheduler in [None, 'ReduceLROnPlateau'], f"Invalid scheduler '{scheduler}', or not yet implemented"
     if back_on_step:
         assert lr > 0, "lr must be positive when back_on_step=True"
 
-    optimiser = get_optimiser(model.parameters(), lr, reg_coeff, optim, no_momentum)
+    optimiser = get_optimiser(model.parameters(), lr, reg_coeff, True, optim, no_momentum)
     if scheduler == 'ReduceLROnPlateau':
         sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=5, verbose=True, factor=0.1)
 
 
     if hasattr(model, 'classifier') and c_lr > 0:
-        c_optimiser = get_optimiser(model.classifier.parameters(), c_lr, reg_coeff, optim)
+        c_optimiser = get_optimiser(model.classifier.parameters(), c_lr, reg_coeff, False, optim,)
         loss_fn = F.cross_entropy
         if scheduler == 'ReduceLROnPlateau':
             c_sched = torch.optim.lr_scheduler.ReduceLROnPlateau(c_optimiser, patience=5, cooldown=10, verbose=True, factor=0.1)
@@ -309,13 +317,17 @@ def train(
             model.zero_grad()
             # Forward pass and gradient calculation
             try:
-                out, state = model(x, y=y)
+                out, state = model(x, y=y, back_on_step=back_on_step)
             # catch typeerror if model is not supervised
             except TypeError:
                 out, state = model(x, back_on_step=back_on_step)
             if lr > 0 and not back_on_step:
                 vfe = model.vfe(state)
                 vfe.backward()
+
+            if norm_grads:
+                for p in model.parameters():
+                    p.grad = F.normalize(p.grad, p=2, dim=-1)
 
             if assert_grads: model.assert_grads(state)
 
@@ -383,8 +395,8 @@ def train(
         # Saves model if it has the lowest validation VFE (or training VFE if no validation data) compared to previous training
         if model_dir is not None:
             current_vfe = stats['val_vfe'] if val_data is not None else stats['train_vfe']
-            if current_vfe < model.min_vfe:
+            if current_vfe > model.max_vfe:
                 torch.save(model.state_dict(), model_dir)
-                model.min_vfe = torch.tensor(current_vfe)
+                model.max_vfe = torch.tensor(current_vfe)
 
         model.inc_epochs()

@@ -124,7 +124,8 @@ class FC(nn.Module):
         """
         if self.in_features is not None:
             self.weight = Parameter(torch.empty((self.out_features, self.in_features), **self.factory_kwargs))
-            nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+            bound = 4 * math.sqrt(6 / (self.in_features + self.out_features)) if self.actv_fn == F.sigmoid else math.sqrt(6 / (self.in_features + self.out_features))
+            self.weight.data.uniform_(-bound, bound)
 
             if self.has_bias:
                 #  Bias is used in prediction of layer below, so it has shape (in_features)
@@ -205,7 +206,41 @@ class FC(nn.Module):
         if e_below.dim() == 4:
             e_below = e_below.flatten(1)
         return F.linear(e_below, self.weight, None)
-        
+    
+
+    def update_x(self, state:dict, e_below:torch.Tensor = None, temp:float = None, gamma:float = None):
+        """
+        | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
+        | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x) - 0.1 * x + noise).
+
+        Parameters
+        ----------
+            state : dict
+                Dictionary containing 'x' and 'e' tensors for this layer.
+            e_below : Optional[torch.Tensor]
+                state['e'] from the layer below. None if input layer.
+        """
+        if gamma is None:
+            gamma = self.gamma
+
+        # If not input layer, propagate error from layer below
+        dx = torch.zeros_like(state['x'], device=self.device)
+        if e_below is not None:
+            e_below = e_below.detach()
+            if e_below.dim() == 4:
+                e_below = e_below.flatten(1)
+            dx += self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
+
+        dx += -state['e'].detach()
+
+        #  dx += 0.1 * -state['x'].detach()
+
+        if temp is not None and temp > 0:
+            dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034
+
+        state['x'] = state['x'].detach() + gamma * dx
+    
+
     def update_e(self, state:dict, pred:torch.Tensor, temp:float = None):
         """
         | Updates prediction-error (state['e']) inplace between state['x'] and the top-down prediction of it.
@@ -233,35 +268,6 @@ class FC(nn.Module):
         if temp is not None:
             eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
             state['e'] += eps
-    
-    def update_x(self, state:dict, e_below:torch.Tensor = None, temp:float = None):
-        """
-        | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
-        | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x) - 0.1 * x + noise).
-
-        Parameters
-        ----------
-            state : dict
-                Dictionary containing 'x' and 'e' tensors for this layer.
-            e_below : Optional[torch.Tensor]
-                state['e'] from the layer below. None if input layer.
-        """
-        # If not input layer, propagate error from layer below
-        dx = torch.zeros_like(state['x'], device=self.device)
-        if e_below is not None:
-            e_below = e_below.detach()
-            if e_below.dim() == 4:
-                e_below = e_below.flatten(1)
-            dx += self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
-
-        dx += -state['e'].detach()
-
-        dx += 0.1 * -state['x'].detach()
-
-        if temp is not None:
-            dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034
-
-        state['x'] = state['x'].detach() + self.gamma * dx
 
     def assert_grads(self, state, e_below):
         """
@@ -270,8 +276,4 @@ class FC(nn.Module):
 
         true_weight_grad = -(self.actv_fn(state['x']).T @ e_below) / state['x'].size(0)
         assert torch.allclose(self.weight.grad, true_weight_grad), f"Back Weight grad:\n{self.weight.grad}\nCalc weight grad:\n{true_weight_grad}"
-
-        if self.memory_vector is not None:
-            true_memory_grad = -state['e'].mean(0)
-        assert torch.allclose(self.memory_vector.grad, true_memory_grad)
         

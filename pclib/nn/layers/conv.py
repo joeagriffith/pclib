@@ -248,7 +248,7 @@ class Conv2d(nn.Module):
             eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
             state['e'] += eps
 
-    def update_x(self, state:dict, e_below:torch.Tensor=None, temp:float=None):
+    def update_x(self, state:dict, e_below:torch.Tensor=None, temp:float=None, gamma:float=None):
         """
         | Updates state['x'] using the error signal from the layer below and of current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x) - 0.1 * x + noise)
@@ -256,7 +256,12 @@ class Conv2d(nn.Module):
         Args:
             | state (dict): The state dictionary for this layer.
             | e_below (Optional[torch.Tensor]): The error from the layer below.
+            | temp (Optional[float]): The temperature for simulated annealing.
+            | gamma (Optional[float]): The step size for x updates.
         """
+
+        if gamma is None:
+            gamma = self.gamma
         dx = torch.zeros_like(state['x'], device=self.device)
         if e_below is not None:
             e_below = e_below.detach()
@@ -271,4 +276,4 @@ class Conv2d(nn.Module):
         if temp is not None:
             dx += torch.randn_like(state['x'], device=self.device) * 0.034 * temp
 
-        state['x'] = state['x'].detach() + self.gamma * dx
+        state['x'] = state['x'].detach() + gamma * dx
