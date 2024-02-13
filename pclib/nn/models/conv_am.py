@@ -62,12 +62,18 @@ class ConvAM(ConvClassifierUs):
         | Initialises the layers of the network.
         """
         layers = []
-        layers.append(Conv2d(None,          (3, 32, 32),                  **self.factory_kwargs))
-        layers.append(Conv2d((3, 32, 32),   (32, 16, 16),  5, 2, 2, **self.factory_kwargs))
-        layers.append(Conv2d((32, 16, 16),  (64, 8, 8),    3, 2, 1, **self.factory_kwargs))
-        layers.append(Conv2d((64, 8, 8),    (128, 4, 4),    3, 2, 1, **self.factory_kwargs))
-        layers.append(Conv2d((128, 4, 4),    (256, 2, 2),    3, 2, 1, **self.factory_kwargs))
-        layers.append(Conv2d((256, 2, 2),    (256, 1, 1),    3, 2, 1, **self.factory_kwargs))
+        layers.append(Conv2d(None,           (3, 32, 32),                  **self.factory_kwargs))
+        layers.append(Conv2d((3, 32, 32),    (64, 32, 32),  3, 1, 1, **self.factory_kwargs))
+        layers.append(Conv2d((64, 32, 32),   (64, 16, 16),  3, 2, 1, **self.factory_kwargs))
+        layers.append(Conv2d((64, 16, 16),   (64, 16, 16),  3, 1, 1, **self.factory_kwargs))
+        layers.append(Conv2d((64, 16, 16),   (128, 8, 8),    3, 2, 1, **self.factory_kwargs))
+        layers.append(Conv2d((128, 8, 8),    (128, 8, 8),    3, 1, 1, **self.factory_kwargs))
+        layers.append(Conv2d((128, 8, 8),    (256, 4, 4),    3, 2, 1, **self.factory_kwargs))
+        layers.append(Conv2d((256, 4, 4),    (256, 4, 4),    3, 1, 1, **self.factory_kwargs))
+        layers.append(Conv2d((256, 4, 4),    (512, 2, 2),    3, 2, 1, **self.factory_kwargs))
+        layers.append(Conv2d((512, 2, 2),    (512, 2, 2),    3, 1, 1, **self.factory_kwargs))
+        layers.append(Conv2d((512, 2, 2),    (512, 1, 1),    3, 2, 1, **self.factory_kwargs))
+        layers.append(Conv2d((512, 1, 1),    (512, 1, 1),    3, 1, 1, **self.factory_kwargs))
         self.layers = nn.ModuleList(layers)
 
         self.memory_vector = nn.Parameter(torch.empty(256, 1, 1, device=self.device, dtype=self.dtype))
@@ -98,7 +104,7 @@ class ConvAM(ConvClassifierUs):
         return out
         
 
-    def forward(self, obs:torch.Tensor = None, steps:int = None, back_on_step:bool = False):
+    def forward(self, obs:torch.Tensor = None, steps:int = None, learn_on_step:bool = False):
         """
         | Performs inference for the network.
 
@@ -108,7 +114,7 @@ class ConvAM(ConvClassifierUs):
                 Input data
             steps : Optional[int]
                 Number of steps to run inference for
-            back_on_step : bool
+            learn_on_step : bool
                 Whether to backpropagate on each step. Default False.
         
         Returns
@@ -129,7 +135,7 @@ class ConvAM(ConvClassifierUs):
             temp = self.calc_temp(i, steps)
             self.step(state, obs, temp, gamma=gamma)
             vfe = self.vfe(state)
-            if back_on_step:
+            if learn_on_step:
                 vfe.backward()
             if prev_vfe is not None and vfe < prev_vfe:
                 gamma = gamma * 0.9

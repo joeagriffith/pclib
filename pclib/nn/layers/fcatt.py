@@ -6,8 +6,9 @@ from torch import Tensor
 from torch.nn import Parameter
 from typing import Optional
 from pclib.utils.functional import reTanh, identity, trec
+from pclib.nn.layers import FC
 
-class FC(nn.Module):
+class FCAtt(FC):
     """
     | Fully connected layer with optional bias and optionally symmetric weights.
     | The layer stores its state in a dictionary with keys 'x' and 'e'.
@@ -54,69 +55,20 @@ class FC(nn.Module):
                  dtype: torch.dtype = None
                  ) -> None:
 
+        assert symmetric == False, "FCAM layer does not support symmetric weights."
         self.factory_kwargs = {'device': device, 'dtype': dtype}
-        super().__init__()
+        super().__init__(
+            in_features,
+            out_features,
+            has_bias,
+            symmetric,
+            actv_fn,
+            d_actv_fn,
+            gamma,
+            device,
+            dtype
+        )
 
-        self.in_features = in_features
-        self.out_features = out_features
-        self.has_bias = has_bias
-        self.symmetric = symmetric
-        self.actv_fn = actv_fn
-        self.gamma = gamma
-        self.device = device
-
-        # Automatically set d_actv_fn if not provided
-        if d_actv_fn is not None:
-            self.d_actv_fn: callable = d_actv_fn
-        elif actv_fn == F.relu:
-            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x))
-        elif actv_fn == F.leaky_relu:
-            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) + torch.sign(torch.minimum(x, torch.zeros_like(x))) * 0.01
-        elif actv_fn == reTanh:
-            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) * (1 - torch.tanh(x).square())
-        elif actv_fn == F.sigmoid:
-            self.d_actv_fn: callable = lambda x: torch.sigmoid(x) * (1 - torch.sigmoid(x))
-        elif actv_fn == F.tanh:
-            self.d_actv_fn: callable = lambda x: 1 - torch.tanh(x).square()
-        elif actv_fn == identity:
-            self.d_actv_fn: callable = lambda x: torch.ones_like(x)
-        elif actv_fn == F.gelu:
-            self.d_actv_fn: callable = lambda x: torch.sigmoid(1.702 * x) * (1. + torch.exp(-1.702 * x) * (1.702 * x + 1.)) + 0.5
-        elif actv_fn == F.softplus:
-            self.d_actv_fn: callable = lambda x: torch.sigmoid(x)
-        elif actv_fn == F.softsign:
-            self.d_actv_fn: callable = lambda x: 1 / (1 + torch.abs(x)).square()
-        elif actv_fn == F.elu:
-            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) + torch.sign(torch.minimum(x, torch.zeros_like(x))) * 0.01 + 1
-        elif actv_fn == F.leaky_relu:
-            self.d_actv_fn: callable = lambda x: torch.where(x > 0, torch.ones_like(x), 0.01 * torch.ones_like(x))
-        elif actv_fn == trec:
-            self.d_actv_fn: callable = lambda x: (x > 1.0).float()
-
-        self.init_params()
-
-    def __str__(self):
-        """
-        | Returns a string representation of the layer.
-
-        Returns
-        -------
-            str
-        """
-        base_str = super().__str__()
-
-        custom_info = "\n  (params): \n" + \
-            f"    in_features: {self.in_features}\n" + \
-            f"    out_features: {self.out_features}\n" + \
-            f"    has_bias: {self.has_bias}\n" + \
-            f"    symmetric: {self.symmetric}\n" + \
-            f"    actv_fn: {self.actv_fn.__name__}\n" + \
-            f"    gamma: {self.gamma}"
-        
-        string = base_str[:base_str.find('\n')] + custom_info + base_str[base_str.find('\n'):]
-        
-        return string
-        
     # Declare weights if not input layer
     def init_params(self):
         """
@@ -126,6 +78,10 @@ class FC(nn.Module):
             self.weight = Parameter(torch.empty((self.out_features, self.in_features), **self.factory_kwargs))
             bound = 4 * math.sqrt(6 / (self.in_features + self.out_features)) if self.actv_fn == F.sigmoid else math.sqrt(6 / (self.in_features + self.out_features))
             self.weight.data.uniform_(-bound, bound)
+
+            self.att_weight = Parameter(torch.empty((self.in_features, self.out_features), **self.factory_kwargs))
+            bound = 4 * math.sqrt(6 / (self.in_features + self.out_features)) if self.actv_fn == F.sigmoid else math.sqrt(6 / (self.in_features + self.out_features))
+            self.att_weight.data.uniform_(-bound, bound)
 
             if self.has_bias:
                 #  Bias is used in prediction of layer below, so it has shape (in_features)
@@ -229,11 +185,12 @@ class FC(nn.Module):
             e_below = e_below.detach()
             if e_below.dim() == 4:
                 e_below = e_below.flatten(1)
+            e_below = F.linear(state['x'].detach(), self.att_weight, None) * e_below
             dx += self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
 
         dx += -state['e'].detach()
 
-        # dx += 0.1 * -state['x'].detach()
+        #  dx += 0.1 * -state['x'].detach()
 
         if temp is not None and temp > 0:
             dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034
@@ -274,10 +231,6 @@ class FC(nn.Module):
         | Assert grads are correct.
         """
 
-        calc_weight_grad = -(self.actv_fn(state['x']).T @ e_below) / state['x'].size(0)
-        assert torch.allclose(self.weight.grad, calc_weight_grad), f"Back Weight grad:\n{self.weight.grad}\nCalc weight grad:\n{calc_weight_grad}"
-
-        if self.has_bias:
-            calc_bias_grad = -e_below.mean(0)
-            assert torch.allclose(self.bias.grad, calc_bias_grad), f"Back Bias grad:\n{self.bias.grad}\nCalc bias grad:\n{calc_bias_grad}"
+        true_weight_grad = -(self.actv_fn(state['x']).T @ e_below) / state['x'].size(0)
+        assert torch.allclose(self.weight.grad, true_weight_grad), f"Back Weight grad:\n{self.weight.grad}\nCalc weight grad:\n{true_weight_grad}"
         

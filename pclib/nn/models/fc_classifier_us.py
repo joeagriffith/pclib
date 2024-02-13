@@ -103,7 +103,8 @@ class FCClassifierUs(FCClassifier):
         out = self.classifier(x.detach())
         return out
 
-    def forward(self, obs:torch.Tensor = None, steps:int = None, back_on_step:bool = False):
+
+    def forward(self, obs:torch.Tensor = None, steps:int = None, learn_on_step:bool = False):
         """
         | Performs inference phase of the model. 
         | Uses self.classifier to get output.
@@ -133,7 +134,7 @@ class FCClassifierUs(FCClassifier):
             temp = self.calc_temp(i, steps)
             self.step(state, obs, temp=temp, gamma=gamma)
             vfe = self.vfe(state)
-            if back_on_step:
+            if learn_on_step:
                 vfe.backward()
             if prev_vfe is not None and vfe < prev_vfe:
                 gamma = gamma * 0.9

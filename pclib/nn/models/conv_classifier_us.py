@@ -105,7 +105,7 @@ class ConvClassifierUs(ConvClassifier):
         return out
         
 
-    def forward(self, obs:torch.Tensor = None, steps:int = None, back_on_step:bool = False):
+    def forward(self, obs:torch.Tensor = None, steps:int = None, learn_on_step:bool = False):
         """
         | Performs inference for the network.
 
@@ -115,7 +115,7 @@ class ConvClassifierUs(ConvClassifier):
                 Input data
             steps : Optional[int]
                 Number of steps to run inference for
-            back_on_step : bool
+            learn_on_step : bool
                 Whether to backpropagate on each step. Default False.
         
         Returns
@@ -136,7 +136,7 @@ class ConvClassifierUs(ConvClassifier):
             temp = self.calc_temp(i, steps)
             self.step(state, obs, temp, gamma)
             vfe = self.vfe(state)
-            if back_on_step:
+            if learn_on_step:
                 vfe.backward()
             if prev_vfe is not None and vfe < prev_vfe:
                 gamma = gamma * 0.9

@@ -313,7 +313,7 @@ class ConvClassifier(nn.Module):
                 layer.update_e(state[i], pred, temp=temp)
 
 
-    def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, steps:int = None, back_on_step:bool = False):
+    def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, steps:int = None, learn_on_step:bool = False):
         """
         | Performs inference phase of the network.
 
@@ -325,7 +325,7 @@ class ConvClassifier(nn.Module):
                 Target data
             steps : Optional[int]
                 Number of steps to run inference for
-            back_on_step : bool
+            learn_on_step : bool
                 Whether to backpropagate on each step. Default False.
         
         Returns
@@ -346,7 +346,7 @@ class ConvClassifier(nn.Module):
             temp = self.calc_temp(i, steps)
             self.step(state, obs, y, temp, gamma)
             vfe = self.vfe(state)
-            if back_on_step:
+            if learn_on_step:
                 vfe.backward()
             if prev_vfe is not None and vfe < prev_vfe:
                 gamma = gamma * 0.9

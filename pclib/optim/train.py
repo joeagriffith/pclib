@@ -139,7 +139,7 @@ def untr_pass(model:torch.nn.Module, x:torch.Tensor, y:torch.Tensor=None, untr_c
     loss = -untr_coeff * model.vfe(neg_state)
     loss.backward()
 
-def val_pass(model:torch.nn.Module, val_loader:torch.utils.data.DataLoader, flatten:bool=True, return_loss:bool=False):
+def val_pass(model:torch.nn.Module, val_loader:torch.utils.data.DataLoader, flatten:bool=True, return_loss:bool=False, learn_layer:int=None):
     """
     | Performs a validation pass on the model
 
@@ -151,6 +151,8 @@ def val_pass(model:torch.nn.Module, val_loader:torch.utils.data.DataLoader, flat
             validation data
         flatten : bool
             if True, flatten input data
+        learn_layer : int
+            if not None, only performs inference using first learn_layer layers, and calculates vfe only from layer learn_layer. Only works for unsupervised models.
 
     Returns
     -------
@@ -169,10 +171,16 @@ def val_pass(model:torch.nn.Module, val_loader:torch.utils.data.DataLoader, flat
                 x = images
 
             # Forward pass
-            out, state = model(x)
+            if learn_layer is not None:
+                out, state = model(x, learn_layer=learn_layer)
+            else:
+                out, state = model(x)
             if return_loss:
                 loss += F.cross_entropy(out, target, reduction='sum')
-            vfe += model.vfe(state, batch_reduction='sum')
+            if learn_layer is not None:
+                vfe += model.vfe(state, batch_reduction='sum', learn_layer=learn_layer)
+            else:
+                vfe += model.vfe(state, batch_reduction='sum')
             acc += (out.argmax(dim=1) == target).sum()
 
         acc /= len(val_loader.dataset)
@@ -187,7 +195,7 @@ def train(
     num_epochs:int,
     lr:float = 3e-4,
     c_lr:float = 1e-3,
-    back_on_step:bool = False,
+    learn_on_step:bool = False,
     batch_size:int = 1,
     reg_coeff:float = 1e-2,
     flatten:bool = True,
@@ -201,6 +209,8 @@ def train(
     scheduler:str = None,
     no_momentum:bool = False,
     norm_grads:bool = False,
+    norm_weights:bool = False,
+    learn_layer:int = None
 ):
     """
     | Trains a model with the specified parameters
@@ -220,7 +230,7 @@ def train(
             learning rate for PC layers.
         c_lr : float
             learning rate for classifier. Ignored if model has no classifier.
-        back_on_step : bool
+        learn_on_step : bool
             if True, backpropagate on every model.step(), if False, backpropagate after model.forward().
         batch_size : int
             batch size
@@ -246,14 +256,18 @@ def train(
             if True, momentum is set to 0.0 for optimiser. Only works for AdamW, Adam, SGD, RMSprop
         norm_grads : bool
             if True, normalise gradients to have norm 1.0 along last dimension.
+        norm_weights: bool
+            if True, layer weights are constrained to have unit columns
+        learn_layer : int
+            if not None, only learn the specified layer. Must be in range(model.num_layers). Only works for unsupervised models. Remember, layer 0 does not have weights, so start from 1 for greedy layer-wise learning.
     """
     assert scheduler in [None, 'ReduceLROnPlateau'], f"Invalid scheduler '{scheduler}', or not yet implemented"
-    if back_on_step:
-        assert lr > 0, "lr must be positive when back_on_step=True"
+    if learn_on_step:
+        assert lr > 0, "lr must be positive when learn_on_step=True"
 
     optimiser = get_optimiser(model.parameters(), lr, reg_coeff, True, optim, no_momentum)
     if scheduler == 'ReduceLROnPlateau':
-        sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=5, verbose=True, factor=0.1)
+        sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=5, verbose=True, factor=0.1, mode='max')
 
 
     if hasattr(model, 'classifier') and c_lr > 0:
@@ -317,17 +331,26 @@ def train(
             model.zero_grad()
             # Forward pass and gradient calculation
             try:
-                out, state = model(x, y=y, back_on_step=back_on_step)
+                out, state = model(x, y=y, learn_on_step=learn_on_step)
             # catch typeerror if model is not supervised
             except TypeError:
-                out, state = model(x, back_on_step=back_on_step)
-            if lr > 0 and not back_on_step:
-                vfe = model.vfe(state)
+                if learn_layer is None:
+                    out, state = model(x, learn_on_step=learn_on_step)
+                else:
+                    out, state = model(x, learn_on_step=learn_on_step, learn_layer=learn_layer)
+            if lr > 0 and not learn_on_step:
+                if learn_layer is None:
+                    vfe = model.vfe(state)
+                else:
+                    vfe = model.vfe(state, learn_layer=learn_layer)
+                if norm_grads:
+                    vfe /= vfe.abs().item()
                 vfe.backward()
 
-            if norm_grads:
-                for p in model.parameters():
-                    p.grad = F.normalize(p.grad, p=2, dim=-1)
+            # if norm_grads:
+            #     for p in model.parameters():
+            #         # p.grad = F.normalize(p.grad, p=2, dim=tuple(range(p.grad.dim())))
+            #         p.grad = F.normalize(p.grad, p=2, dim=-1)
 
             if assert_grads: model.assert_grads(state)
 
@@ -345,6 +368,11 @@ def train(
                 train_loss.backward()
                 c_optimiser.step()
                 epoch_stats['train_loss'].append(train_loss.item())
+            
+            if norm_weights:
+                for i, layer in enumerate(model.layers):
+                    if i > 0:
+                        layer.weight.data = F.normalize(layer.weight.data, dim=1)
 
             # Track batch statistics
             epoch_stats['train_vfe'].append(model.vfe(state, batch_reduction='sum').item())
@@ -359,7 +387,7 @@ def train(
 
         # Collects statistics for validation data if it exists
         if val_data is not None:
-            val_results = val_pass(model, val_loader, flatten, c_optimiser is not None)
+            val_results = val_pass(model, val_loader, flatten, c_optimiser is not None, learn_layer=learn_layer)
             stats['val_vfe'] = val_results['vfe'].item()
             stats['val_acc'] = val_results['acc'].item()
             if c_optimiser is not None:
