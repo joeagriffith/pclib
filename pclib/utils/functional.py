@@ -69,8 +69,11 @@ class Shrinkage(torch.autograd.Function):
         return grad_input, grad_output
 
 # To apply this function
-def shrinkage(input, lambda_):
+def shrinkage(input, lambda_=1.0):
     return Shrinkage.apply(input, lambda_)
+
+def d_shrinkage(input, lambda_=1.0):
+    return (input.abs() > lambda_).float()
 
 # Calculate Correlations
 def calc_corr(state):

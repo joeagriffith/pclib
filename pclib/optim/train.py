@@ -69,6 +69,7 @@ def init_stats(model:torch.nn.Module, minimal:bool = False, loss:bool = False):
         stats = {
             "X_norms": [[] for _ in range(len(model.layers))],
             "E_mags": [[] for _ in range(len(model.layers))],
+            "grad_norms": [[] for _ in range(len(model.layers)-1)],
             "train_vfe": [],
             "train_corr": [],
             "train_sparsity": [],
@@ -210,7 +211,7 @@ def train(
     no_momentum:bool = False,
     norm_grads:bool = False,
     norm_weights:bool = False,
-    learn_layer:int = None
+    learn_layer:int = None,
 ):
     """
     | Trains a model with the specified parameters
@@ -383,6 +384,9 @@ def train(
                 for i, layer in enumerate(model.layers):
                     epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                     epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
+                    if i > 0:
+                        epoch_stats['grad_norms'][i-1].append(layer.weight.grad.norm().item())
+
 
 
         # Collects statistics for validation data if it exists
@@ -414,6 +418,8 @@ def train(
                 for i, layer in enumerate(model.layers):
                     writer.add_scalar(f'X_norms/layer_{i}', torch.tensor(epoch_stats['X_norms'][i]).mean().item(), model.epochs_trained.item())
                     writer.add_scalar(f'E_mags/layer_{i}', torch.tensor(epoch_stats['E_mags'][i]).mean().item(), model.epochs_trained.item())
+                    if i > 0:
+                        writer.add_scalar(f'grad_norms/layer_{i}', torch.tensor(epoch_stats['grad_norms'][i-1]).mean().item(), model.epochs_trained.item())
         
         if scheduler is not None:
             sched.step(stats['train_vfe'])

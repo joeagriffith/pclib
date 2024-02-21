@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Parameter
 from typing import Optional
-from pclib.utils.functional import reTanh, identity, trec
+from pclib.utils.functional import reTanh, identity, trec, shrinkage, d_shrinkage
 
 class FC(nn.Module):
     """
@@ -92,6 +92,8 @@ class FC(nn.Module):
             self.d_actv_fn: callable = lambda x: torch.where(x > 0, torch.ones_like(x), 0.01 * torch.ones_like(x))
         elif actv_fn == trec:
             self.d_actv_fn: callable = lambda x: (x > 1.0).float()
+        elif actv_fn == shrinkage:
+            self.d_actv_fn: callable = d_shrinkage
 
         self.init_params()
 
@@ -233,7 +235,8 @@ class FC(nn.Module):
 
         dx += -state['e'].detach()
 
-        # dx += 0.1 * -state['x'].detach()
+        # dx += 0.05 * -state['x'].detach()
+        dx += -0.1*state['x'].detach()
 
         if temp is not None and temp > 0:
             dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034
