@@ -31,6 +31,8 @@ class FCAtt(FC):
             Derivative of activation function to use (if None, will be inferred from actv_fn).
         gamma : float
             step size for x updates.
+        x_decay : float
+            Decay rate for x.
         device : torch.device
             Device to use for computation.
         dtype : torch.dtype
@@ -51,6 +53,7 @@ class FCAtt(FC):
                  actv_fn: callable = F.relu,
                  d_actv_fn: callable = None,
                  gamma: float = 0.1,
+                 x_decay: float = 0.0,
                  device: torch.device = torch.device('cpu'),
                  dtype: torch.dtype = None
                  ) -> None:
@@ -65,6 +68,7 @@ class FCAtt(FC):
             actv_fn,
             d_actv_fn,
             gamma,
+            x_decay,
             device,
             dtype
         )
@@ -190,7 +194,8 @@ class FCAtt(FC):
 
         dx += -state['e'].detach()
 
-        #  dx += 0.1 * -state['x'].detach()
+        if self.x_decay > 0:
+            dx += -self.x_decay * state['x'].detach()
 
         if temp is not None and temp > 0:
             dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034

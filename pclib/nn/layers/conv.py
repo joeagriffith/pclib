@@ -37,6 +37,8 @@ class Conv2d(nn.Module):
             Derivative of the activation function of the layer (if None, it will be inferred from actv_fn).
         gamma : float
             Step size for x updates.
+        x_decay : float
+            Decay rate for x.
         device : Optional[torch.device]
             Device to run the layer on.
         dtype : Optional[torch.dtype]
@@ -60,6 +62,7 @@ class Conv2d(nn.Module):
                  actv_fn: callable = F.tanh,
                  d_actv_fn: callable = None,
                  gamma: float = 0.1,
+                 x_decay: float = 0.0,
                  device: torch.device = torch.device('cpu'),
                  dtype: torch.dtype = None
                  ) -> None:
@@ -74,6 +77,7 @@ class Conv2d(nn.Module):
         self.shape = shape
         self.actv_fn = actv_fn
         self.gamma = gamma
+        self.x_decay = x_decay
         self.device = device
 
         self.kernel_size = kernel_size
@@ -271,7 +275,8 @@ class Conv2d(nn.Module):
 
         dx += -state['e'].detach()
 
-        dx += 0.1 * -state['x'].detach()
+        if self.x_decay > 0.0:
+            dx += -self.x_decay * state['x'].detach()
         
         if temp is not None:
             dx += torch.randn_like(state['x'], device=self.device) * 0.034 * temp

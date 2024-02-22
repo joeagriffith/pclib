@@ -27,6 +27,8 @@ class ConvClassifierUs(ConvClassifier):
             Derivative of the activation function to use in the network.
         gamma : float
             step size for x updates
+        x_decay : float
+            Decay rate for x
         temp_k : float
             Temperature constant for inference
         device : torch.device
@@ -42,6 +44,7 @@ class ConvClassifierUs(ConvClassifier):
             actv_fn:callable = F.relu, 
             d_actv_fn:callable = None, 
             gamma:float = 0.1, 
+            x_decay:float = 0.0,
             temp_k:float = 1.0,
             device:torch.device = torch.device('cpu'), 
             dtype:torch.dtype = None
@@ -53,6 +56,7 @@ class ConvClassifierUs(ConvClassifier):
             actv_fn=actv_fn,
             d_actv_fn=d_actv_fn,
             gamma=gamma,
+            x_decay=x_decay,
             temp_k=temp_k,
             device=device,
             dtype=dtype,

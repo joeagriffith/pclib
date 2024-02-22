@@ -33,6 +33,8 @@ class FCClassifier(nn.Module):
             Derivative of activation function to use
         gamma : float
             step size for x updates
+        x_decay : float
+            Decay constant for x
         temp_k : float
             Temperature constant for inference
         device : torch.device
@@ -55,19 +57,21 @@ class FCClassifier(nn.Module):
             actv_fn:callable = F.tanh, 
             d_actv_fn:callable = None, 
             gamma:float = 0.1, 
+            x_decay: float = 0.0,
             temp_k:float = 1.0,
             device:torch.device = torch.device('cpu'), 
             dtype:torch.dtype = None
         ):
         super().__init__()
 
-        self.factory_kwargs = {'actv_fn': actv_fn, 'd_actv_fn': d_actv_fn, 'gamma': gamma, 'has_bias': bias, 'symmetric': symmetric, 'dtype': dtype}
+        self.factory_kwargs = {'actv_fn': actv_fn, 'd_actv_fn': d_actv_fn, 'gamma': gamma, 'has_bias': bias, 'symmetric': symmetric, 'x_decay': x_decay, 'dtype': dtype}
         self.in_features = in_features
         self.hidden_sizes = hidden_sizes
         self.num_classes = num_classes
         self.bias = bias
         self.symmetric = symmetric
         self.gamma = gamma
+        self.x_decay = x_decay
         self.temp_k = temp_k
         self.steps = steps
         self.device = device
@@ -89,6 +93,7 @@ class FCClassifier(nn.Module):
             f"    symmetric: {self.symmetric}\n" + \
             f"    actv_fn: {self.factory_kwargs['actv_fn'].__name__}\n" + \
             f"    gamma: {self.gamma}\n" + \
+            f"    x_decay: {self.x_decay}\n" + \
             f"    device: {self.device}\n" + \
             f"    dtype: {self.factory_kwargs['dtype']}\n" + \
             f"    epochs_trained: {self.epochs_trained}\n" + \

@@ -33,6 +33,8 @@ class FCClassifierUsGreedy(FCClassifierUs):
             Derivative of activation function to use
         gamma : float
             step size for x updates
+        x_decay : float
+            Decay rate for x
         temp_k : float
             Temperature constant for inference
         device : torch.device
@@ -51,11 +53,12 @@ class FCClassifierUsGreedy(FCClassifierUs):
             actv_fn:callable = F.tanh, 
             d_actv_fn:callable = None, 
             gamma:float = 0.1, 
+            x_decay:float = 0.0,
             temp_k:float = 1.0,
             device:torch.device = torch.device('cpu'), 
             dtype:torch.dtype = None
         ):
-        super().__init__(in_features, num_classes, hidden_sizes, steps, bias, symmetric, actv_fn, d_actv_fn, gamma, temp_k, device, dtype)
+        super().__init__(in_features, num_classes, hidden_sizes, steps, bias, symmetric, actv_fn, d_actv_fn, gamma, x_decay, temp_k, device, dtype)
 
     
     def vfe(self, state:List[dict], batch_reduction:str = 'mean', unit_reduction:str = 'sum', learn_layer:int = None):

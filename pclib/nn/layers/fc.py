@@ -30,6 +30,8 @@ class FC(nn.Module):
             Derivative of activation function to use (if None, will be inferred from actv_fn).
         gamma : float
             step size for x updates.
+        x_decay : float
+            Decay rate for x.
         device : torch.device
             Device to use for computation.
         dtype : torch.dtype
@@ -50,6 +52,7 @@ class FC(nn.Module):
                  actv_fn: callable = F.relu,
                  d_actv_fn: callable = None,
                  gamma: float = 0.1,
+                 x_decay: float = 0.0,
                  device: torch.device = torch.device('cpu'),
                  dtype: torch.dtype = None
                  ) -> None:
@@ -63,6 +66,7 @@ class FC(nn.Module):
         self.symmetric = symmetric
         self.actv_fn = actv_fn
         self.gamma = gamma
+        self.x_decay = x_decay
         self.device = device
 
         # Automatically set d_actv_fn if not provided
@@ -113,7 +117,8 @@ class FC(nn.Module):
             f"    has_bias: {self.has_bias}\n" + \
             f"    symmetric: {self.symmetric}\n" + \
             f"    actv_fn: {self.actv_fn.__name__}\n" + \
-            f"    gamma: {self.gamma}"
+            f"    gamma: {self.gamma}" + \
+            f"    x_decay: {self.x_decay}"
         
         string = base_str[:base_str.find('\n')] + custom_info + base_str[base_str.find('\n'):]
         
@@ -236,7 +241,8 @@ class FC(nn.Module):
         dx += -state['e'].detach()
 
         # dx += 0.05 * -state['x'].detach()
-        dx += -0.1*state['x'].detach()
+        if self.x_decay > 0:
+            dx += -self.x_decay*state['x'].detach()
 
         if temp is not None and temp > 0:
             dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034

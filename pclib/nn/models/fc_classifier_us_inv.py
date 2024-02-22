@@ -30,6 +30,8 @@ class FCClassifierUsInv(FCClassifierUs):
             Derivative of activation function to use
         gamma : float
             step size for x updates
+        x_decay : float
+            Decay rate for x
         temp_k : float
             Temperature constant for inference
         device : torch.device
@@ -48,6 +50,7 @@ class FCClassifierUsInv(FCClassifierUs):
             actv_fn:callable = F.tanh, 
             d_actv_fn:bool = None, 
             gamma:float = 0.1, 
+            x_decay:float = 0.0,
             temp_k:float = 1.0,
             device:torch.device = torch.device('cpu'), 
             dtype:torch.dtype = None
@@ -61,6 +64,7 @@ class FCClassifierUsInv(FCClassifierUs):
             symmetric, 
             actv_fn, 
             d_actv_fn, 
+            x_decay,
             gamma, 
             temp_k,
             device, 

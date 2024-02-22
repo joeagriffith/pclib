@@ -33,6 +33,8 @@ class FCAM(FCClassifierUs):
             step size for x updates
         temp_k : float
             Temperature constant for inference
+        x_decay : float
+            Decay rate for x
         device : torch.device
             Device to run on
         dtype : torch.dtype
@@ -49,11 +51,12 @@ class FCAM(FCClassifierUs):
             actv_fn:callable = F.tanh, 
             d_actv_fn:callable = None, 
             gamma:float = 0.1, 
+            x_decay:float = 0.0,
             temp_k:float = 1.0,
             device:torch.device = torch.device('cpu'), 
             dtype:torch.dtype = None
         ):
-        super().__init__(in_features, num_classes, hidden_sizes, steps, bias, symmetric, actv_fn, d_actv_fn, gamma, temp_k, device, dtype)
+        super().__init__(in_features, num_classes, hidden_sizes, steps, bias, symmetric, actv_fn, d_actv_fn, gamma, x_decay, temp_k, device, dtype)
 
     def init_layers(self):
         """

@@ -212,6 +212,7 @@ def train(
     norm_grads:bool = False,
     norm_weights:bool = False,
     learn_layer:int = None,
+    sparse_coeff:float = 0.0,
 ):
     """
     | Trains a model with the specified parameters
@@ -329,18 +330,29 @@ def train(
                 x = images
             y = format_y(targets, model.num_classes)
 
-            model.zero_grad()
+            if sparse_coeff > 0:
+                obs = x * (torch.rand_like(x) < sparse_coeff).float()
+            else:
+                obs = x
+
+            optimiser.zero_grad()
+            if c_optimiser is not None:
+                c_optimiser.zero_grad()
             # Forward pass and gradient calculation
             try:
-                out, state = model(x, y=y, learn_on_step=learn_on_step)
+                out, state = model(obs, y=y, learn_on_step=learn_on_step)
             # catch typeerror if model is not supervised
             except TypeError:
                 if learn_layer is None:
-                    out, state = model(x, learn_on_step=learn_on_step)
+                    out, state = model(obs, learn_on_step=learn_on_step)
                 else:
-                    out, state = model(x, learn_on_step=learn_on_step, learn_layer=learn_layer)
+                    out, state = model(obs, learn_on_step=learn_on_step, learn_layer=learn_layer)
             if lr > 0 and not learn_on_step:
                 if learn_layer is None:
+                    if sparse_coeff > 0:
+                        state[0]['x'] = x
+                        pred = model.layers[1].predict(state[1])
+                        model.layers[0].update_e(state[0], pred, temp=0.0)
                     vfe = model.vfe(state)
                 else:
                     vfe = model.vfe(state, learn_layer=learn_layer)
@@ -348,10 +360,10 @@ def train(
                     vfe /= vfe.abs().item()
                 vfe.backward()
 
-            # if norm_grads:
-            #     for p in model.parameters():
-            #         # p.grad = F.normalize(p.grad, p=2, dim=tuple(range(p.grad.dim())))
-            #         p.grad = F.normalize(p.grad, p=2, dim=-1)
+            if norm_grads:
+                for p in model.parameters():
+                    # p.grad = F.normalize(p.grad, p=2, dim=tuple(range(p.grad.dim())))
+                    p.grad = F.normalize(p.grad, p=2, dim=-1)
 
             if assert_grads: model.assert_grads(state)
 
@@ -375,17 +387,19 @@ def train(
                     if i > 0:
                         layer.weight.data = F.normalize(layer.weight.data, dim=1)
 
-            # Track batch statistics
-            epoch_stats['train_vfe'].append(model.vfe(state, batch_reduction='sum').item())
-            
-            if not minimal_stats:
-                epoch_stats['train_corr'].append(calc_corr(state).item())
-                epoch_stats['train_sparsity'].append(calc_sparsity(state).item())
-                for i, layer in enumerate(model.layers):
-                    epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
-                    epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
-                    if i > 0:
-                        epoch_stats['grad_norms'][i-1].append(layer.weight.grad.norm().item())
+
+            if lr > 0:
+                # Track batch statistics
+                epoch_stats['train_vfe'].append(model.vfe(state, batch_reduction='sum').item())
+                
+                if not minimal_stats:
+                    epoch_stats['train_corr'].append(calc_corr(state).item())
+                    epoch_stats['train_sparsity'].append(calc_sparsity(state).item())
+                    for i, layer in enumerate(model.layers):
+                        epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
+                        epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
+                        if i > 0:
+                            epoch_stats['grad_norms'][i-1].append(layer.weight.grad.norm().item())
 
 
 
@@ -403,34 +417,36 @@ def train(
                 if c_optimiser is not None:
                     writer.add_scalar('Loss/val', stats['val_loss'], model.epochs_trained.item())
 
-        stats['train_vfe'] = torch.tensor(epoch_stats['train_vfe']).sum().item() / len(train_loader.dataset)
         if c_optimiser is not None:
             stats['train_loss'] = torch.tensor(epoch_stats['train_loss']).mean().item()
-        if log_dir:
-            writer.add_scalar('VFE/train', stats['train_vfe'], model.epochs_trained.item())
-            if c_optimiser is not None:
-                writer.add_scalar('Loss/train', stats['train_loss'], model.epochs_trained.item())
-            if not minimal_stats:
-                stats['train_corr'] = torch.tensor(epoch_stats['train_corr']).mean().item()
-                writer.add_scalar('Corr/train', stats['train_corr'], model.epochs_trained.item())
-                stats['train_sparsity'] = torch.tensor(epoch_stats['train_sparsity']).mean().item()
-                writer.add_scalar('Sparsity/train', stats['train_sparsity'], model.epochs_trained.item())
-                for i, layer in enumerate(model.layers):
-                    writer.add_scalar(f'X_norms/layer_{i}', torch.tensor(epoch_stats['X_norms'][i]).mean().item(), model.epochs_trained.item())
-                    writer.add_scalar(f'E_mags/layer_{i}', torch.tensor(epoch_stats['E_mags'][i]).mean().item(), model.epochs_trained.item())
-                    if i > 0:
-                        writer.add_scalar(f'grad_norms/layer_{i}', torch.tensor(epoch_stats['grad_norms'][i-1]).mean().item(), model.epochs_trained.item())
+        if lr > 0:
+            stats['train_vfe'] = torch.tensor(epoch_stats['train_vfe']).sum().item() / len(train_loader.dataset)
+            if log_dir:
+                writer.add_scalar('VFE/train', stats['train_vfe'], model.epochs_trained.item())
+                if c_optimiser is not None:
+                    writer.add_scalar('Loss/train', stats['train_loss'], model.epochs_trained.item())
+                if not minimal_stats:
+                    stats['train_corr'] = torch.tensor(epoch_stats['train_corr']).mean().item()
+                    writer.add_scalar('Corr/train', stats['train_corr'], model.epochs_trained.item())
+                    stats['train_sparsity'] = torch.tensor(epoch_stats['train_sparsity']).mean().item()
+                    writer.add_scalar('Sparsity/train', stats['train_sparsity'], model.epochs_trained.item())
+                    for i, layer in enumerate(model.layers):
+                        writer.add_scalar(f'X_norms/layer_{i}', torch.tensor(epoch_stats['X_norms'][i]).mean().item(), model.epochs_trained.item())
+                        writer.add_scalar(f'E_mags/layer_{i}', torch.tensor(epoch_stats['E_mags'][i]).mean().item(), model.epochs_trained.item())
+                        if i > 0:
+                            writer.add_scalar(f'grad_norms/layer_{i}', torch.tensor(epoch_stats['grad_norms'][i-1]).mean().item(), model.epochs_trained.item())
         
-        if scheduler is not None:
+        if scheduler is not None and lr > 0:
             sched.step(stats['train_vfe'])
         if c_optimiser is not None and scheduler is not None:
             c_sched.step(stats['train_loss'])
         
-        # Saves model if it has the lowest validation VFE (or training VFE if no validation data) compared to previous training
-        if model_dir is not None:
-            current_vfe = stats['val_vfe'] if val_data is not None else stats['train_vfe']
-            if current_vfe > model.max_vfe:
-                torch.save(model.state_dict(), model_dir)
-                model.max_vfe = torch.tensor(current_vfe)
+        if lr > 0:
+            # Saves model if it has the lowest validation VFE (or training VFE if no validation data) compared to previous training
+            if model_dir is not None:
+                current_vfe = stats['val_vfe'] if val_data is not None else stats['train_vfe']
+                if current_vfe > model.max_vfe:
+                    torch.save(model.state_dict(), model_dir)
+                    model.max_vfe = torch.tensor(current_vfe)
 
         model.inc_epochs()
