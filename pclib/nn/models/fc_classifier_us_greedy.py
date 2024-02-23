@@ -84,14 +84,14 @@ class FCClassifierUsGreedy(FCClassifierUs):
         # Reduce units for each layer
         if unit_reduction == 'sum':
             if learn_layer is not None:
-                vfe = [-0.5 * state[learn_layer-1]['e'].square().sum(dim=[i for i in range(1, state[learn_layer-1]['e'].dim())])]
+                vfe = [0.5 * state[learn_layer-1]['e'].square().sum(dim=[i for i in range(1, state[learn_layer-1]['e'].dim())])]
             else:
-                vfe = [-0.5 * state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+                vfe = [0.5 * state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
         elif unit_reduction =='mean':
             if learn_layer is not None:
-                vfe = [-0.5 * state[learn_layer-1]['e'].square().mean(dim=[i for i in range(1, state[learn_layer-1]['e'].dim())])]
+                vfe = [0.5 * state[learn_layer-1]['e'].square().mean(dim=[i for i in range(1, state[learn_layer-1]['e'].dim())])]
             else:
-                vfe = [-0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+                vfe = [0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
         # Reduce layers
         vfe = sum(vfe)
         # Reduce batches

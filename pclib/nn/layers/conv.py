@@ -52,7 +52,7 @@ class Conv2d(nn.Module):
 
     def __init__(self,
                  prev_shape: Optional[Tuple[int]],
-                 shape: (int, int, int), # (channels, height, width)
+                 shape: Tuple[int], # (channels, height, width)
                  kernel_size: int = 3,
                  stride: int = 1,
                  padding: int = 1,
@@ -132,6 +132,7 @@ class Conv2d(nn.Module):
             f"    shape: {self.shape}\n" + \
             f"    actv_fn: {self.actv_fn}\n" + \
             f"    gamma: {self.gamma}\n" + \
+            f"    x_decay: {self.x_decay}\n" + \
             f"    kernel_size: {self.kernel_size}\n" + \
             f"    stride: {self.stride}\n" + \
             f"    padding: {self.padding}\n" + \

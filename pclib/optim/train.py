@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 from pclib.optim.eval import topk_accuracy
 from pclib.utils.functional import format_y, calc_corr, calc_sparsity
 
-def get_optimiser(parameters:list, lr:float, weight_decay:float, maximize:bool, optimiser:str = 'AdamW', no_momentum:bool = False):
+def get_optimiser(parameters:list, lr:float, weight_decay:float, optimiser:str = 'AdamW', no_momentum:bool = False):
     """
     | Builds an optimiser from the specified arguments
 
@@ -30,24 +30,24 @@ def get_optimiser(parameters:list, lr:float, weight_decay:float, maximize:bool, 
     assert optimiser in ['AdamW', 'Adam', 'SGD', 'RMSprop'], f"Invalid optimiser {optimiser}"
     if optimiser == 'AdamW':
         if no_momentum:
-            return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize, betas=(0.0, 0.0))
+            return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay, betas=(0.0, 0.0))
         else:
-            return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize)
+            return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay)
     elif optimiser == 'Adam':
         if no_momentum:
-            return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize, betas=(0.0, 0.0))
+            return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay, betas=(0.0, 0.0))
         else:
-            return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize)
+            return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay)
     elif optimiser == 'SGD':
         if no_momentum:
-            return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize, momentum=0.0)
+            return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay, momentum=0.0)
         else:
-            return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize, momentum=0.8)
+            return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay)
     elif optimiser == 'RMSprop':
         if no_momentum:
-            return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize, momentum=0.0)
+            return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, momentum=0.0)
         else:
-            return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, maximize=maximize, momentum=0.8)
+            return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, momentum=0.8)
 
 def init_stats(model:torch.nn.Module, minimal:bool = False, loss:bool = False):
     """
@@ -267,13 +267,13 @@ def train(
     if learn_on_step:
         assert lr > 0, "lr must be positive when learn_on_step=True"
 
-    optimiser = get_optimiser(model.parameters(), lr, reg_coeff, True, optim, no_momentum)
+    optimiser = get_optimiser(model.parameters(), lr, reg_coeff, optim, no_momentum)
     if scheduler == 'ReduceLROnPlateau':
         sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=5, verbose=True, factor=0.1, mode='max')
 
 
     if hasattr(model, 'classifier') and c_lr > 0:
-        c_optimiser = get_optimiser(model.classifier.parameters(), c_lr, reg_coeff, False, optim,)
+        c_optimiser = get_optimiser(model.classifier.parameters(), c_lr, reg_coeff, optim,)
         loss_fn = F.cross_entropy
         if scheduler == 'ReduceLROnPlateau':
             c_sched = torch.optim.lr_scheduler.ReduceLROnPlateau(c_optimiser, patience=5, cooldown=10, verbose=True, factor=0.1)
@@ -385,7 +385,10 @@ def train(
             if norm_weights:
                 for i, layer in enumerate(model.layers):
                     if i > 0:
-                        layer.weight.data = F.normalize(layer.weight.data, dim=1)
+                        if hasattr(layer, 'weight'):
+                            layer.weight.data = F.normalize(layer.weight.data, dim=-1)
+                        elif hasattr(layer, 'conv'):
+                            layer.conv[0].weight.data = F.normalize(layer.conv[0].weight.data, dim=(0, 2, 3))
 
 
             if lr > 0:
