@@ -237,6 +237,8 @@ class FC(nn.Module):
             if e_below.dim() == 4:
                 e_below = e_below.flatten(1)
             dx += self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
+            # dx += self.propagate(e_below) * state['x'].detach().sign()
+
 
         dx += -state['e'].detach()
 

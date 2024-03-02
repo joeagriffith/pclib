@@ -189,7 +189,7 @@ class FCClassifierUsGreedy(FCClassifierUs):
                 layer.update_e(state[i], pred, temp=temp)
 
 
-    def forward(self, obs:torch.Tensor = None, steps:int = None, learn_on_step:bool = False, learn_layer:int = None):
+    def forward(self, obs:torch.Tensor = None, steps:int = None, learn_layer:int = None):
         """
         | Performs inference phase of the model. 
         | Uses self.classifier to get output.
@@ -200,8 +200,6 @@ class FCClassifierUsGreedy(FCClassifierUs):
                 Input data
             steps : Optional[int]
                 Number of steps to run inference for. Uses self.steps if not provided.
-            learn_on_step : bool
-                Whether to backpropagate on each step. Default False.
             learn_layer : Optional[int]
                 If provided, only layers i where i <= learn_layer are updated.
 
@@ -224,8 +222,6 @@ class FCClassifierUsGreedy(FCClassifierUs):
             temp = self.calc_temp(i, steps)
             self.step(state, obs, temp=temp, gamma=gamma, learn_layer=learn_layer)
             vfe = self.vfe(state, learn_layer=learn_layer)
-            if learn_on_step:
-                vfe.backward()
             if prev_vfe is not None and vfe < prev_vfe:
                 gamma = gamma * 0.9
             prev_vfe = vfe

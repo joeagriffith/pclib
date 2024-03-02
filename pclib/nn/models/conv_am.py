@@ -108,7 +108,7 @@ class ConvAM(ConvClassifierUs):
         return out
         
 
-    def forward(self, obs:torch.Tensor = None, steps:int = None, learn_on_step:bool = False):
+    def forward(self, obs:torch.Tensor = None, steps:int = None):
         """
         | Performs inference for the network.
 

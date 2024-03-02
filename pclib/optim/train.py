@@ -196,7 +196,6 @@ def train(
     num_epochs:int,
     lr:float = 3e-4,
     c_lr:float = 1e-3,
-    learn_on_step:bool = False,
     batch_size:int = 1,
     reg_coeff:float = 1e-2,
     flatten:bool = True,
@@ -232,8 +231,6 @@ def train(
             learning rate for PC layers.
         c_lr : float
             learning rate for classifier. Ignored if model has no classifier.
-        learn_on_step : bool
-            if True, backpropagate on every model.step(), if False, backpropagate after model.forward().
         batch_size : int
             batch size
         reg_coeff : float
@@ -264,8 +261,6 @@ def train(
             if not None, only learn the specified layer. Must be in range(model.num_layers). Only works for unsupervised models. Remember, layer 0 does not have weights, so start from 1 for greedy layer-wise learning.
     """
     assert scheduler in [None, 'ReduceLROnPlateau'], f"Invalid scheduler '{scheduler}', or not yet implemented"
-    if learn_on_step:
-        assert lr > 0, "lr must be positive when learn_on_step=True"
 
     optimiser = get_optimiser(model.parameters(), lr, reg_coeff, optim, no_momentum)
     if scheduler == 'ReduceLROnPlateau':
@@ -340,30 +335,25 @@ def train(
                 c_optimiser.zero_grad()
             # Forward pass and gradient calculation
             try:
-                out, state = model(obs, y=y, learn_on_step=learn_on_step)
+                out, state = model(obs, y=y)
             # catch typeerror if model is not supervised
             except TypeError:
                 if learn_layer is None:
-                    out, state = model(obs, learn_on_step=learn_on_step)
+                    out, state = model(obs)
                 else:
-                    out, state = model(obs, learn_on_step=learn_on_step, learn_layer=learn_layer)
-            if lr > 0 and not learn_on_step:
+                    out, state = model(obs, learn_layer=learn_layer)
+            if lr > 0:
                 if learn_layer is None:
                     if sparse_coeff > 0:
                         state[0]['x'] = x
                         pred = model.layers[1].predict(state[1])
                         model.layers[0].update_e(state[0], pred, temp=0.0)
-                    vfe = model.vfe(state)
+                    vfe = model.vfe(state, norm_grads=norm_grads)
                 else:
-                    vfe = model.vfe(state, learn_layer=learn_layer)
-                if norm_grads:
-                    vfe /= vfe.abs().item()
+                    vfe = model.vfe(state, learn_layer=learn_layer, norm_grads=norm_grads)
+                # if norm_grads:
+                #     vfe /= vfe.abs().item()
                 vfe.backward()
-
-            if norm_grads:
-                for p in model.parameters():
-                    # p.grad = F.normalize(p.grad, p=2, dim=tuple(range(p.grad.dim())))
-                    p.grad = F.normalize(p.grad, p=2, dim=-1)
 
             if assert_grads: model.assert_grads(state)
 

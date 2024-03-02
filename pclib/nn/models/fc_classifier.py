@@ -127,7 +127,7 @@ class FCClassifier(nn.Module):
         """
         self.epochs_trained += n    
 
-    def vfe(self, state:List[dict], batch_reduction:str = 'mean', unit_reduction:str = 'sum'):
+    def vfe(self, state:List[dict], batch_reduction:str = 'mean', unit_reduction:str = 'sum', norm_grads=False):
         """
         | Calculates the Variational Free Energy (VFE) of the model.
         | This is the sum of the squared prediction errors of each layer.
@@ -148,10 +148,17 @@ class FCClassifier(nn.Module):
                 VFE of the model (scalar)
         """
         # Reduce units for each layer
-        if unit_reduction == 'sum':
-            vfe = [0.5 * state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
-        elif unit_reduction =='mean':
-            vfe = [0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+        if not norm_grads:
+            if unit_reduction == 'sum':
+                vfe = [0.5 * state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+            elif unit_reduction =='mean':
+                vfe = [0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+        else:
+            if unit_reduction == 'sum':
+                vfe = [0.5 * F.normalize(state_i['e']).square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+            elif unit_reduction =='mean':
+                vfe = [0.5 * F.normalize(state_i['e']).square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+
         # Reduce layers
         vfe = sum(vfe)
         # Reduce batches
@@ -313,7 +320,8 @@ class FCClassifier(nn.Module):
                 pred = self.layers[i+1].predict(state[i+1])
                 layer.update_e(state[i], pred, temp=temp)
 
-    def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, steps:int = None, learn_on_step:bool = False):
+    def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, steps:int = None):
+
         """
         | Performs inference phase of the model.
         
@@ -324,6 +332,8 @@ class FCClassifier(nn.Module):
                 Target data
             steps : Optional[int]
                 Number of steps to run inference for. Uses self.steps if not provided.
+            optimiser : Optional[torch.optim.Optimizer]
+                If provided, will perform incremental Predictive Coding, (learn on each step).
 
         Returns
         -------
@@ -343,8 +353,7 @@ class FCClassifier(nn.Module):
             temp = self.calc_temp(i, steps)
             self.step(state, obs, y, temp, gamma)
             vfe = self.vfe(state)
-            if learn_on_step:
-                vfe.backward()
+
             if prev_vfe is not None and vfe < prev_vfe:
                 gamma = gamma * 0.9
             prev_vfe = vfe
