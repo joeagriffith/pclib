@@ -20,34 +20,10 @@ pclib.nn.models.conv\_classifier\_us module
    :undoc-members:
    :show-inheritance:
 
-pclib.nn.models.fc\_classifier module
+pclib.nn.models.FCPCN module
 -------------------------------------
 
-.. automodule:: pclib.nn.models.fc_classifier
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-pclib.nn.models.fc\_classifier\_inv module
-------------------------------------------
-
-.. automodule:: pclib.nn.models.fc_classifier_inv
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-pclib.nn.models.fc\_classifier\_us module
------------------------------------------
-
-.. automodule:: pclib.nn.models.fc_classifier_us
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-pclib.nn.models.fc\_classifier\_us\_inv module
-----------------------------------------------
-
-.. automodule:: pclib.nn.models.fc_classifier_us_inv
+.. automodule:: pclib.nn.models.FCPCN
    :members:
    :undoc-members:
    :show-inheritance:
