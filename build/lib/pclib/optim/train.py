@@ -8,18 +8,24 @@ from torch.utils.tensorboard import SummaryWriter
 from pclib.optim.eval import topk_accuracy
 from pclib.utils.functional import format_y, calc_corr, calc_sparsity
 
-def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW', no_momentum=False):
+def get_optimiser(parameters:list, lr:float, weight_decay:float, optimiser:str = 'AdamW', no_momentum:bool = False):
     """
     | Builds an optimiser from the specified arguments
 
-    Args:
-        | parameters (list): list of PyTorch parameters to optimiser. Usually model.parameters()
-        | lr (float): learning rate
-        | weight_decay (float): weight decay
-        | optimiser (str): optimiser to use. ['AdamW', 'Adam', 'SGD', 'RMSprop']
+    Parameters
+    ----------
+        parameters : list
+            list of PyTorch parameters to optimiser. Usually model.parameters()
+        lr : float
+            learning rate
+        weight_decay : float
+            weight decay
+        optimiser : str
+            optimiser to use. ['AdamW', 'Adam', 'SGD', 'RMSprop']
     
-    Returns:
-        | optimiser (torch.optim): optimiser
+    Returns
+    -------
+        torch.optim.Optimiser
     """
     assert optimiser in ['AdamW', 'Adam', 'SGD', 'RMSprop'], f"Invalid optimiser {optimiser}"
     if optimiser == 'AdamW':
@@ -36,28 +42,34 @@ def get_optimiser(parameters, lr, weight_decay, optimiser='AdamW', no_momentum=F
         if no_momentum:
             return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay, momentum=0.0)
         else:
-            return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay, momentum=0.9)
+            return torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay)
     elif optimiser == 'RMSprop':
         if no_momentum:
             return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, momentum=0.0)
         else:
-            return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, momentum=0.9)
+            return torch.optim.RMSprop(parameters, lr=lr, weight_decay=weight_decay, momentum=0.8)
 
-def init_stats(model, minimal=False, loss=False):
+def init_stats(model:torch.nn.Module, minimal:bool = False, loss:bool = False):
     """
     | Initialises a dictionary to store statistics
     
-    Args:
-        | model (nn.Module): model to track statistics for
-        | minimal (bool): if True, only track minimal statistics (train_vfe, train_corr, val_vfe, val_acc)
+    Parameters
+    ----------
+        model : torch.nn.Module
+            model to track statistics for
+        minimal : bool
+            if True, only track minimal statistics (train_vfe, train_corr, val_vfe, val_acc)
     
-    Returns:
-        | stats (dict): dictionary to store statistics
+    Returns
+    -------
+        dict
+            dictionary to store statistics
     """
     if not minimal:
         stats = {
             "X_norms": [[] for _ in range(len(model.layers))],
             "E_mags": [[] for _ in range(len(model.layers))],
+            "grad_norms": [[] for _ in range(len(model.layers)-1)],
             "train_vfe": [],
             "train_corr": [],
             "train_sparsity": [],
@@ -77,19 +89,24 @@ def init_stats(model, minimal=False, loss=False):
         stats['val_loss'] = []
     return stats
 
-def neg_pass(model, x, targets, neg_coeff):
+def neg_pass(model:torch.nn.Module, x:torch.Tensor, labels:torch.Tensor, neg_coeff:float=1.0):
     """
-    | Calculates incorrect ys and performs inference on them.
+    | Calculates incorrect y
     | Then multiply vfe by -neg_coeff and backpropagate to increase vfe for negative data.
 
-    Args:
-        | model (nn.Module): model to train
-        | x (torch.Tensor): input data
-        | targets (torch.Tensor): targets
-        | neg_coeff (float): coefficient to multiply vfe by. 1.0 for balanced positive and negative passes. Must be positive.
+    Parameters
+    ----------
+        model : torch.nn.Module
+            model to train
+        x : torch.Tensor
+            input data
+        labels : torch.Tensor
+            target labels
+        neg_coeff : float
+            coefficient to multiply vfe by. 1.0 for balanced positive and negative passes. Must be positive.
     """
     assert neg_coeff > 0, f"neg_coeff must be positive, got {neg_coeff}"
-    false_targets = (targets + torch.randint_like(targets, low=1, high=model.num_classes)) % model.num_classes
+    false_targets = (labels + torch.randint_like(labels, low=1, high=model.num_classes)) % model.num_classes
     false_y = format_y(false_targets, model.num_classes)
 
     # Forward pass
@@ -97,41 +114,53 @@ def neg_pass(model, x, targets, neg_coeff):
     loss = -neg_coeff * model.vfe(neg_state)
     loss.backward()
 
-def untr_pass(model, x, untr_coeff):
+def untr_pass(model:torch.nn.Module, x:torch.Tensor, y:torch.Tensor=None, untr_coeff:float=0.1):
     """
-    | Calculates incorrect ys and performs inference on them.
-    | Then multiply vfe by -neg_coeff and backpropagate to increase vfe for negative data.
+    | Performs an inference pass with the model, always supplying x, and y if it is not None.
+    | However, the gradients calculated with respect to 'vfe * -untr_coeff', so that the model is untrained.
+    | This function is inspired by work in the Hopfield Network literature, which aims to reduce the occurence of spurious minima.
 
-    Args:
-        | model (nn.Module): model to train
-        | x (torch.Tensor): input data
-        | targets (torch.Tensor): targets
-        | neg_coeff (float): coefficient to multiply vfe by. 1.0 for balanced positive and negative passes. Must be positive.
+    Parameters
+    ----------
+        model : torch.nn.Module
+            model to train
+        x : torch.Tensor
+            input data
+        untr_coeff : float
+            coefficient to multiply vfe by. 1.0 for balanced positive and negative passes. Must be positive.
     """
-    input = torch.randn_like(x)*2 + x
-    input = F.normalize(input, dim=1) * x.norm(dim=1).mean()
-
-    grad_before = model.layers[1].weight_td.grad.clone()
+    assert untr_coeff > 0, f"untr_coeff must be positive, got {untr_coeff}"
     # Forward pass
-    _, neg_state = model(x)
+    x = torch.rand_like(x)
+    try:
+        _, neg_state = model(x, y=y)
+    # catch typeerror if model is not supervised
+    except TypeError:
+        _, neg_state = model(x)
     loss = -untr_coeff * model.vfe(neg_state)
     loss.backward()
-    grad_after = model.layers[1].weight_td.grad.clone()
-    if (grad_before == grad_after).all():
-        raise RuntimeError("Untrained pass did not update gradients")
 
-def val_pass(model, val_loader, flatten=True, return_loss=False):
+def val_pass(model:torch.nn.Module, classifier:torch.nn.Module, val_loader:torch.utils.data.DataLoader, flatten:bool=True, return_loss:bool=False, learn_layer:int=None):
     """
     | Performs a validation pass on the model
 
-    Args:
-        | model (nn.Module): model to validate
-        | val_loader (DataLoader): validation data
-        | flatten (bool): if True, flatten input data
+    Parameters
+    ----------
+        model : torch.nn.Module
+            model to validate
+        classifier : Optional[torch.nn.Module]
+            classifies model output. Ignored if classifier does not exist.
+        val_loader : torch.utils.data.DataLoader
+            validation data
+        flatten : bool
+            if True, flatten input data
+        learn_layer : int
+            if not None, only performs inference using first learn_layer layers, and calculates vfe only from layer learn_layer. Only works for unsupervised models.
 
-    Returns:
-        | val_vfe (float): average VFE for the validation data
-        | val_acc (float): accuracy for the validation data
+    Returns
+    -------
+        dict
+            dictionary of validation results
     """
     with torch.no_grad():
         model.eval()
@@ -145,10 +174,18 @@ def val_pass(model, val_loader, flatten=True, return_loss=False):
                 x = images
 
             # Forward pass
-            out, state = model(x)
+            if learn_layer is not None:
+                out, state = model(x, learn_layer=learn_layer)
+            else:
+                out, state = model(x)
+            if classifier is not None:
+                out = classifier(out)
             if return_loss:
                 loss += F.cross_entropy(out, target, reduction='sum')
-            vfe += model.vfe(state, batch_reduction='sum')
+            if learn_layer is not None:
+                vfe += model.vfe(state, batch_reduction='sum', learn_layer=learn_layer)
+            else:
+                vfe += model.vfe(state, batch_reduction='sum')
             acc += (out.argmax(dim=1) == target).sum()
 
         acc /= len(val_loader.dataset)
@@ -157,61 +194,91 @@ def val_pass(model, val_loader, flatten=True, return_loss=False):
     return {'vfe': vfe, 'acc': acc, 'loss': loss}
 
 def train(
-    model, 
-    train_data,
-    val_data,
-    num_epochs,
-    lr = 3e-4,
-    c_lr = 1e-3,
-    back_on_step=False,
-    batch_size=1,
-    reg_coeff = 1e-2,
-    flatten=True,
-    neg_coeff=None,
-    untr_coeff=None,
-    log_dir=None,
-    model_dir=None,
-    minimal_stats=False,
-    assert_grads=False,
-    optim='AdamW',
-    scheduler=None,
-    no_momentum=False,
+    model:torch.nn.Module, 
+    classifier:torch.nn.Module,
+    supervised:bool,
+    train_data:torch.utils.data.Dataset,
+    val_data:torch.utils.data.Dataset,
+    num_epochs:int,
+    lr:float = 3e-4,
+    c_lr:float = 1e-3,
+    batch_size:int = 1,
+    reg_coeff:float = 1e-2,
+    flatten:bool = True,
+    neg_coeff:float = None,
+    untr_coeff:float = None,
+    log_dir:str = None,
+    model_dir:str = None,
+    minimal_stats:bool = False,
+    assert_grads:bool = False,
+    optim:str = 'AdamW',
+    scheduler:str = None,
+    no_momentum:bool = False,
+    norm_grads:bool = False,
+    norm_weights:bool = False,
+    learn_layer:int = None,
+    sparse_coeff:float = 0.0,
 ):
     """
     | Trains a model with the specified parameters
     | Can train any model, supervised or unsupervised, standard, symmetric or inverted.
 
-    Args:
-        | model (nn.Module): model to train
-        | train_data (Dataset or DataLoader): training data
-        | val_data (Dataset or DataLoader): validation data
-        | num_epochs (int): number of epochs to train for
-        | lr (float): learning rate
-        | c_lr (float): learning rate for classifier. Ignored if model has no classifier.
-        | back_on_step (bool): if True, backpropagate on every model.step(), if False, backpropagate after model.forward().
-        | batch_size (int): batch size
-        | reg_coeff (float): weight decay. Also used for optimising classifier.
-        | flatten (bool): if True, flatten input data
-        | neg_coeff (float): coefficient to multiply vfe by during negative pass. 1.0 for balanced positive and negative passes. Must be positive.
-        | untr_coeff (float): coefficient to multiply vfe by during untraining pass. 1.0 for balanced positive and negative passes. Must be positive.
-        | minimal_stats (bool): if True, only track minimal statistics (train_vfe, train_corr, val_vfe, val_acc)
-        | assert_grads (bool): if True, assert that gradients are close to manual gradients. Must be false if grad_mode is 'manual'.
-        | grad_mode (str): gradient mode. ['auto', 'manual']
-        | optim (str): optimiser to use. ['AdamW', 'Adam', 'SGD', 'RMSprop']
-        | scheduler (str): scheduler to use. [None, 'ReduceLROnPlateau']
-        | no momentum (bool): if True, momentum is set to 0.0 for optimiser. Only works for AdamW, Adam, SGD, RMSprop
+    Parameters
+    ----------
+        model : torch.nn.Module
+            model to train
+        classifier : torch.nn.Module
+            classifier to train on model output. Ignored if classifier does not exist.
+        supervised : bool
+            if True, model is supervised. If False, model is unsupervised. (whether output layer is pinned to target or not).
+        train_data : Dataset or DataLoader
+            training data
+        val_data : Dataset or DataLoader
+            validation data
+        num_epochs : int
+            number of epochs to train for
+        lr : float
+            learning rate for PC layers.
+        c_lr : float
+            learning rate for classifier. Ignored if model has no classifier.
+        batch_size : int
+            batch size
+        reg_coeff : float
+            weight decay. Also used for optimising classifier.
+        flatten : bool
+            if True, flatten input data
+        neg_coeff : float
+            coefficient to multiply vfe by during negative pass. 1.0 for balanced positive and negative passes. Must be positive.
+        untr_coeff : float
+            coefficient to multiply vfe by during untraining pass. 1.0 for equal training and untraining (suggest ~0.1). Must be positive.
+        minimal_stats : bool
+            if True, only track minimal statistics (train_vfe, val_vfe, val_acc)
+        assert_grads : bool
+            if True, assert that gradients are close to manual gradients. Must be false if grad_mode is 'manual'.
+        grad_mode : str
+            gradient mode. ['auto', 'manual']
+        optim : str
+            optimiser to use. ['AdamW', 'Adam', 'SGD', 'RMSprop']
+        scheduler : str
+            scheduler to use. [None, 'ReduceLROnPlateau']
+        no momentum : bool
+            if True, momentum is set to 0.0 for optimiser. Only works for AdamW, Adam, SGD, RMSprop
+        norm_grads : bool
+            if True, normalise gradients by normalising the VFE.
+        norm_weights: bool
+            if True, layer weights are constrained to have unit columns
+        learn_layer : int
+            if not None, only learn the specified layer. Must be in range(model.num_layers). Only works for unsupervised models. Remember, layer 0 does not have weights, so start from 1 for greedy layer-wise learning.
     """
     assert scheduler in [None, 'ReduceLROnPlateau'], f"Invalid scheduler '{scheduler}', or not yet implemented"
-    if back_on_step:
-        assert lr > 0, "lr must be positive when back_on_step=True"
 
     optimiser = get_optimiser(model.parameters(), lr, reg_coeff, optim, no_momentum)
     if scheduler == 'ReduceLROnPlateau':
         sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=5, verbose=True, factor=0.1)
 
 
-    if hasattr(model, 'classifier') and c_lr > 0:
-        c_optimiser = get_optimiser(model.classifier.parameters(), c_lr, reg_coeff, optim)
+    if classifier is not None and c_lr > 0:
+        c_optimiser = get_optimiser(classifier.parameters(), c_lr, reg_coeff, optim,)
         loss_fn = F.cross_entropy
         if scheduler == 'ReduceLROnPlateau':
             c_sched = torch.optim.lr_scheduler.ReduceLROnPlateau(c_optimiser, patience=5, cooldown=10, verbose=True, factor=0.1)
@@ -219,6 +286,8 @@ def train(
         c_optimiser = None
 
     train_params = {
+        'classifier': classifier is not None,
+        'supervised': supervised,
         'num_epochs': num_epochs,
         'lr': lr,
         'c_lr': c_lr,
@@ -228,11 +297,17 @@ def train(
         'neg_coeff': neg_coeff,
         'untr_coeff': untr_coeff,
         'optim': optim,
+        'scheduler': scheduler,
+        'no_momentum': no_momentum,
+        'norm_grads': norm_grads,
+        'norm_weights': norm_weights,
+        'learn_layer': learn_layer,
     }
 
     if log_dir is not None:
         writer = SummaryWriter(log_dir=log_dir)
         writer.add_text('model', str(model).replace('\n', '<br/>').replace(' ', '&nbsp;'))
+        writer.add_text('classifier', str(classifier).replace('\n', '<br/>').replace(' ', '&nbsp;'))
         writer.add_text('modules', '\n'.join([str(module) for module in model.modules()]).replace('\n', '<br/>').replace(' ', '&nbsp;'))
         writer.add_text('train_params', str(train_params).replace(',', '<br/>').replace('{', '').replace('}', '').replace(' ', '&nbsp;').replace("'", ''), model.epochs_trained.item())
         writer.add_text('optimiser', str(optimiser).replace('\n', '<br/>').replace(' ', '&nbsp;'), model.epochs_trained.item())
@@ -268,15 +343,27 @@ def train(
                 x = images
             y = format_y(targets, model.num_classes)
 
-            model.zero_grad()
+            if sparse_coeff > 0:
+                obs = x * (torch.rand_like(x) < sparse_coeff).float()
+            else:
+                obs = x
+
+            optimiser.zero_grad()
+            if c_optimiser is not None:
+                c_optimiser.zero_grad()
             # Forward pass and gradient calculation
-            try:
-                out, state = model(x, y=y)
-            # catch typeerror if model is not supervised
-            except TypeError:
-                out, state = model(x, back_on_step=back_on_step)
-            if lr > 0 and not back_on_step:
-                vfe = model.vfe(state)
+            if supervised:
+                out, state = model(obs, y=y, pin_obs=True, pin_target=True, learn_layer=learn_layer)
+            else:
+                out, state = model(obs, pin_obs=True, learn_layer=learn_layer)
+            if lr > 0:
+                if sparse_coeff > 0:
+                    state[0]['x'] = x
+                    pred = model.layers[1].predict(state[1])
+                    model.layers[0].update_e(state[0], pred, temp=0.0)
+                vfe = model.vfe(state, learn_layer=learn_layer)
+                if norm_grads:
+                    vfe /= vfe.item()
                 vfe.backward()
 
             if assert_grads: model.assert_grads(state)
@@ -291,25 +378,40 @@ def train(
             if lr > 0:
                 optimiser.step()
             if c_optimiser is not None:# and grad_mode=='auto':
+                out = classifier(out.detach())
                 train_loss = loss_fn(out, targets)
                 train_loss.backward()
                 c_optimiser.step()
                 epoch_stats['train_loss'].append(train_loss.item())
-
-            # Track batch statistics
-            epoch_stats['train_vfe'].append(model.vfe(state, batch_reduction='sum').item())
             
-            if not minimal_stats:
-                epoch_stats['train_corr'].append(calc_corr(state).item())
-                epoch_stats['train_sparsity'].append(calc_sparsity(state).item())
+            if norm_weights:
                 for i, layer in enumerate(model.layers):
-                    epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
-                    epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
+                    if i > 0:
+                        if hasattr(layer, 'weight'):
+                            layer.weight.data = F.normalize(layer.weight.data, dim=-1)
+                        elif hasattr(layer, 'conv'):
+                            layer.conv[0].weight.data = F.normalize(layer.conv[0].weight.data, dim=(0, 2, 3))
+
+            if lr > 0:
+                # Track batch statistics
+                epoch_stats['train_vfe'].append(model.vfe(state, batch_reduction='sum').item())
+                
+                if not minimal_stats:
+                    epoch_stats['train_corr'].append(calc_corr(state).item())
+                    epoch_stats['train_sparsity'].append(calc_sparsity(state).item())
+                    for i, layer in enumerate(model.layers):
+                        epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
+                        epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
+                        if i > 0:
+                            if learn_layer is not None and i != learn_layer:
+                                continue
+                            epoch_stats['grad_norms'][i-1].append(layer.weight.grad.norm().item())
+
 
 
         # Collects statistics for validation data if it exists
         if val_data is not None:
-            val_results = val_pass(model, val_loader, flatten, c_optimiser is not None)
+            val_results = val_pass(model, classifier, val_loader, flatten, c_optimiser is not None, learn_layer=learn_layer)
             stats['val_vfe'] = val_results['vfe'].item()
             stats['val_acc'] = val_results['acc'].item()
             if c_optimiser is not None:
@@ -321,32 +423,38 @@ def train(
                 if c_optimiser is not None:
                     writer.add_scalar('Loss/val', stats['val_loss'], model.epochs_trained.item())
 
-        stats['train_vfe'] = torch.tensor(epoch_stats['train_vfe']).sum().item() / len(train_loader.dataset)
         if c_optimiser is not None:
             stats['train_loss'] = torch.tensor(epoch_stats['train_loss']).mean().item()
-        if log_dir:
-            writer.add_scalar('VFE/train', stats['train_vfe'], model.epochs_trained.item())
-            if c_optimiser is not None:
-                writer.add_scalar('Loss/train', stats['train_loss'], model.epochs_trained.item())
-            if not minimal_stats:
-                stats['train_corr'] = torch.tensor(epoch_stats['train_corr']).mean().item()
-                writer.add_scalar('Corr/train', stats['train_corr'], model.epochs_trained.item())
-                stats['train_sparsity'] = torch.tensor(epoch_stats['train_sparsity']).mean().item()
-                writer.add_scalar('Sparsity/train', stats['train_sparsity'], model.epochs_trained.item())
-                for i, layer in enumerate(model.layers):
-                    writer.add_scalar(f'X_norms/layer_{i}', torch.tensor(epoch_stats['X_norms'][i]).mean().item(), model.epochs_trained.item())
-                    writer.add_scalar(f'E_mags/layer_{i}', torch.tensor(epoch_stats['E_mags'][i]).mean().item(), model.epochs_trained.item())
+        if lr > 0:
+            stats['train_vfe'] = torch.tensor(epoch_stats['train_vfe']).sum().item() / len(train_loader.dataset)
+            if log_dir:
+                writer.add_scalar('VFE/train', stats['train_vfe'], model.epochs_trained.item())
+                if c_optimiser is not None:
+                    writer.add_scalar('Loss/train', stats['train_loss'], model.epochs_trained.item())
+                if not minimal_stats:
+                    stats['train_corr'] = torch.tensor(epoch_stats['train_corr']).mean().item()
+                    writer.add_scalar('Corr/train', stats['train_corr'], model.epochs_trained.item())
+                    stats['train_sparsity'] = torch.tensor(epoch_stats['train_sparsity']).mean().item()
+                    writer.add_scalar('Sparsity/train', stats['train_sparsity'], model.epochs_trained.item())
+                    for i, layer in enumerate(model.layers):
+                        writer.add_scalar(f'X_norms/layer_{i}', torch.tensor(epoch_stats['X_norms'][i]).mean().item(), model.epochs_trained.item())
+                        writer.add_scalar(f'E_mags/layer_{i}', torch.tensor(epoch_stats['E_mags'][i]).mean().item(), model.epochs_trained.item())
+                        if i > 0:
+                            if learn_layer is not None and i != learn_layer:
+                                continue
+                            writer.add_scalar(f'grad_norms/layer_{i}', torch.tensor(epoch_stats['grad_norms'][i-1]).mean().item(), model.epochs_trained.item())
         
-        if scheduler is not None:
+        if scheduler is not None and lr > 0:
             sched.step(stats['train_vfe'])
         if c_optimiser is not None and scheduler is not None:
             c_sched.step(stats['train_loss'])
         
-        # Saves model if it has the lowest validation VFE (or training VFE if no validation data) compared to previous training
-        if model_dir is not None:
-            current_vfe = stats['val_vfe'] if val_data is not None else stats['train_vfe']
-            if current_vfe < model.min_vfe:
-                torch.save(model.state_dict(), model_dir)
-                model.min_vfe = torch.tensor(current_vfe)
+        if lr > 0:
+            # Saves model if it has the lowest validation VFE (or training VFE if no validation data) compared to previous training
+            if model_dir is not None:
+                current_vfe = stats['val_vfe'] if val_data is not None else stats['train_vfe']
+                if current_vfe > model.max_vfe:
+                    torch.save(model.state_dict(), model_dir)
+                    model.max_vfe = torch.tensor(current_vfe)
 
         model.inc_epochs()

@@ -6,7 +6,7 @@ import os
 
 from PIL import Image
 
-def remove_to_tensor(transform):
+def remove_to_tensor(transform: [transforms.Compose, transforms.ToTensor]):
     if type(transform) == transforms.ToTensor:
         transform = None
 
@@ -19,7 +19,7 @@ def remove_to_tensor(transform):
     return transform
 
 class PreloadedDataset(Dataset):
-    def __init__(self, main_dir, shape, transform=None, device="cpu", shuffle=False):
+    def __init__(self, main_dir:str, shape, transform=None, device="cpu", shuffle:bool=False):
         self.main_dir = main_dir
         self.shape = shape
         self.transform = transform

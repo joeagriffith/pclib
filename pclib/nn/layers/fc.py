@@ -215,7 +215,7 @@ class FC(nn.Module):
         return F.linear(e_below, self.weight, None)
     
 
-    def update_x(self, state:dict, e_below:torch.Tensor = None, temp:float = None, gamma:float = None):
+    def update_x(self, state:dict, e_below:torch.Tensor = None, temp:float = None, gamma:torch.Tensor = None):
         """
         | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x) - 0.1 * x + noise).
@@ -226,9 +226,13 @@ class FC(nn.Module):
                 Dictionary containing 'x' and 'e' tensors for this layer.
             e_below : Optional[torch.Tensor]
                 state['e'] from the layer below. None if input layer.
+            temp : Optional[float]
+                Temperature for simulated annealing.
+            gamma : Optional[torch.Tensor]
+                Step size for x updates. If None, self.gamma is used. shape: (BatchSize,)
         """
         if gamma is None:
-            gamma = self.gamma
+            gamma = torch.ones(state['x'].shape[0]).to(self.device) * self.gamma
 
         # If not input layer, propagate error from layer below
         dx = torch.zeros_like(state['x'], device=self.device)
@@ -249,7 +253,7 @@ class FC(nn.Module):
         if temp is not None and temp > 0:
             dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034
 
-        state['x'] = state['x'].detach() + gamma * dx
+        state['x'] = state['x'].detach() + gamma.unsqueeze(-1) * dx
     
 
     def update_e(self, state:dict, pred:torch.Tensor, temp:float = None):

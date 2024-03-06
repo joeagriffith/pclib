@@ -7,10 +7,10 @@ here = os.path.abspath(os.path.dirname(__file__))
 with codecs.open(os.path.join(here, "README.md"), encoding="utf-8") as fh:
     long_description = "\n" + fh.read()
 
-VERSION = '1.0.3b1'
+VERSION = '2.0.0b2'
 DESCRIPTION = 'A torch-like package for building Predictive Coding Neural Networks.'
 LONG_DESCRIPTION = 'Built with a torch-like API, this package allows for the creation of Predictive Coding Neural Networks.' \
-                    'The package includes both fully-connected and convolutional layers, as well as different pre-defined models.' \
+                    'The package includes both fully-connected and convolutional layers, as well as helper classes for building networks.' \
                     'The package also includes a set of tools for training and testing the models, with detailed logging.'
 
 # Setting up

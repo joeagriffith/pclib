@@ -1,7 +1,20 @@
 import torch
 import torch.nn.functional as F
+import numpy as np
 
-def reTanh(x):
+def reTanh(x:torch.Tensor):
+    """
+    | Applies the tanh then relu function element-wise:
+    | x = x.tanh().relu()
+
+    Parameters
+    ----------
+        x : torch.Tensor
+    
+    Returns
+    -------
+        torch.Tensor
+    """
     return x.tanh().relu()
 
 def identity(x):
@@ -38,21 +51,46 @@ class CustomReLU(torch.autograd.Function):
 def my_relu(input):
     return CustomReLU.apply(input)
 
+class Shrinkage(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, lambda_):
+        ctx.save_for_backward(input, lambda_)
+        signs = input.sign()
+        # set vals < or > lambda_ to 0
+        output = input.abs() - lambda_
+        output = output.clamp(min=0)
+        return output * signs
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        input, lambda_ = ctx.saved_tensors
+        grad_input = grad_output.clone()
+        grad_input[input.abs() < lambda_] = 0
+        return grad_input, grad_output
+
+# To apply this function
+def shrinkage(input, lambda_=1.0):
+    return Shrinkage.apply(input, lambda_)
+
+def d_shrinkage(input, lambda_=1.0):
+    return (input.abs() > lambda_).float()
 
 # Calculate Correlations
 def calc_corr(state):
-    # Normalize activations
-    activations = [F.normalize(state_i['x'].flatten(1), dim=1) for state_i in state]
-    # Calculate correlations
-    correlations = [torch.corrcoef(activations_i.t()) for activations_i in activations]
-    # Mask to exclude self-correlations
-    masks = [torch.eye(corr.shape[0]).to(correlations[0].device) for corr in correlations]
-    masked_correlations = [corr.masked_select(mask == 0).abs().mean() for corr, mask in zip(correlations, masks)]
-    # Return average absolute correlation
-    return sum(masked_correlations) / len(masked_correlations)
+    correlations = []
+    for state_i in state:
+        # Standardise activations
+        mean = state_i['x'].mean(dim=0, keepdim=True)
+        std = state_i['x'].std(dim=0, keepdim=True) + 1e-5
+        x = (state_i['x'] - mean) / std
 
+        # Compute Correlation matrix
+        corr_matrix = torch.corrcoef(x.T)
+        mask = torch.triu(torch.ones_like(corr_matrix), diagonal=1).bool()
+        correlations.append(torch.nanmean(corr_matrix.masked_select(mask).abs()))
+    
+    return sum(correlations) / len(correlations)
 
-def calc_sparsity(state, std_multiplier=0.1):
-    thresholds = [std_multiplier * state_i['x'].std() for state_i in state]
-    small_values = [(state_i['x'].abs() < threshold).sum(dim=1).float().mean() for state_i, threshold in zip(state, thresholds)]
-    return sum(small_values) / len(small_values)
+def calc_sparsity(state):
+    num_zeros = [(state_i['x'].numel() - torch.count_nonzero(state_i['x'])) / state_i['x'].numel() for state_i in state]
+    return sum(num_zeros) / len(num_zeros)

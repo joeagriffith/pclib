@@ -140,7 +140,7 @@ def untr_pass(model:torch.nn.Module, x:torch.Tensor, y:torch.Tensor=None, untr_c
     loss = -untr_coeff * model.vfe(neg_state)
     loss.backward()
 
-def val_pass(model:torch.nn.Module, val_loader:torch.utils.data.DataLoader, flatten:bool=True, return_loss:bool=False, learn_layer:int=None):
+def val_pass(model:torch.nn.Module, classifier:torch.nn.Module, val_loader:torch.utils.data.DataLoader, flatten:bool=True, return_loss:bool=False, learn_layer:int=None):
     """
     | Performs a validation pass on the model
 
@@ -148,6 +148,8 @@ def val_pass(model:torch.nn.Module, val_loader:torch.utils.data.DataLoader, flat
     ----------
         model : torch.nn.Module
             model to validate
+        classifier : Optional[torch.nn.Module]
+            classifies model output. Ignored if classifier does not exist.
         val_loader : torch.utils.data.DataLoader
             validation data
         flatten : bool
@@ -176,6 +178,8 @@ def val_pass(model:torch.nn.Module, val_loader:torch.utils.data.DataLoader, flat
                 out, state = model(x, learn_layer=learn_layer)
             else:
                 out, state = model(x)
+            if classifier is not None:
+                out = classifier(out)
             if return_loss:
                 loss += F.cross_entropy(out, target, reduction='sum')
             if learn_layer is not None:
@@ -191,6 +195,8 @@ def val_pass(model:torch.nn.Module, val_loader:torch.utils.data.DataLoader, flat
 
 def train(
     model:torch.nn.Module, 
+    classifier:torch.nn.Module,
+    supervised:bool,
     train_data:torch.utils.data.Dataset,
     val_data:torch.utils.data.Dataset,
     num_epochs:int,
@@ -221,6 +227,10 @@ def train(
     ----------
         model : torch.nn.Module
             model to train
+        classifier : torch.nn.Module
+            classifier to train on model output. Ignored if classifier does not exist.
+        supervised : bool
+            if True, model is supervised. If False, model is unsupervised. (whether output layer is pinned to target or not).
         train_data : Dataset or DataLoader
             training data
         val_data : Dataset or DataLoader
@@ -254,7 +264,7 @@ def train(
         no momentum : bool
             if True, momentum is set to 0.0 for optimiser. Only works for AdamW, Adam, SGD, RMSprop
         norm_grads : bool
-            if True, normalise gradients to have norm 1.0 along last dimension.
+            if True, normalise gradients by normalising the VFE.
         norm_weights: bool
             if True, layer weights are constrained to have unit columns
         learn_layer : int
@@ -264,11 +274,11 @@ def train(
 
     optimiser = get_optimiser(model.parameters(), lr, reg_coeff, optim, no_momentum)
     if scheduler == 'ReduceLROnPlateau':
-        sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=5, verbose=True, factor=0.1, mode='max')
+        sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=5, verbose=True, factor=0.1)
 
 
-    if hasattr(model, 'classifier') and c_lr > 0:
-        c_optimiser = get_optimiser(model.classifier.parameters(), c_lr, reg_coeff, optim,)
+    if classifier is not None and c_lr > 0:
+        c_optimiser = get_optimiser(classifier.parameters(), c_lr, reg_coeff, optim,)
         loss_fn = F.cross_entropy
         if scheduler == 'ReduceLROnPlateau':
             c_sched = torch.optim.lr_scheduler.ReduceLROnPlateau(c_optimiser, patience=5, cooldown=10, verbose=True, factor=0.1)
@@ -276,6 +286,8 @@ def train(
         c_optimiser = None
 
     train_params = {
+        'classifier': classifier is not None,
+        'supervised': supervised,
         'num_epochs': num_epochs,
         'lr': lr,
         'c_lr': c_lr,
@@ -285,11 +297,17 @@ def train(
         'neg_coeff': neg_coeff,
         'untr_coeff': untr_coeff,
         'optim': optim,
+        'scheduler': scheduler,
+        'no_momentum': no_momentum,
+        'norm_grads': norm_grads,
+        'norm_weights': norm_weights,
+        'learn_layer': learn_layer,
     }
 
     if log_dir is not None:
         writer = SummaryWriter(log_dir=log_dir)
         writer.add_text('model', str(model).replace('\n', '<br/>').replace(' ', '&nbsp;'))
+        writer.add_text('classifier', str(classifier).replace('\n', '<br/>').replace(' ', '&nbsp;'))
         writer.add_text('modules', '\n'.join([str(module) for module in model.modules()]).replace('\n', '<br/>').replace(' ', '&nbsp;'))
         writer.add_text('train_params', str(train_params).replace(',', '<br/>').replace('{', '').replace('}', '').replace(' ', '&nbsp;').replace("'", ''), model.epochs_trained.item())
         writer.add_text('optimiser', str(optimiser).replace('\n', '<br/>').replace(' ', '&nbsp;'), model.epochs_trained.item())
@@ -334,23 +352,16 @@ def train(
             if c_optimiser is not None:
                 c_optimiser.zero_grad()
             # Forward pass and gradient calculation
-            try:
-                out, state = model(obs, y=y, pin_obs=True, pin_target=True)
-            # catch typeerror if model is not supervised
-            except TypeError:
-                if learn_layer is None:
-                    out, state = model(obs, pin_obs=True)
-                else:
-                    out, state = model(obs, pin_obs=True, learn_layer=learn_layer)
+            if supervised:
+                out, state = model(obs, y=y, pin_obs=True, pin_target=True, learn_layer=learn_layer)
+            else:
+                out, state = model(obs, pin_obs=True, learn_layer=learn_layer)
             if lr > 0:
-                if learn_layer is None:
-                    if sparse_coeff > 0:
-                        state[0]['x'] = x
-                        pred = model.layers[1].predict(state[1])
-                        model.layers[0].update_e(state[0], pred, temp=0.0)
-                    vfe = model.vfe(state)
-                else:
-                    vfe = model.vfe(state, learn_layer=learn_layer)
+                if sparse_coeff > 0:
+                    state[0]['x'] = x
+                    pred = model.layers[1].predict(state[1])
+                    model.layers[0].update_e(state[0], pred, temp=0.0)
+                vfe = model.vfe(state, learn_layer=learn_layer)
                 if norm_grads:
                     vfe /= vfe.item()
                 vfe.backward()
@@ -367,6 +378,7 @@ def train(
             if lr > 0:
                 optimiser.step()
             if c_optimiser is not None:# and grad_mode=='auto':
+                out = classifier(out.detach())
                 train_loss = loss_fn(out, targets)
                 train_loss.backward()
                 c_optimiser.step()
@@ -379,7 +391,6 @@ def train(
                             layer.weight.data = F.normalize(layer.weight.data, dim=-1)
                         elif hasattr(layer, 'conv'):
                             layer.conv[0].weight.data = F.normalize(layer.conv[0].weight.data, dim=(0, 2, 3))
-
 
             if lr > 0:
                 # Track batch statistics
@@ -400,7 +411,7 @@ def train(
 
         # Collects statistics for validation data if it exists
         if val_data is not None:
-            val_results = val_pass(model, val_loader, flatten, c_optimiser is not None, learn_layer=learn_layer)
+            val_results = val_pass(model, classifier, val_loader, flatten, c_optimiser is not None, learn_layer=learn_layer)
             stats['val_vfe'] = val_results['vfe'].item()
             stats['val_acc'] = val_results['acc'].item()
             if c_optimiser is not None:

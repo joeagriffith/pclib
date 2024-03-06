@@ -11,13 +11,12 @@ pclib/nn/__init__.py
 pclib/nn/layers/__init__.py
 pclib/nn/layers/conv.py
 pclib/nn/layers/fc.py
+pclib/nn/layers/fcatt.py
+pclib/nn/models/FCPCN.py
 pclib/nn/models/__init__.py
+pclib/nn/models/conv_am.py
 pclib/nn/models/conv_classifier.py
 pclib/nn/models/conv_classifier_us.py
-pclib/nn/models/fc_classifier.py
-pclib/nn/models/fc_classifier_inv.py
-pclib/nn/models/fc_classifier_us.py
-pclib/nn/models/fc_classifier_us_inv.py
 pclib/optim/__init__.py
 pclib/optim/eval.py
 pclib/optim/train.py

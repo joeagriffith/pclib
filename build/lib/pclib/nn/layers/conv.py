@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Parameter
 from torch.nn.grad import conv2d_input, conv2d_weight
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from pclib.utils.functional import reTanh, identity, trec
 
 # Whittington & Bogacz 2017
@@ -15,19 +15,34 @@ class Conv2d(nn.Module):
     | The predictions are calculated using pytorch's conv2d_input function.
     | This layer also defines predictions as: Wf(x) + Optional(bias).
 
-    Args:
-        prev_shape: Shape of the previous layer, None if this is input layer.
-        shape: Shape of the current layer.
-        kernel_size: Size of the convolutional kernel.
-        stride: Stride of the convolutional kernel.
-        padding: Padding of the convolutional kernel.
-        has_bias: Whether the layer has a bias.
-        symmetric: Whether the layer has symmetric weights.
-        actv_fn: Activation function of the layer.
-        d_actv_fn: Derivative of the activation function of the layer (if None, it will be inferred from actv_fn).
-        gamma: Step size for x updates.
-        device: Device to run the layer on.
-        dtype: Data type of the layer.
+    Parameters
+    ----------
+        prev_shape : Optional[Tuple[int]] 
+            Shape of the previous layer, None if this is input layer.
+        shape : (int, int, int)
+            Shape of the current layer.
+        kernel_size : int
+            Size of the convolutional kernel.
+        stride : int
+            Stride of the convolutional kernel.
+        padding : int
+            Padding of the convolutional kernel.
+        has_bi : bool 
+            Whether the layer has a bias.
+        symmetric : bool
+            Whether the layer has symmetric weights.
+        actv_fn : callable
+            Activation function of the layer.
+        d_actv_fn : Optional[callable]
+            Derivative of the activation function of the layer (if None, it will be inferred from actv_fn).
+        gamma : float
+            Step size for x updates.
+        x_decay : float
+            Decay rate for x.
+        device : Optional[torch.device]
+            Device to run the layer on.
+        dtype : Optional[torch.dtype]
+            Data type of the layer.
     """
 
 
@@ -37,7 +52,7 @@ class Conv2d(nn.Module):
 
     def __init__(self,
                  prev_shape: Optional[Tuple[int]],
-                 shape: (int, int, int), # (channels, height, width)
+                 shape: Tuple[int], # (channels, height, width)
                  kernel_size: int = 3,
                  stride: int = 1,
                  padding: int = 1,
@@ -47,8 +62,9 @@ class Conv2d(nn.Module):
                  actv_fn: callable = F.tanh,
                  d_actv_fn: callable = None,
                  gamma: float = 0.1,
-                 device=torch.device('cpu'),
-                 dtype=None
+                 x_decay: float = 0.0,
+                 device: torch.device = torch.device('cpu'),
+                 dtype: torch.dtype = None
                  ) -> None:
         
         # assert stride == 1, "Stride != 1 not yet supported."
@@ -61,12 +77,14 @@ class Conv2d(nn.Module):
         self.shape = shape
         self.actv_fn = actv_fn
         self.gamma = gamma
+        self.x_decay = x_decay
         self.device = device
 
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
         self.has_bias = has_bias
+        self.symmetric = symmetric
         self.maxpool = maxpool
 
         # Automatically set d_actv_fn if not provided
@@ -102,6 +120,10 @@ class Conv2d(nn.Module):
     def __str__(self):
         """
         | Returns a string representation of the layer.
+
+        Returns
+        -------
+            str
         """
         base_str = super().__str__()
 
@@ -110,10 +132,12 @@ class Conv2d(nn.Module):
             f"    shape: {self.shape}\n" + \
             f"    actv_fn: {self.actv_fn}\n" + \
             f"    gamma: {self.gamma}\n" + \
+            f"    x_decay: {self.x_decay}\n" + \
             f"    kernel_size: {self.kernel_size}\n" + \
             f"    stride: {self.stride}\n" + \
             f"    padding: {self.padding}\n" + \
             f"    has_bias: {self.has_bias}\n" + \
+            f"    symmetric: {self.symmetric}\n" + \
             f"    maxpool: {self.maxpool}\n"
         
         string = base_str[:base_str.find('\n')] + custom_info + base_str[base_str.find('\n'):]
@@ -139,15 +163,19 @@ class Conv2d(nn.Module):
             #     nn.ConvTranspose2d(prev_shape[0], shape[0], kernel_size, padding=padding, stride=stride, bias=False, **factory_kwargs),
             # )
 
-    def init_state(self, batch_size):
+    def init_state(self, batch_size:int):
         """
         | Builds a new state dictionary for the layer.
 
-        Args:
-            | batch_size (int): Batch size of the state dictionary.
+        Parameters
+        ----------
+            batch_size : int
+                Batch size of the state dictionary.
 
-        Returns:
-            | state (dict): A state dictionary for the layer.
+        Returns
+        -------
+            dict
+                A dictionary containing 2 equally shaped tensors, 'x' and 'e'.
         """
         return {
             'x': torch.zeros((batch_size, self.shape[0], self.shape[1], self.shape[2]), device=self.device),
@@ -158,58 +186,74 @@ class Conv2d(nn.Module):
         self.device = args[0]
         return super().to(*args, **kwargs)
 
-    def predict(self, state):
+    def predict(self, state:dict):
         """
-        | Calculates the prediction of state['x] the layer below.
+        | Calculates the prediction of state['x'] the layer below.
 
-        Args:
-            | state (dict): The state dictionary for this layer.
+        Parameters
+        ----------
+            state : dict
+                The state dictionary for this layer.
         
-        Returns:
-            | pred (torch.Tensor): The calculated prediction.
+        Returns
+        -------
+            torch.Tensor
+                The layers prediction of 'x' in the layer below.
         """
 
-        x = F.interpolate(state['x'].detach(), scale_factor=self.maxpool, mode='nearest')
+        x = state['x'].detach() if self.symmetric else state['x']
+        x = F.interpolate(x, scale_factor=self.maxpool, mode='nearest')
         prev_shape = (x.shape[0], self.prev_shape[0], self.prev_shape[1], self.prev_shape[2])
         actv = conv2d_input(prev_shape, self.conv[0].weight, self.actv_fn(x), stride=self.stride, padding=self.padding, dilation=1, groups=1)
         if self.has_bias:
             actv += self.bias
         return actv
     
-    def propagate(self, e_below):
+    def propagate(self, e_below:torch.Tensor):
         """
         | Propagates error from layer below, returning an update for state['x'].
 
-        Args:
-            | e_below (torch.Tensor): The error from the layer below.
+        Parameters
+        ----------
+            e_below : torch.Tensor
+                The error from the layer below.
 
-        Returns:
-            | update (torch.Tensor): The update for state['x'].
+        Returns
+        -------
+            torch.Tensor
+                The update for state['x'].
         """
         return self.conv(e_below)
     
-    def update_e(self, state, pred, temp=None):
+    def update_e(self, state:dict, pred:torch.Tensor, temp:float=None):
         """
         | Updates the prediction error (state['e']) between state['x'] and pred.
         | Uses simulated annealing if temp is not None.
 
-        Args:
-            | state (dict): The state dictionary for this layer.
-            | pred (torch.Tensor): The prediction of the layer below.
-            | temp (Optional[float]): The temperature for simulated annealing.
+        Parameters
+        ----------
+            state : dict
+                The state dictionary for this layer, containing 'x' and 'e'.
+            pred : torch.Tensor
+                The prediction of 'x' from the layer above.
+            temp : Optional[float]
+                The temperature for simulated annealing.
         """
 
         assert pred is not None, "Prediction must be provided to update_e()."
 
+        if self.symmetric:
+            state['x'] = state['x'].detach()
+
         if pred.dim() == 2:
             pred = pred.unsqueeze(-1).unsqueeze(-1)
-        state['e'] = state['x'].detach() - pred
+        state['e'] = state['x'] - pred
 
         if temp is not None:
-            eps = torch.randn_like(state['e'].detach(), device=self.device) * 0.034 * temp
+            eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
             state['e'] += eps
 
-    def update_x(self, state, e_below=None, temp=None):
+    def update_x(self, state:dict, e_below:torch.Tensor=None, temp:float=None, gamma:float=None):
         """
         | Updates state['x'] using the error signal from the layer below and of current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x) - 0.1 * x + noise)
@@ -217,18 +261,25 @@ class Conv2d(nn.Module):
         Args:
             | state (dict): The state dictionary for this layer.
             | e_below (Optional[torch.Tensor]): The error from the layer below.
+            | temp (Optional[float]): The temperature for simulated annealing.
+            | gamma (Optional[float]): The step size for x updates.
         """
+
+        if gamma is None:
+            gamma = self.gamma
         dx = torch.zeros_like(state['x'], device=self.device)
         if e_below is not None:
+            e_below = e_below.detach()
             if e_below.dim() == 2:
                 e_below = e_below.unsqueeze(-1).unsqueeze(-1)
             dx += self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
 
-        dx += -state['e']
+        dx += -state['e'].detach()
 
-        dx += 0.1 * -state['x']
+        if self.x_decay > 0.0:
+            dx += -self.x_decay * state['x'].detach()
         
         if temp is not None:
             dx += torch.randn_like(state['x'], device=self.device) * 0.034 * temp
 
-        state['x'] = state['x'].detach() + self.gamma * dx
+        state['x'] = state['x'].detach() + gamma * dx
