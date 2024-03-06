@@ -107,7 +107,7 @@ class FCClassifierUs(FCClassifier):
         return out
 
 
-    def forward(self, obs:torch.Tensor = None, steps:int = None, learn_on_step:bool = False):
+    def forward(self, obs:torch.Tensor = None, pin_obs:bool = False, steps:int = None):
         """
         | Performs inference phase of the model. 
         | Uses self.classifier to get output.
@@ -116,6 +116,8 @@ class FCClassifierUs(FCClassifier):
         ----------
             obs : Optional[torch.Tensor]
                 Input data
+            pin_obs : bool
+                Whether to pin the observation or not
             steps : Optional[int]
                 Number of steps to run inference for. Uses self.steps if not provided.
 
@@ -135,10 +137,8 @@ class FCClassifierUs(FCClassifier):
         gamma = self.gamma
         for i in range(steps):
             temp = self.calc_temp(i, steps)
-            self.step(state, obs, temp=temp, gamma=gamma)
+            self.step(state, pin_obs=pin_obs, temp=temp, gamma=gamma)
             vfe = self.vfe(state)
-            if learn_on_step:
-                vfe.backward()
             if prev_vfe is not None and vfe < prev_vfe:
                 gamma = gamma * 0.9
             prev_vfe = vfe
@@ -147,7 +147,7 @@ class FCClassifierUs(FCClassifier):
             
         return out, state
 
-
+    
     def classify(self, obs:torch.Tensor, steps:int = None):
         """
         | Performs inference on the observation and passes the output through the classifier.
@@ -165,39 +165,4 @@ class FCClassifierUs(FCClassifier):
             torch.Tensor
                 Argmax(dim=1) output of the classifier
         """
-        return self.forward(obs, steps)[0].argmax(dim=1)
-
-
-    def reconstruct(self, obs:torch.Tensor, steps:int = None):
-        """
-        | Initialises the state of the model using the observation.
-        | Runs inference without pinning the observation.
-        | In theory should reconstruct the observation.
-
-        Args:
-            | obs (torch.Tensor): Input data
-            | steps (Optional[int]): Number of steps to run inference for. Uses self.steps if not provided.
-
-        Returns:
-            | out (torch.Tensor): Reconstructed observation
-            | state (list): List of layer state dicts, each containing 'x' and 'e'
-        """
-        if steps is None:
-            steps = self.steps
-        
-        state = self.init_state(obs)
-
-        for i in range(steps):
-            temp = self.calc_temp(i, steps)
-            self.step(state, temp=temp)
-        
-        out = state[0]['x']
-
-        return out, state
-
-    
-    def generate(self, y:torch.Tensor, steps:int = None):
-        """
-        | Not implemented as one cannot generate an input without a target, and this model does not pin targets.
-        """
-        raise(NotImplementedError)
+        return self.forward(obs, pin_obs=True, steps=steps)[0].argmax(dim=1)

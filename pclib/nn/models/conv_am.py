@@ -108,7 +108,7 @@ class ConvAM(ConvClassifierUs):
         return out
         
 
-    def forward(self, obs:torch.Tensor = None, steps:int = None):
+    def forward(self, obs:torch.Tensor = None, pin_obs=False, steps:int = None):
         """
         | Performs inference for the network.
 
@@ -116,10 +116,10 @@ class ConvAM(ConvClassifierUs):
         ----------
             obs : Optional[torch.Tensor]
                 Input data
+            pin_obs : bool
+                Whether to pin the observation or not
             steps : Optional[int]
                 Number of steps to run inference for
-            learn_on_step : bool
-                Whether to backpropagate on each step. Default False.
         
         Returns
         -------
@@ -137,10 +137,8 @@ class ConvAM(ConvClassifierUs):
         gamma = self.gamma
         for i in range(steps):
             temp = self.calc_temp(i, steps)
-            self.step(state, obs, temp, gamma=gamma)
+            self.step(state, pin_obs, temp, gamma=gamma)
             vfe = self.vfe(state)
-            if learn_on_step:
-                vfe.backward()
             if prev_vfe is not None and vfe < prev_vfe:
                 gamma = gamma * 0.9
             prev_vfe = vfe
@@ -148,11 +146,3 @@ class ConvAM(ConvClassifierUs):
         out = self.get_output(state)
             
         return out, state
-
-    def reconstruct(self, obs:torch.Tensor, steps:int = None):
-        raise(NotImplementedError, "Use forward (call) instead.")
-
-    
-    def generate(self, y, steps=None):
-        raise(NotImplementedError, "Use forward (call) instead.")
-

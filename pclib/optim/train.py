@@ -335,24 +335,24 @@ def train(
                 c_optimiser.zero_grad()
             # Forward pass and gradient calculation
             try:
-                out, state = model(obs, y=y)
+                out, state = model(obs, y=y, pin_obs=True, pin_target=True)
             # catch typeerror if model is not supervised
             except TypeError:
                 if learn_layer is None:
-                    out, state = model(obs)
+                    out, state = model(obs, pin_obs=True)
                 else:
-                    out, state = model(obs, learn_layer=learn_layer)
+                    out, state = model(obs, pin_obs=True, learn_layer=learn_layer)
             if lr > 0:
                 if learn_layer is None:
                     if sparse_coeff > 0:
                         state[0]['x'] = x
                         pred = model.layers[1].predict(state[1])
                         model.layers[0].update_e(state[0], pred, temp=0.0)
-                    vfe = model.vfe(state, norm_grads=norm_grads)
+                    vfe = model.vfe(state)
                 else:
-                    vfe = model.vfe(state, learn_layer=learn_layer, norm_grads=norm_grads)
-                # if norm_grads:
-                #     vfe /= vfe.abs().item()
+                    vfe = model.vfe(state, learn_layer=learn_layer)
+                if norm_grads:
+                    vfe /= vfe.item()
                 vfe.backward()
 
             if assert_grads: model.assert_grads(state)
@@ -392,6 +392,8 @@ def train(
                         epoch_stats['X_norms'][i].append(state[i]['x'].norm(dim=1).mean().item())
                         epoch_stats['E_mags'][i].append(state[i]['e'].square().mean().item())
                         if i > 0:
+                            if learn_layer is not None and i != learn_layer:
+                                continue
                             epoch_stats['grad_norms'][i-1].append(layer.weight.grad.norm().item())
 
 
@@ -427,6 +429,8 @@ def train(
                         writer.add_scalar(f'X_norms/layer_{i}', torch.tensor(epoch_stats['X_norms'][i]).mean().item(), model.epochs_trained.item())
                         writer.add_scalar(f'E_mags/layer_{i}', torch.tensor(epoch_stats['E_mags'][i]).mean().item(), model.epochs_trained.item())
                         if i > 0:
+                            if learn_layer is not None and i != learn_layer:
+                                continue
                             writer.add_scalar(f'grad_norms/layer_{i}', torch.tensor(epoch_stats['grad_norms'][i-1]).mean().item(), model.epochs_trained.item())
         
         if scheduler is not None and lr > 0:

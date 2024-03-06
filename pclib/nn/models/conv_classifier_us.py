@@ -109,7 +109,7 @@ class ConvClassifierUs(ConvClassifier):
         return out
         
 
-    def forward(self, obs:torch.Tensor = None, steps:int = None):
+    def forward(self, obs:torch.Tensor = None, pin_obs:bool = False, steps:int = None):
         """
         | Performs inference for the network.
 
@@ -138,7 +138,7 @@ class ConvClassifierUs(ConvClassifier):
         gamma = self.gamma
         for i in range(steps):
             temp = self.calc_temp(i, steps)
-            self.step(state, obs, temp, gamma)
+            self.step(state, pin_obs, temp, gamma)
             vfe = self.vfe(state)
             if prev_vfe is not None and vfe < prev_vfe:
                 gamma = gamma * 0.9
@@ -164,51 +164,4 @@ class ConvClassifierUs(ConvClassifier):
             torch.Tensor
                 Predicted class
         """
-        return self.forward(obs, steps)[0].argmax(dim=1)
-
-
-    def reconstruct(self, obs:torch.Tensor, steps:int = None):
-        """
-        | Initialises the state of the model using the observation.
-        | Runs inference without pinning the observation.
-        | In theory should reconstruct the observation.
-
-        Parameters
-        ----------
-            obs : torch.Tensor
-                Input data
-            steps : Optional[int]
-                Number of steps to run inference for. Uses self.steps if not provided.
-
-        Returns:
-            torch.Tensor
-                Reconstructed observation
-            List[dict]
-                List of states for each layer, each is a dict containing 'x' and 'e'.
-        """
-        if steps is None:
-            steps = self.steps
-        
-        state = self.init_state(obs)
-
-        prev_vfe = None
-        gamma = self.gamma
-        for i in range(steps):
-            temp = self.calc_temp(i, steps)
-            self.step(state, temp=temp, gamma=gamma)
-            vfe = self.vfe(state)
-            if prev_vfe is not None and vfe < prev_vfe:
-                gamma = gamma * 0.9
-            prev_vfe = vfe
-        
-        out = state[0]['x']
-
-        return out, state
-
-    
-    def generate(self, y, steps=None):
-        """
-        | Not implemented as one cannot generate an input without a target, and this model does not pin targets.
-        """
-        raise(NotImplementedError)
-
+        return self.forward(obs, pin_obs=True, steps=steps)[0].argmax(dim=1)

@@ -154,7 +154,7 @@ class FCClassifierUsGreedy(FCClassifierUs):
 
         return state
 
-    def step(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None, temp:float = None, gamma:float = None, learn_layer:int = None):
+    def step(self, state:List[dict], pin_obs:bool = False, temp:float = None, gamma:float = None, learn_layer:int = None):
         """
         | Performs one step of inference. Updates Xs first, then Es.
         | Both are updated from bottom to top.
@@ -165,8 +165,8 @@ class FCClassifierUsGreedy(FCClassifierUs):
                 List of layer state dicts, each containing 'x' and 'e; (and 'eps' for FCPW)
             obs : Optional[torch.Tensor]
                 Input data
-            y : Optional[torch.Tensor]
-                Target data
+            pin_obs : bool
+                Whether to pin the observation or not
             temp : Optional[float]
                 Temperature to use for update
             gamma : Optional[float]
@@ -177,19 +177,18 @@ class FCClassifierUsGreedy(FCClassifierUs):
         for i, layer in enumerate(self.layers):
             if learn_layer is not None and i > learn_layer:
                 break
-            if i > 0 or obs is None: # Don't update bottom x if obs is given
-                if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
-                    e_below = state[i-1]['e'] if i > 0 else None
-                    layer.update_x(state[i], e_below, temp=temp, gamma=gamma)
+            if i > 0 or not pin_obs: # Don't update bottom x if pinned
+                e_below = state[i-1]['e'] if i > 0 else None
+                layer.update_x(state[i], e_below, temp=temp, gamma=gamma)
         for i, layer in enumerate(self.layers):
-            if learn_layer is not None and i > learn_layer-1:
+            if learn_layer is not None and i >= learn_layer:
                 break
             if i < len(self.layers) - 1:
                 pred = self.layers[i+1].predict(state[i+1])
                 layer.update_e(state[i], pred, temp=temp)
 
 
-    def forward(self, obs:torch.Tensor = None, steps:int = None, learn_layer:int = None):
+    def forward(self, obs:torch.Tensor = None, pin_obs:bool = False, steps:int = None, learn_layer:int = None):
         """
         | Performs inference phase of the model. 
         | Uses self.classifier to get output.
@@ -198,11 +197,12 @@ class FCClassifierUsGreedy(FCClassifierUs):
         ----------
             obs : Optional[torch.Tensor]
                 Input data
+            pin_obs : bool
+                Whether to pin the observation or not
             steps : Optional[int]
                 Number of steps to run inference for. Uses self.steps if not provided.
             learn_layer : Optional[int]
                 If provided, only layers i where i <= learn_layer are updated.
-
 
         Returns
         -------
@@ -220,7 +220,7 @@ class FCClassifierUsGreedy(FCClassifierUs):
         gamma = self.gamma
         for i in range(steps):
             temp = self.calc_temp(i, steps)
-            self.step(state, obs, temp=temp, gamma=gamma, learn_layer=learn_layer)
+            self.step(state, pin_obs=pin_obs, temp=temp, gamma=gamma, learn_layer=learn_layer)
             vfe = self.vfe(state, learn_layer=learn_layer)
             if prev_vfe is not None and vfe < prev_vfe:
                 gamma = gamma * 0.9

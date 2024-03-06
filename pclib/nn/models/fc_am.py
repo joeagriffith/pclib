@@ -83,7 +83,7 @@ class FCAM(FCClassifierUs):
         self.memory_vector = nn.Parameter(self.memory_vector.to(device))
         return self
 
-    def step(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None, temp:float = None, gamma:float = None):
+    def step(self, state:List[dict], pin_obs:bool = False, temp:float = None, gamma:float = None):
         """
         | Performs one step of inference. Updates Xs first, then Es.
         | Both are updated from bottom to top.
@@ -100,10 +100,9 @@ class FCAM(FCClassifierUs):
                 Temperature to use for update
         """
         for i, layer in enumerate(self.layers):
-            if i > 0 or obs is None: # Don't update bottom x if obs is given
-                if i < len(self.layers) - 1 or y is None: # Don't update top x if y is given
-                    e_below = state[i-1]['e'] if i > 0 else None
-                    layer.update_x(state[i], e_below, temp=temp, gamma=gamma)
+            if i > 0 or not pin_obs: # Don't update bottom x if obs is given
+                e_below = state[i-1]['e'] if i > 0 else None
+                layer.update_x(state[i], e_below, temp=temp, gamma=gamma)
         for i, layer in enumerate(self.layers):
             if i < len(self.layers) - 1:
                 pred = self.layers[i+1].predict(state[i+1])
@@ -111,7 +110,7 @@ class FCAM(FCClassifierUs):
             elif i == len(self.layers) - 1:
                 layer.update_e(state[i], self.memory_vector, temp=temp)
 
-    def forward(self, obs:torch.Tensor = None, steps:int = None):
+    def forward(self, obs:torch.Tensor = None, pin_obs:bool = False, steps:int = None):
         """
         | Performs inference phase of the model. 
         | Uses self.classifier to get output.
@@ -120,6 +119,8 @@ class FCAM(FCClassifierUs):
         ----------
             obs : Optional[torch.Tensor]
                 Input data
+            pin_obs : bool
+                Whether to pin the observation or not
             steps : Optional[int]
                 Number of steps to run inference for. Uses self.steps if not provided.
 
@@ -139,7 +140,7 @@ class FCAM(FCClassifierUs):
         gamma = self.gamma
         for i in range(steps):
             temp = self.calc_temp(i, steps)
-            self.step(state, obs, temp=temp, gamma=gamma)
+            self.step(state, pin_obs=pin_obs, temp=temp, gamma=gamma)
             vfe = self.vfe(state)
             if prev_vfe is not None and vfe < prev_vfe:
                 gamma = gamma * 0.9
@@ -182,14 +183,3 @@ class FCAM(FCClassifierUs):
         for i, layer in enumerate(model.layers):
             if i > 0:
                 layer.assert_grads(state[i], state[i-1]['e'])                
-            
-
-    def reconstruct(self, obs:torch.Tensor, steps:int = None):
-        raise(NotImplementedError, "Use .forward() instead.")
-
-    
-    def generate(self, y:torch.Tensor, steps:int = None):
-        """
-        | Not implemented as one cannot generate an input without a target, and this model does not pin targets.
-        """
-        raise(NotImplementedError)

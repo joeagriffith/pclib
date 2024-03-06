@@ -287,7 +287,7 @@ class ConvClassifier(nn.Module):
         return self.temp_k * alpha**step_i
 
 
-    def step(self, state:List[dict], obs:torch.Tensor=None, y:torch.Tensor=None, temp:float=None, gamma:float=None):
+    def step(self, state:List[dict], pin_obs:bool = False, pin_target:bool = False, temp:float=None, gamma:float=None):
         """
         Performs one step of inference, updating all Xs first, then calculates Errors.
 
@@ -306,8 +306,8 @@ class ConvClassifier(nn.Module):
         """
 
         for i, layer in enumerate(self.layers):
-            if i > 0 or obs is None:
-                if i < len(self.layers) - 1 or y is None:
+            if i > 0 or not pin_obs:
+                if i < len(self.layers) - 1 or not pin_target:
                     e_below = state[i-1]['e'] if i > 0 else None
                     layer.update_x(state[i], e_below, temp=temp, gamma=gamma)
         for i, layer in enumerate(self.layers):
@@ -316,7 +316,7 @@ class ConvClassifier(nn.Module):
                 layer.update_e(state[i], pred, temp=temp)
 
 
-    def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, steps:int = None):
+    def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, pin_obs:bool = False, pin_target:bool = False, steps:int = None):
         """
         | Performs inference phase of the network.
 
@@ -326,6 +326,10 @@ class ConvClassifier(nn.Module):
                 Input data
             y : Optional[torch.Tensor]
                 Target data
+            pin_obs : bool
+                Whether to pin the observation or not
+            pin_target : bool
+                Whether to pin the target or not
             steps : Optional[int]
                 Number of steps to run inference for
             learn_on_step : bool
@@ -347,7 +351,7 @@ class ConvClassifier(nn.Module):
         gamma = self.gamma
         for i in range(steps):
             temp = self.calc_temp(i, steps)
-            self.step(state, obs, y, temp, gamma)
+            self.step(state, pin_obs, pin_target, temp, gamma)
             vfe = self.vfe(state)
             if prev_vfe is not None and vfe < prev_vfe:
                 gamma = gamma * 0.9
@@ -357,26 +361,6 @@ class ConvClassifier(nn.Module):
             
         return out, state
 
-    def generate(self, y:torch.Tensor, steps:int = None):
-        """
-        | Generates an image from the target y.
-
-        Parameters
-        ----------
-            y : torch.Tensor
-                Target data
-            steps : Optional[int]
-                Number of steps to run inference for. defaults to self.steps
-
-        Returns
-        -------
-            torch.Tensor
-                Generated image
-        """
-        y = format_y(y, self.num_classes)
-        _, state = self.forward(y=y, steps=steps)
-        return state[0]['x']
-    
     def classify(self, obs:torch.Tensor, state:List[dict] = None, steps:int=None):
         """
         | Classifies the input obs.
@@ -402,7 +386,7 @@ class ConvClassifier(nn.Module):
         for target in range(self.num_classes):
             targets = torch.full((obs.shape[0],), target, device=self.device, dtype=torch.long)
             y = format_y(targets, self.num_classes)
-            _, state = self.forward(obs, y, steps)
+            _, state = self.forward(obs, y, pin_obs=True, pin_target=True, steps=steps)
             vfes[:, target] = self.vfe(state, batch_reduction=None)
         
         return vfes.argmin(dim=1)
