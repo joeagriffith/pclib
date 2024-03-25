@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# from pclib.nn.layers import FCAtt as FC
 from pclib.nn.layers import FC
-from pclib.utils.functional import format_y
+from pclib.utils.functional import format_y, identity
 from typing import List, Optional
 
 
@@ -35,12 +36,12 @@ class FCPCN(nn.Module):
             step size for x updates
         x_decay : float
             Decay constant for x
-        temp_k : float
-            Temperature constant for inference
+        dropout : float
+            Dropout rate for predictions
         inverted : bool
             Whether to switch observation and target in forward pass (WhittingtonBogacz2017)
-        has_memory_vec : bool
-            Whether to include a memory vector for predicting the top layer
+        has_top : bool
+            Whether to include a recurrent layer for top prediction
         device : torch.device
             Device to run on
         dtype : torch.dtype
@@ -53,6 +54,7 @@ class FCPCN(nn.Module):
     def __init__(
             self, 
             sizes:List[int] = [], 
+            precisions:List[float] = [],
             steps:int = 20, 
             bias:bool = True, 
             symmetric:bool = True, 
@@ -60,24 +62,27 @@ class FCPCN(nn.Module):
             d_actv_fn:callable = None, 
             gamma:float = 0.1, 
             x_decay: float = 0.0,
-            temp_k:float = 1.0,
+            dropout:float = 0.0,
             inverted:bool = False,
-            has_memory_vec:bool = False,
+            has_top: bool = False,
             device:torch.device = torch.device('cpu'), 
             dtype:torch.dtype = None
         ):
         super().__init__()
 
-        self.factory_kwargs = {'actv_fn': actv_fn, 'd_actv_fn': d_actv_fn, 'gamma': gamma, 'has_bias': bias, 'symmetric': symmetric, 'x_decay': x_decay, 'dtype': dtype}
+        assert len(precisions) == len(sizes), "Precisions must be the same length as sizes"
+
+        self.factory_kwargs = {'actv_fn': actv_fn, 'd_actv_fn': d_actv_fn, 'gamma': gamma, 'has_bias': bias, 'symmetric': symmetric, 'x_decay': x_decay, 'dropout': dropout, 'dtype': dtype}
         self.sizes = sizes
+        self.precisions = precisions
         self.bias = bias
         self.symmetric = symmetric
         self.gamma = gamma
         self.x_decay = x_decay
-        self.temp_k = temp_k
+        self.dropout = dropout
         self.steps = steps
         self.inverted = inverted
-        self.has_memory_vec = has_memory_vec
+        self.has_top = has_top
         self.device = device
         self.dtype = dtype
 
@@ -90,15 +95,16 @@ class FCPCN(nn.Module):
 
         custom_info = "\n  (params): \n" + \
             f"    sizes: {self.sizes}\n" + \
-            f"    steps: {self.steps}\n" + \
+            f"    precisions: {self.precisions}\n" + \
             f"    bias: {self.bias}\n" + \
             f"    symmetric: {self.symmetric}\n" + \
             f"    actv_fn: {self.factory_kwargs['actv_fn'].__name__}\n" + \
             f"    gamma: {self.gamma}\n" + \
             f"    x_decay: {self.x_decay}\n" + \
-            f"    temp_k: {self.temp_k}\n" + \
+            f"    dropout: {self.dropout}\n" + \
+            f"    steps: {self.steps}\n" + \
             f"    inverted: {self.inverted}\n" + \
-            f"    has_memory_vec: {self.has_memory_vec}\n" + \
+            f"    has_top: {self.has_top}\n" + \
             f"    device: {self.device}\n" + \
             f"    dtype: {self.factory_kwargs['dtype']}\n" + \
             f"    epochs_trained: {self.epochs_trained}\n" + \
@@ -125,16 +131,16 @@ class FCPCN(nn.Module):
         """
         layers = []
         in_features = None
-        for out_features in self.sizes:
-            layers.append(FC(in_features, out_features, device=self.device, **self.factory_kwargs))
+        for i, out_features in enumerate(self.sizes):
+            layers.append(FC(in_features, out_features, self.precisions[i], device=self.device, **self.factory_kwargs))
             in_features = out_features
         self.layers = nn.ModuleList(layers)
 
-        if self.has_memory_vec:
-            self.memory_vector = nn.Parameter(torch.empty(self.sizes[-1], device=self.device, dtype=self.dtype))
-            fan_in = self.sizes[-1]
-            bound = 1 / fan_in if fan_in > 0 else 0
-            nn.init.uniform_(self.memory_vector, -bound, bound)
+        if self.has_top:
+            top_fac_kwargs = self.factory_kwargs.copy()
+            # top_fac_kwargs['actv_fn'] = identity
+            self.top = FC(self.sizes[-1], self.sizes[-1], self.precisions[-1], device=self.device, **top_fac_kwargs)
+            self.top.weight.data = (self.top.weight.data - torch.diag(self.top.weight.data.diag())) * 0.01
     
     def inc_epochs(self, n:int=1):
         """
@@ -148,7 +154,7 @@ class FCPCN(nn.Module):
         """
         self.epochs_trained += n    
 
-    def vfe(self, state:List[dict], batch_reduction:str = 'mean', unit_reduction:str = 'sum', learn_layer:int = None):
+    def vfe(self, state:List[dict], batch_reduction:str = 'mean', learn_layer:int = None, normalise=False):
         """
         | Calculates the Variational Free Energy (VFE) of the model.
         | This is the sum of the squared prediction errors of each layer.
@@ -164,23 +170,22 @@ class FCPCN(nn.Module):
                 How to reduce over units ['sum', 'mean'], default='sum'
             learn_layer : Optional[int]
                 If provided, only error from layer 'learn_layer-1' is included in the VFE calculation.
+            normalise : bool
+                Whether to normalise the VFE by the sum of the squared activations.
 
         Returns
         -------
             torch.Tensor
-                VFE of the model (scalar)
+                VFE of the model
         """
         # Reduce units for each layer
-        if unit_reduction == 'sum':
-            if learn_layer is not None:
-                vfe = [0.5 * state[learn_layer-1]['e'].square().sum(dim=[i for i in range(1, state[learn_layer-1]['e'].dim())])]
-            else:
-                vfe = [0.5 * state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
-        elif unit_reduction =='mean':
-            if learn_layer is not None:
-                vfe = [0.5 * state[learn_layer-1]['e'].square().mean(dim=[i for i in range(1, state[learn_layer-1]['e'].dim())])]
-            else:
-                vfe = [0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+        if learn_layer is not None:
+            vfe = [0.5 * state[learn_layer-1]['e'].square().mean(dim=[i for i in range(1, state[learn_layer-1]['e'].dim())])]
+        else:
+            vfe = [0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+        
+        if normalise:
+            vfe = [vfe_i / (vfe_i.detach() + 1e-6) for vfe_i in vfe]
 
         # Reduce layers
         vfe = sum(vfe)
@@ -192,73 +197,77 @@ class FCPCN(nn.Module):
 
         return vfe
 
-    def _init_xs(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None, learn_layer:int = None):
-        """
-        | Initialises xs using either y or obs if provided.
-        | If y is provided, then top down predictions are calculated and used as initial xs.
-        | Else if obs is provided, then bottom up error propagations (pred=0) are calculated and used as initial xs.
+    # def _init_xs(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None, learn_layer:int = None):
+    #     """
+    #     | Initialises xs using either y or obs if provided.
+    #     | If y is provided, then top down predictions are calculated and used as initial xs.
+    #     | Else if obs is provided, then bottom up error propagations (pred=0) are calculated and used as initial xs.
 
-        Parameters
-        ----------
-            state : List[dict]
-                List of layer state dicts, each containing 'x' and 'e'
-            obs : Optional[torch.Tensor]
-                Input data
-            y : Optional[torch.Tensor]
-                Target data
-            learn_layer : Optional[int]
-                If provided, only initialises Xs for layers i where i <= learn_layer
-        """
-        if self.inverted:
-            obs, y = y, obs
+    #     Parameters
+    #     ----------
+    #         state : List[dict]
+    #             List of layer state dicts, each containing 'x' and 'e'
+    #         obs : Optional[torch.Tensor]
+    #             Input data
+    #         y : Optional[torch.Tensor]
+    #             Target data
+    #         learn_layer : Optional[int]
+    #             If provided, only initialises Xs for layers i where i <= learn_layer
+    #     """
+    #     if self.inverted:
+    #         obs, y = y, obs
 
-        with torch.no_grad():
-            if y is not None and learn_layer is None:
-                for i, layer in reversed(list(enumerate(self.layers))):
-                    if i == len(self.layers) - 1: # last layer
-                        state[i]['x'] = y.detach()
-                    if i > 0:
-                        pred = layer.predict(state[i])
-                        state[i-1]['x'] = pred.detach()
-                if obs is not None:
-                    state[0]['x'] = obs.detach()
-            elif obs is not None:
-                for i, layer in enumerate(self.layers):
-                    if learn_layer is not None and i > learn_layer:
-                        break
-                    if i == 0:
-                        state[0]['x'] = obs.clone()
-                    else:
-                        x_below = state[i-1]['x'].detach()
-                        # Found that using actv_fn here gives better results
-                        state[i]['x'] = layer.actv_fn(layer.propagate(x_below))
-            else:
-                for i, layer in enumerate(self.layers):
-                    if learn_layer is not None and i > learn_layer:
-                        break
-                    state[i]['x'] = torch.randn_like(state[i]['x'])
+    #     if y is not None and learn_layer is None:
+    #         for i, layer in reversed(list(enumerate(self.layers))):
+    #             if i == len(self.layers) - 1: # last layer
+    #                 state[i]['x'] = y.detach()
+    #             if i > 0:
+    #                 pred = layer.predict(state[i])
+    #                 state[i-1]['x'] = pred.detach()
+    #         if obs is not None:
+    #             state[0]['x'] = obs.detach()
+    #     elif obs is not None:
+    #         for i, layer in enumerate(self.layers):
+    #             if learn_layer is not None and i > learn_layer:
+    #                 break
+    #             if i == 0:
+    #                 state[0]['x'] = obs.clone()
+    #             else:
+    #                 x_below = state[i-1]['x'].detach()
+    #                 # Found that using actv_fn here gives better results
+    #                 state[i]['x'] = layer.propagate(x_below)
+    #                 # state[i]['x'] = torch.randn_like(state[i]['x']) * 0.1
+    #     else:
+    #         for i, layer in enumerate(self.layers):
+    #             if learn_layer is not None and i > learn_layer:
+    #                 break
+    #             state[i]['x'] = torch.randn_like(state[i]['x']) * 0.01
 
-    def _init_es(self, state:List[dict], learn_layer:int = None):
-        """
-        | Calculates the initial errors for each layer.
-        | Assumes that Xs have already been initialised.
+    # def _init_es(self, state:List[dict], learn_layer:int = None):
+    #     """
+    #     | Calculates the initial errors for each layer.
+    #     | Assumes that Xs have already been initialised.
 
-        Parameters
-        ----------
-            state : List[dict]
-                List of state dicts for each layer, each containing 'x' and 'e' tensors.
-            learn_layer : Optional[int]
-                If provided, only initialises errors for layers i where i < learn_layer
-        """
-        with torch.no_grad():
-            for i, layer in enumerate(self.layers):
-                if learn_layer is not None and i >= learn_layer:
-                    break
-                if i < len(self.layers) - 1:
-                    pred = self.layers[i+1].predict(state[i+1])
-                    layer.update_e(state[i], pred, temp=1.0)
-                if i == len(self.layers) - 1 and self.has_memory_vec:
-                    layer.update_e(state[i], self.memory_vector, temp=1.0)
+    #     Parameters
+    #     ----------
+    #         state : List[dict]
+    #             List of state dicts for each layer, each containing 'x' and 'e' tensors.
+    #         learn_layer : Optional[int]
+    #             If provided, only initialises errors for layers i where i < learn_layer
+    #     """
+    #     for i, layer in enumerate(self.layers):
+    #         # Dont update e if >= learn_layer, unless top layer
+    #         if learn_layer is not None:
+    #             if learn_layer < len(self.layers) - 1 or not self.has_top:
+    #                 if i >= learn_layer:
+    #                     break
+    #         if i < len(self.layers) - 1:
+    #             pred = self.layers[i+1].predict(state[i+1])
+    #         elif self.has_top:
+    #             pred = self.top.predict(state[i])
+    #         else:
+    #             continue
+    #         layer.update_e(state[i], pred)
 
     def init_state(self, obs:torch.Tensor = None, y:torch.Tensor = None, b_size:int = None, learn_layer:int = None):
         """
@@ -294,8 +303,16 @@ class FCPCN(nn.Module):
         for layer in self.layers:
             state.append(layer.init_state(b_size))
             
-        self._init_xs(state, obs, y, learn_layer=learn_layer)
-        self._init_es(state, learn_layer=learn_layer)
+        if self.inverted:
+            obs, y = y, obs
+        if obs is not None:
+            state[0]['x'] = obs.clone()
+        if y is not None:
+            state[-1]['x'] = y.clone()
+    
+        # # Alternative Initialisation
+        # self._init_xs(state, obs, y, learn_layer=learn_layer)
+        # self._init_es(state, learn_layer=learn_layer)
 
         return state
 
@@ -303,6 +320,8 @@ class FCPCN(nn.Module):
         self.device = device
         for layer in self.layers:
             layer.to(device)
+        if self.has_top:
+            self.top.to(device)
         return self
 
     def get_output(self, state:List[dict]):
@@ -324,29 +343,35 @@ class FCPCN(nn.Module):
         else:
             return state[-1]['x']
 
-    def calc_temp(self, step_i:int, steps:int):
+    def update_gamma(self, state, gamma, prev_vfe=None):
         """
-        | Calculates the temperature for the current step.
-        | Uses a geometric sequence to decay the temperature.
-        | temp = self.temp_k * \alpha^{step_i}
-        | where \alpha = (\frac{0.001}{1})^{\frac{1}{steps}}
+        | Decays gamma based on the change in VFE.
+        | If VFE increases, gamma is decayed, else it is increased.
 
         Parameters
         ----------
-            step_i : int
-                Current step
-            steps : int
-                Total number of steps
-
+            state : List[dict]
+                List of layer state dicts, each containing 'x' and 'e'
+            gamma : torch.Tensor
+                Current gamma
+            prev_vfe : torch.Tensor
+                Previous VFE
+        
         Returns
         -------
-            float
-                Temperature for the current step
+            torch.Tensor
+                Updated gamma
+            Torch.Tensor
+                Current VFE
         """
-        alpha = (0.001/1)**(1/steps)
-        return self.temp_k * alpha**step_i
-
-    def step(self, state:List[dict], gamma:torch.Tensor=None, pin_obs:bool = False, pin_target:bool = False, temp:float = None, learn_layer:int = None):
+        vfe = self.vfe(state, batch_reduction=None)
+        if prev_vfe is None:
+            return gamma, vfe
+        else:
+            mult = torch.where(vfe < prev_vfe, 1.0, 0.9)
+            return gamma * mult, vfe
+    
+    def step(self, state:List[dict], gamma:torch.Tensor=None, pin_obs:bool = False, pin_target:bool = False, learn_layer:int = None):
         """
         | Performs one step of inference. Updates Xs first, then Es.
         | Both are updated from bottom to top.
@@ -361,29 +386,35 @@ class FCPCN(nn.Module):
                 Whether to pin the observation
             pin_target : bool
                 Whether to pin the target
-            temp : Optional[float]
-                Temperature to use for update
             learn_layer : Optional[int]
                 If provided, only layers i where i <= learn_layer are updated.
         """
         if self.inverted:
             pin_obs, pin_target = pin_target, pin_obs
 
+        # Update Xs
         for i, layer in enumerate(self.layers):
             if learn_layer is not None and i > learn_layer:
                 break
             if i > 0 or not pin_obs: # Don't update bottom x if pin_obs is True
                 if i < len(self.layers) - 1 or not pin_target: # Don't update top x if pin_target is True
                     e_below = state[i-1]['e'] if i > 0 else None
-                    layer.update_x(state[i], e_below, temp=temp, gamma=gamma)
+                    layer.update_x(state[i], e_below, gamma=gamma)
+        
+        # Update Es
         for i, layer in enumerate(self.layers):
-            if learn_layer is not None and i >= learn_layer:
-                break
+            # Dont update e if >= learn_layer, unless top layer
+            if learn_layer is not None:
+                if learn_layer < len(self.layers) - 1 or not self.has_top:
+                    if i >= learn_layer:
+                        break
             if i < len(self.layers) - 1:
                 pred = self.layers[i+1].predict(state[i+1])
-                layer.update_e(state[i], pred, temp=temp)
-            elif i == len(self.layers) - 1 and self.has_memory_vec:
-                layer.update_e(state[i], self.memory_vector, temp=temp)
+            elif self.has_top:
+                pred = self.top.predict(state[i])
+            else:
+                continue
+            layer.update_e(state[i], pred)
 
     def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, pin_obs:bool = False, pin_target:bool = False, steps:int = None, learn_layer:int = None):
 
@@ -411,6 +442,8 @@ class FCPCN(nn.Module):
             List[dict]
                 List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
         """
+        if self.has_top:
+            self.top.weight.data = self.top.weight.data - torch.diag(self.top.weight.data.diag())
         if steps is None:
             steps = self.steps
 
@@ -419,14 +452,9 @@ class FCPCN(nn.Module):
         prev_vfe = None
         gamma = torch.ones(state[0]['x'].shape[0]).to(self.device) * self.gamma
         for i in range(steps):
-            temp = self.calc_temp(i, steps)
-            self.step(state, gamma, pin_obs, pin_target, temp, learn_layer)
-            vfe = self.vfe(state, batch_reduction=None, learn_layer=learn_layer).detach()
-            if prev_vfe is not None:
-                mult = torch.ones_like(gamma)
-                mult[vfe > prev_vfe] = 0.9
-                gamma = gamma * mult
-            prev_vfe = vfe
+            self.step(state, gamma, pin_obs, pin_target, learn_layer)
+            with torch.no_grad():
+                gamma, prev_vfe = self.update_gamma(state, gamma, prev_vfe)
             
         out = self.get_output(state)
             
@@ -480,8 +508,31 @@ class FCPCN(nn.Module):
         
         return vfes.argmin(dim=1)
 
+    def reconstruct(self, obs:torch.Tensor = None, y:torch.Tensor = None, steps:int = None, learn_layer:int = None):
 
+        """
+        | Performs inference phase of the model.
+        
+        Parameters
+            obs : Optional[torch.Tensor]
+                Input data
+            y : Optional[torch.Tensor]
+                Target data
+            steps : Optional[int]
+                Number of steps to run inference for. Uses self.steps if not provided.
+            learn_layer : Optional[int]
+                If provided, only layers i where i <= learn_layer are updated.
 
-
-
-
+        Returns
+        -------
+            torch.Tensor
+                Final prediction of input data
+            List[dict]
+                List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
+        """
+        _, state = self.forward(obs, y, pin_obs=True, pin_target=y is not None, steps=steps, learn_layer=learn_layer)
+        if len(self.layers) == 1:
+            out = self.top.predict(state[0])
+        else:
+            out = self.layers[1].predict(state[1])
+        return out, state

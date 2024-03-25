@@ -20,6 +20,8 @@ class FC(nn.Module):
             Number of input features.
         out_features : int
             Number of output features.
+        precision : float
+            Coefficient for bottom-up error propagation.
         has_bias : bool
             Whether to include a bias term.
         symmetric : bool
@@ -32,6 +34,8 @@ class FC(nn.Module):
             step size for x updates.
         x_decay : float
             Decay rate for x.
+        dropout : float
+            Dropout rate for predictions.
         device : torch.device
             Device to use for computation.
         dtype : torch.dtype
@@ -47,12 +51,14 @@ class FC(nn.Module):
     def __init__(self,
                  in_features: int,
                  out_features: int,
+                 precision: float = 1.0,
                  has_bias: bool = True,
                  symmetric: bool = True,
                  actv_fn: callable = F.relu,
                  d_actv_fn: callable = None,
                  gamma: float = 0.1,
                  x_decay: float = 0.0,
+                 dropout: float = 0.0,
                  device: torch.device = torch.device('cpu'),
                  dtype: torch.dtype = None
                  ) -> None:
@@ -62,11 +68,13 @@ class FC(nn.Module):
 
         self.in_features = in_features
         self.out_features = out_features
+        self.precision = precision
         self.has_bias = has_bias
         self.symmetric = symmetric
         self.actv_fn = actv_fn
         self.gamma = gamma
         self.x_decay = x_decay
+        self.dropout = dropout
         self.device = device
 
         # Automatically set d_actv_fn if not provided
@@ -153,6 +161,8 @@ class FC(nn.Module):
             self.register_parameter('weight', None)
             self.register_parameter('weight_td', None)
             self.register_parameter('bias', None)
+        
+        self.dropout = nn.Dropout(p=self.dropout)
             
     def init_state(self, batch_size:int):
         """
@@ -193,9 +203,9 @@ class FC(nn.Module):
         """
         x = state['x'].detach() if self.symmetric else state['x']
         weight_td = self.weight.T if self.symmetric else self.weight_td
+        x = self.dropout(x)
         return F.linear(self.actv_fn(x), weight_td, self.bias)
-    
-    
+
     def propagate(self, e_below:torch.Tensor):
         """
         | Propagates error from layer below, returning an update signal for state['x'].
@@ -212,10 +222,10 @@ class FC(nn.Module):
         """
         if e_below.dim() == 4:
             e_below = e_below.flatten(1)
-        return F.linear(e_below, self.weight, None)
+        return F.linear(e_below.detach(), self.weight, None)
     
 
-    def update_x(self, state:dict, e_below:torch.Tensor = None, temp:float = None, gamma:torch.Tensor = None):
+    def update_x(self, state:dict, e_below:torch.Tensor = None, gamma:torch.Tensor = None):
         """
         | Updates state['x'] inplace, using the error signal from the layer below and error of the current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x) - 0.1 * x + noise).
@@ -226,8 +236,6 @@ class FC(nn.Module):
                 Dictionary containing 'x' and 'e' tensors for this layer.
             e_below : Optional[torch.Tensor]
                 state['e'] from the layer below. None if input layer.
-            temp : Optional[float]
-                Temperature for simulated annealing.
             gamma : Optional[torch.Tensor]
                 Step size for x updates. If None, self.gamma is used. shape: (BatchSize,)
         """
@@ -235,28 +243,21 @@ class FC(nn.Module):
             gamma = torch.ones(state['x'].shape[0]).to(self.device) * self.gamma
 
         # If not input layer, propagate error from layer below
-        dx = torch.zeros_like(state['x'], device=self.device)
+        dx = -state['e'].detach()
+
         if e_below is not None:
             e_below = e_below.detach()
             if e_below.dim() == 4:
                 e_below = e_below.flatten(1)
-            dx += self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
-            # dx += self.propagate(e_below) * state['x'].detach().sign()
-
-
-        dx += -state['e'].detach()
-
-        # dx += 0.05 * -state['x'].detach()
+            dx += self.precision*self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
+        
         if self.x_decay > 0:
-            dx += -self.x_decay*state['x'].detach()
-
-        if temp is not None and temp > 0:
-            dx += torch.randn_like(state['x'], device=self.device) * temp * 0.034
+            dx += -self.x_decay*state['x'].detach()*self.d_actv_fn(state['x'].detach())
 
         state['x'] = state['x'].detach() + gamma.unsqueeze(-1) * dx
     
 
-    def update_e(self, state:dict, pred:torch.Tensor, temp:float = None):
+    def update_e(self, state:dict, pred:torch.Tensor):
         """
         | Updates prediction-error (state['e']) inplace between state['x'] and the top-down prediction of it.
         | Uses simulated annealing if temp is not None.
@@ -273,6 +274,7 @@ class FC(nn.Module):
         """
         assert pred is not None, "Prediction must be provided to update_e()."
 
+        # not detaching x, allows for gradients to flow back to recognition weights
         if self.symmetric:
             state['x'] = state['x'].detach()
         
@@ -280,9 +282,6 @@ class FC(nn.Module):
             pred = pred.flatten(1)
         state['e'] = state['x'] - pred
 
-        if temp is not None:
-            eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
-            state['e'] += eps
 
     def assert_grads(self, state, e_below):
         """
@@ -295,4 +294,3 @@ class FC(nn.Module):
         if self.has_bias:
             calc_bias_grad = -e_below.mean(0)
             assert torch.allclose(self.bias.grad, calc_bias_grad), f"Back Bias grad:\n{self.bias.grad}\nCalc bias grad:\n{calc_bias_grad}"
-        

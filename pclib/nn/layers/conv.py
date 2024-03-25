@@ -225,7 +225,7 @@ class Conv2d(nn.Module):
         """
         return self.conv(e_below)
     
-    def update_e(self, state:dict, pred:torch.Tensor, temp:float=None):
+    def update_e(self, state:dict, pred:torch.Tensor):
         """
         | Updates the prediction error (state['e']) between state['x'] and pred.
         | Uses simulated annealing if temp is not None.
@@ -236,8 +236,6 @@ class Conv2d(nn.Module):
                 The state dictionary for this layer, containing 'x' and 'e'.
             pred : torch.Tensor
                 The prediction of 'x' from the layer above.
-            temp : Optional[float]
-                The temperature for simulated annealing.
         """
 
         assert pred is not None, "Prediction must be provided to update_e()."
@@ -249,11 +247,7 @@ class Conv2d(nn.Module):
             pred = pred.unsqueeze(-1).unsqueeze(-1)
         state['e'] = state['x'] - pred
 
-        if temp is not None:
-            eps = torch.randn_like(state['e'], device=self.device) * 0.034 * temp
-            state['e'] += eps
-
-    def update_x(self, state:dict, e_below:torch.Tensor=None, temp:float=None, gamma:float=None):
+    def update_x(self, state:dict, e_below:torch.Tensor=None, gamma:float=None):
         """
         | Updates state['x'] using the error signal from the layer below and of current layer.
         | Formula: new_x = x + gamma * (-e + propagate(e_below) * d_actv_fn(x) - 0.1 * x + noise)
@@ -266,7 +260,7 @@ class Conv2d(nn.Module):
         """
 
         if gamma is None:
-            gamma = self.gamma
+            gamma = torch.ones(state['x'].shape[0]).to(self.device) * self.gamma
         dx = torch.zeros_like(state['x'], device=self.device)
         if e_below is not None:
             e_below = e_below.detach()
@@ -279,7 +273,4 @@ class Conv2d(nn.Module):
         if self.x_decay > 0.0:
             dx += -self.x_decay * state['x'].detach()
         
-        if temp is not None:
-            dx += torch.randn_like(state['x'], device=self.device) * 0.034 * temp
-
-        state['x'] = state['x'].detach() + gamma * dx
+        state['x'] = state['x'].detach() + gamma.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1) * dx

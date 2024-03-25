@@ -3,7 +3,6 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
 
 from pclib.optim.eval import topk_accuracy
 from pclib.utils.functional import format_y, calc_corr, calc_sparsity
@@ -361,9 +360,7 @@ def train(
                     state[0]['x'] = x
                     pred = model.layers[1].predict(state[1])
                     model.layers[0].update_e(state[0], pred, temp=0.0)
-                vfe = model.vfe(state, learn_layer=learn_layer)
-                if norm_grads:
-                    vfe /= vfe.item()
+                vfe = model.vfe(state, learn_layer=learn_layer, normalise=norm_grads)
                 vfe.backward()
 
             if assert_grads: model.assert_grads(state)

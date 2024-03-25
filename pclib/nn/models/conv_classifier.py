@@ -28,8 +28,6 @@ class ConvClassifier(nn.Module):
             step size for x updates
         x_decay : float
             Decay rate for x
-        temp_k : float
-            Temperature constant for inference
         device : torch.device
             Device to run the network on.
         dtype : torch.dtype
@@ -48,7 +46,6 @@ class ConvClassifier(nn.Module):
             d_actv_fn:callable = None, 
             gamma:float = 0.1, 
             x_decay:float = 0.0,
-            temp_k:float = 1.0, 
             device:torch.device = torch.device('cpu'), 
             dtype:torch.dtype = None
         ):
@@ -58,7 +55,6 @@ class ConvClassifier(nn.Module):
         self.num_classes = 10
         self.steps = steps
         self.gamma = gamma
-        self.temp_k = temp_k
         self.device = device
         self.dtype = dtype
 
@@ -84,6 +80,7 @@ class ConvClassifier(nn.Module):
             f"    symmetric: {self.factory_kwargs['symmetric']}" + \
             f"    actv_fn: {self.factory_kwargs['actv_fn'].__name__}" + \
             f"    gamma: {self.factory_kwargs['gamma']}" + \
+            f"    x_decay: {self.factory_kwargs['x_decay']}" + \
             f"    device: {self.device}" + \
             f"    dtype: {self.factory_kwargs['dtype']}" + \
             f"    epochs_trained: {self.epochs_trained}" + \
@@ -122,7 +119,7 @@ class ConvClassifier(nn.Module):
         self.epochs_trained += n
 
 
-    def vfe(self, state:List[dict], batch_reduction:str='mean', unit_reduction:str='sum'):
+    def vfe(self, state:List[dict], batch_reduction:str='mean', unit_reduction:str='sum', normalise:bool=False):
         """
         | Calculates the Variational Free Energy (VFE) of the model.
         | This is the sum of the squared prediction errors of each layer.
@@ -136,6 +133,8 @@ class ConvClassifier(nn.Module):
                 How to reduce over batches ['sum', 'mean', None]
             unit_reduction : str
                 How to reduce over units ['sum', 'mean']
+            normalise : bool
+                Whether to normalise the VFE by the number of units.
 
         Returns
         -------
@@ -147,6 +146,9 @@ class ConvClassifier(nn.Module):
             vfe = [0.5 * state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
         elif unit_reduction =='mean':
             vfe = [0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+        
+        if normalise:
+            vfe = [vfe_i / (vfe_i.detach() + 1e-6) for vfe_i in vfe]
         # Reduce layers
         vfe = sum(vfe)
         # Reduce batches
@@ -208,7 +210,7 @@ class ConvClassifier(nn.Module):
             for i, layer in enumerate(self.layers):
                 if i < len(self.layers) - 1:
                     pred = self.layers[i+1].predict(state[i+1])
-                    layer.update_e(state[i], pred, temp=1.0)
+                    layer.update_e(state[i], pred)
 
     def init_state(self, obs:torch.Tensor = None, y:torch.Tensor = None):
         """
@@ -263,31 +265,7 @@ class ConvClassifier(nn.Module):
         """
         return state[-1]['x']
 
-
-    def calc_temp(self, step_i:int, steps:int):
-        """
-        | Calculates the temperature for the current step.
-        | Uses a geometric sequence to decay the temperature.
-        | temp = self.temp_k * \alpha^{step_i}
-        | where \alpha = (\frac{0.001}{1})^{\frac{1}{steps}}
-
-        Parameters
-        ----------
-            step_i : int
-                Current step
-            steps : int
-                Total number of steps
-
-        Returns
-        -------
-            float
-                Temperature for the current step
-        """
-        alpha = (0.001/1)**(1/steps)
-        return self.temp_k * alpha**step_i
-
-
-    def step(self, state:List[dict], pin_obs:bool = False, pin_target:bool = False, temp:float=None, gamma:float=None):
+    def step(self, state:List[dict], gamma:torch.Tensor=None, pin_obs:bool = False, pin_target:bool = False):
         """
         Performs one step of inference, updating all Xs first, then calculates Errors.
 
@@ -309,27 +287,50 @@ class ConvClassifier(nn.Module):
             if i > 0 or not pin_obs:
                 if i < len(self.layers) - 1 or not pin_target:
                     e_below = state[i-1]['e'] if i > 0 else None
-                    layer.update_x(state[i], e_below, temp=temp, gamma=gamma)
+                    layer.update_x(state[i], e_below, gamma=gamma)
         for i, layer in enumerate(self.layers):
             if i < len(self.layers) - 1:
                 pred = self.layers[i+1].predict(state[i+1])
-                layer.update_e(state[i], pred, temp=temp)
+                layer.update_e(state[i], pred)
 
-
-    def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, pin_obs:bool = False, pin_target:bool = False, steps:int = None):
+    def _gamma_decay(self, vfe, prev_vfe, gamma, decay=0.9):
         """
-        | Performs inference phase of the network.
+        | Decays gamma based on the change in VFE.
+        | If VFE increases, gamma is decayed, else it is increased.
+
+        Parameters
+        ----------
+            vfe : torch.Tensor
+                Current VFE
+            prev_vfe : torch.Tensor
+                Previous VFE
+            gamma : torch.Tensor
+                Current gamma
+
+        Returns
+        -------
+            torch.Tensor
+                Updated gamma
+        """
+        if prev_vfe is None:
+            return gamma
+
+        assert vfe.dim() == 1, f"VFE must be 1D, got {vfe.dim()}D"
+        assert prev_vfe.dim() == 1, f"prev_vfe must be 1D, got {prev_vfe.dim()}D"
+        assert gamma.dim() == 1, f"gamma must be 1D, got {gamma.dim()}D"
+
+        mult = torch.ones_like(gamma)
+        mult[vfe > prev_vfe] = decay
+        return gamma * mult
+
+    def forward(self, obs:torch.Tensor = None, pin_obs:bool = False, steps:int = None):
+        """
+        | Performs inference for the network.
 
         Parameters
         ----------
             obs : Optional[torch.Tensor]
                 Input data
-            y : Optional[torch.Tensor]
-                Target data
-            pin_obs : bool
-                Whether to pin the observation or not
-            pin_target : bool
-                Whether to pin the target or not
             steps : Optional[int]
                 Number of steps to run inference for
             learn_on_step : bool
@@ -340,22 +341,21 @@ class ConvClassifier(nn.Module):
             torch.Tensor
                 Output of the network
             List[dict]
-                List of state dicts for each layer, each containing 'x' and 'e'
+                List of layer state dicts, each containing 'x' and 'e'
         """
         if steps is None:
             steps = self.steps
 
-        state = self.init_state(obs, y)
-    
+        state = self.init_state(obs)
+
         prev_vfe = None
-        gamma = self.gamma
+        gamma = torch.ones(state[0]['x'].shape[0]).to(self.device) * self.gamma
         for i in range(steps):
-            temp = self.calc_temp(i, steps)
-            self.step(state, pin_obs, pin_target, temp, gamma)
-            vfe = self.vfe(state)
-            if prev_vfe is not None and vfe < prev_vfe:
-                gamma = gamma * 0.9
-            prev_vfe = vfe
+            self.step(state, gamma, pin_obs)
+            with torch.no_grad():
+                vfe = self.vfe(state, batch_reduction=None)
+                gamma = self._gamma_decay(vfe, prev_vfe, gamma)
+                prev_vfe = vfe
             
         out = self.get_output(state)
             
