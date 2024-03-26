@@ -46,12 +46,12 @@ class ConvClassifierUs(ConvClassifier):
             d_actv_fn:callable = None, 
             gamma:float = 0.1, 
             x_decay:float = 0.0,
-            has_memory_vec:bool = False,
+            has_top:bool = False,
             device:torch.device = torch.device('cpu'), 
             dtype:torch.dtype = None
         ):
         self.in_channels = in_channels
-        self.has_memory_vec = has_memory_vec
+        self.has_top = has_top
         super().__init__(
             steps=steps,
             bias=bias,
@@ -60,6 +60,7 @@ class ConvClassifierUs(ConvClassifier):
             d_actv_fn=d_actv_fn,
             gamma=gamma,
             x_decay=x_decay,
+            has_top=has_top,
             device=device,
             dtype=dtype,
         )
@@ -77,15 +78,25 @@ class ConvClassifierUs(ConvClassifier):
         layers.append(Conv2d((256, 2, 2),    (256, 1, 1),    3, 2, 1, **self.factory_kwargs))
         self.layers = nn.ModuleList(layers)
 
-        if self.has_memory_vec:
-            self.memory_vector = nn.Parameter(torch.empty(256, 1, 1, device=self.device, dtype=self.dtype))
-            nn.init.normal_(self.memory_vector, mean=0.0, std=0.01)
+        if self.has_top:
+            self.top = FC(
+                256, 
+                256, 
+                has_bias=self.bias,
+                actv_fn=self.actv_fn,
+                gamma=self.gamma,
+                x_decay=self.x_decay,
+                device=self.device,
+                dtype=self.dtype,
+            )
+            self.top.weight.data = (self.top.weight.data - torch.diag(torch.diag(self.top.weight.data))) * 0.01
 
     def to(self, device):
         self.device = device
         for layer in self.layers:
             layer.to(device)
-        self.memory_vector = nn.Parameter(self.memory_vector.to(device))
+        if self.has_top:
+            self.top.to(device)
         return self
 
 

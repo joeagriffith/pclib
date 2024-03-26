@@ -28,6 +28,8 @@ class ConvClassifier(nn.Module):
             step size for x updates
         x_decay : float
             Decay rate for x
+        has_top: bool
+            Whether to include a recurrent layer for top prediction
         device : torch.device
             Device to run the network on.
         dtype : torch.dtype
@@ -46,6 +48,7 @@ class ConvClassifier(nn.Module):
             d_actv_fn:callable = None, 
             gamma:float = 0.1, 
             x_decay:float = 0.0,
+            has_top:bool = False,
             device:torch.device = torch.device('cpu'), 
             dtype:torch.dtype = None
         ):
@@ -54,13 +57,17 @@ class ConvClassifier(nn.Module):
 
         self.num_classes = 10
         self.steps = steps
+        self.bias = bias
+        self.actv_fn = actv_fn
         self.gamma = gamma
+        self.x_decay = x_decay
         self.device = device
         self.dtype = dtype
 
         self.init_layers()
         self.register_buffer('epochs_trained', torch.tensor(0, dtype=torch.long))
         self.register_buffer('max_vfe', torch.tensor(-float('inf'), dtype=torch.float32))
+
 
     def __str__(self):
         """
@@ -81,6 +88,7 @@ class ConvClassifier(nn.Module):
             f"    actv_fn: {self.factory_kwargs['actv_fn'].__name__}" + \
             f"    gamma: {self.factory_kwargs['gamma']}" + \
             f"    x_decay: {self.factory_kwargs['x_decay']}" + \
+            f"    has_top: {self.has_top}" + \
             f"    device: {self.device}" + \
             f"    dtype: {self.factory_kwargs['dtype']}" + \
             f"    epochs_trained: {self.epochs_trained}" + \
@@ -100,12 +108,25 @@ class ConvClassifier(nn.Module):
         layers.append(Conv2d(None, (1, 32, 32),         maxpool=2, **self.factory_kwargs))
         layers.append(Conv2d((1, 32, 32), (32, 16, 16), maxpool=2, **self.factory_kwargs))
         layers.append(Conv2d((32, 16, 16), (64, 8, 8),  maxpool=2, **self.factory_kwargs))
-        layers.append(Conv2d((64, 8, 8), (64, 4, 4),    maxpool=2, **self.factory_kwargs))
-        layers.append(Conv2d((64, 4, 4), (64, 2, 2),    maxpool=2, **self.factory_kwargs))
-        layers.append(Conv2d((64, 2, 2), (64, 1, 1),    maxpool=2, **self.factory_kwargs))
-        layers.append(FC(64, 128, **self.factory_kwargs))
+        layers.append(Conv2d((64, 8, 8), (128, 4, 4),    maxpool=2, **self.factory_kwargs))
+        layers.append(Conv2d((128, 4, 4), (256, 2, 2),    maxpool=2, **self.factory_kwargs))
+        layers.append(Conv2d((256, 2, 2), (256, 1, 1),    maxpool=2, **self.factory_kwargs))
+        layers.append(FC(256, 128, **self.factory_kwargs))
         layers.append(FC(128, 10, **self.factory_kwargs))
         self.layers = nn.ModuleList(layers)
+
+        if self.has_top:
+            self.top = FC(
+                10, 
+                10, 
+                has_bias=self.bias,
+                actv_fn=self.actv_fn,
+                gamma=self.gamma,
+                x_decay=self.x_decay,
+                device=self.device,
+                dtype=self.dtype,
+            )
+            self.top.weight.data = (self.top.weight.data - torch.diag(torch.diag(self.top.weight.data))) * 0.01
 
     def inc_epochs(self, n:int=1):
         """
@@ -119,7 +140,7 @@ class ConvClassifier(nn.Module):
         self.epochs_trained += n
 
 
-    def vfe(self, state:List[dict], batch_reduction:str='mean', unit_reduction:str='sum', normalise:bool=False):
+    def vfe(self, state:List[dict], batch_reduction:str='mean', normalise:bool=False):
         """
         | Calculates the Variational Free Energy (VFE) of the model.
         | This is the sum of the squared prediction errors of each layer.
@@ -142,10 +163,7 @@ class ConvClassifier(nn.Module):
                 VFE of the model (scalar)
         """
         # Reduce units for each layer
-        if unit_reduction == 'sum':
-            vfe = [0.5 * state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
-        elif unit_reduction =='mean':
-            vfe = [0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+        vfe = [0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
         
         if normalise:
             vfe = [vfe_i / (vfe_i.detach() + 1e-6) for vfe_i in vfe]
@@ -159,58 +177,58 @@ class ConvClassifier(nn.Module):
 
         return vfe
 
-    def _init_xs(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None):
-        """
-        | Initialises Xs.
-        | If y is provided, xs are initialised top-down using predictions.
-        | Else if obs is provided, xs are initialised bottom-up using propagations.
+    # def _init_xs(self, state:List[dict], obs:torch.Tensor = None, y:torch.Tensor = None):
+    #     """
+    #     | Initialises Xs.
+    #     | If y is provided, xs are initialised top-down using predictions.
+    #     | Else if obs is provided, xs are initialised bottom-up using propagations.
         
-        Parameters
-        ----------
-            state : List[dict]
-                List of state dicts for each layer, each containing 'x' and 'e' tensors.
-            obs : Optional[torch.Tensor]
-                Input data
-            y : Optional[torch.Tensor]
-                Target data
-        """
-        with torch.no_grad():
-            if y is not None:
-                for i, layer in reversed(list(enumerate(self.layers))):
-                    if i == len(self.layers) - 1: # last layer
-                        state[i]['x'] = y.detach()
-                    if i > 0:
-                        pred = layer.predict(state[i])
-                        if isinstance(layer, FC) and isinstance(self.layers[i-1], Conv2d):
-                            shape = self.layers[i-1].shape
-                            pred = pred.view(pred.shape[0], shape[0], shape[1], shape[2])
-                        state[i-1]['x'] = pred.detach()
-                if obs is not None:
-                    state[0]['x'] = obs.detach()
+    #     Parameters
+    #     ----------
+    #         state : List[dict]
+    #             List of state dicts for each layer, each containing 'x' and 'e' tensors.
+    #         obs : Optional[torch.Tensor]
+    #             Input data
+    #         y : Optional[torch.Tensor]
+    #             Target data
+    #     """
+    #     with torch.no_grad():
+    #         if y is not None:
+    #             for i, layer in reversed(list(enumerate(self.layers))):
+    #                 if i == len(self.layers) - 1: # last layer
+    #                     state[i]['x'] = y.detach()
+    #                 if i > 0:
+    #                     pred = layer.predict(state[i])
+    #                     if isinstance(layer, FC) and isinstance(self.layers[i-1], Conv2d):
+    #                         shape = self.layers[i-1].shape
+    #                         pred = pred.view(pred.shape[0], shape[0], shape[1], shape[2])
+    #                     state[i-1]['x'] = pred.detach()
+    #             if obs is not None:
+    #                 state[0]['x'] = obs.detach()
 
-            elif obs is not None:
-                for i, layer in enumerate(self.layers):
-                    if i == 0:
-                        state[0]['x'] = obs.detach()
-                    else:
-                        x_below = state[i-1]['x'].detach()
-                        state[i]['x'] = layer.propagate(x_below)
+    #         elif obs is not None:
+    #             for i, layer in enumerate(self.layers):
+    #                 if i == 0:
+    #                     state[0]['x'] = obs.detach()
+    #                 else:
+    #                     x_below = state[i-1]['x'].detach()
+    #                     state[i]['x'] = layer.propagate(x_below)
 
-    def _init_es(self, state:List[dict]):
-        """
-        | Calculates the initial errors for each layer.
-        | Assumes that Xs have already been initialised.
+    # def _init_es(self, state:List[dict]):
+    #     """
+    #     | Calculates the initial errors for each layer.
+    #     | Assumes that Xs have already been initialised.
 
-        Parameters
-        ----------
-            state : List[dict]
-                List of state dicts for each layer, each containing 'x' and 'e' tensors.
-        """
-        with torch.no_grad():
-            for i, layer in enumerate(self.layers):
-                if i < len(self.layers) - 1:
-                    pred = self.layers[i+1].predict(state[i+1])
-                    layer.update_e(state[i], pred)
+    #     Parameters
+    #     ----------
+    #         state : List[dict]
+    #             List of state dicts for each layer, each containing 'x' and 'e' tensors.
+    #     """
+    #     with torch.no_grad():
+    #         for i, layer in enumerate(self.layers):
+    #             if i < len(self.layers) - 1:
+    #                 pred = self.layers[i+1].predict(state[i+1])
+    #                 layer.update_e(state[i], pred)
 
     def init_state(self, obs:torch.Tensor = None, y:torch.Tensor = None):
         """
@@ -237,9 +255,15 @@ class ConvClassifier(nn.Module):
         state = []
         for layer in self.layers:
             state.append(layer.init_state(b_size))
+
+        if obs is not None:
+            state[0]['x'] = obs.clone()
+        if y is not None:
+            state[-1]['x'] = y.clone()
         
-        self._init_xs(state, obs, y)
-        self._init_es(state)
+        # # Alternative initialisation
+        # self._init_xs(state, obs, y)
+        # self._init_es(state)
         
         return state
 
@@ -288,40 +312,43 @@ class ConvClassifier(nn.Module):
                 if i < len(self.layers) - 1 or not pin_target:
                     e_below = state[i-1]['e'] if i > 0 else None
                     layer.update_x(state[i], e_below, gamma=gamma)
+        
         for i, layer in enumerate(self.layers):
             if i < len(self.layers) - 1:
                 pred = self.layers[i+1].predict(state[i+1])
-                layer.update_e(state[i], pred)
+            elif self.has_top:
+                pred = self.top.predict(state[-1])
+            else:
+                continue
+            layer.update_e(state[i], pred)
 
-    def _gamma_decay(self, vfe, prev_vfe, gamma, decay=0.9):
+    def update_gamma(self, state, gamma, prev_vfe=None):
         """
         | Decays gamma based on the change in VFE.
         | If VFE increases, gamma is decayed, else it is increased.
 
         Parameters
         ----------
-            vfe : torch.Tensor
-                Current VFE
-            prev_vfe : torch.Tensor
-                Previous VFE
+            state : List[dict]
+                List of state dicts for each layer, each containing 'x' and 'e' tensors.
             gamma : torch.Tensor
                 Current gamma
+            prev_vfe : Optional[torch.Tensor]
+                VFE from the previous step
 
         Returns
         -------
             torch.Tensor
                 Updated gamma
+            torch.Tensor
+                Current VFE
         """
+        vfe = self.vfe(state, batch_reduction=None)
         if prev_vfe is None:
-            return gamma
-
-        assert vfe.dim() == 1, f"VFE must be 1D, got {vfe.dim()}D"
-        assert prev_vfe.dim() == 1, f"prev_vfe must be 1D, got {prev_vfe.dim()}D"
-        assert gamma.dim() == 1, f"gamma must be 1D, got {gamma.dim()}D"
-
-        mult = torch.ones_like(gamma)
-        mult[vfe > prev_vfe] = decay
-        return gamma * mult
+            return gamma, vfe
+        else:
+            mult = torch.where(vfe < prev_vfe, 1.0, 0.9)
+            return gamma * mult, vfe
 
     def forward(self, obs:torch.Tensor = None, pin_obs:bool = False, steps:int = None):
         """
@@ -353,9 +380,7 @@ class ConvClassifier(nn.Module):
         for i in range(steps):
             self.step(state, gamma, pin_obs)
             with torch.no_grad():
-                vfe = self.vfe(state, batch_reduction=None)
-                gamma = self._gamma_decay(vfe, prev_vfe, gamma)
-                prev_vfe = vfe
+                gamma, prev_vfe = self.update_gamma(state, gamma, prev_vfe)
             
         out = self.get_output(state)
             

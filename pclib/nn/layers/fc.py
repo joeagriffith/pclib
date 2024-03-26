@@ -202,6 +202,7 @@ class FC(nn.Module):
                 Prediction of state['x'] in the layer below.
         """
         x = state['x'].detach() if self.symmetric else state['x']
+        x = x.flatten(1)
         weight_td = self.weight.T if self.symmetric else self.weight_td
         x = self.dropout(x)
         return F.linear(self.actv_fn(x), weight_td, self.bias)

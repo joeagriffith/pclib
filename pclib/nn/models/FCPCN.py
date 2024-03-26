@@ -354,14 +354,14 @@ class FCPCN(nn.Module):
                 List of layer state dicts, each containing 'x' and 'e'
             gamma : torch.Tensor
                 Current gamma
-            prev_vfe : torch.Tensor
+            prev_vfe : Optional[torch.Tensor]
                 Previous VFE
         
         Returns
         -------
             torch.Tensor
                 Updated gamma
-            Torch.Tensor
+            torch.Tensor
                 Current VFE
         """
         vfe = self.vfe(state, batch_reduction=None)
@@ -442,8 +442,6 @@ class FCPCN(nn.Module):
             List[dict]
                 List of layer state dicts, each containing 'x' and 'e' (and 'eps' for FCPW)
         """
-        if self.has_top:
-            self.top.weight.data = self.top.weight.data - torch.diag(self.top.weight.data.diag())
         if steps is None:
             steps = self.steps
 

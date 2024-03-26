@@ -237,6 +237,8 @@ class Conv2d(nn.Module):
             pred : torch.Tensor
                 The prediction of 'x' from the layer above.
         """
+        if pred.dim() == 2:
+            pred = pred.unsqueeze(-1).unsqueeze(-1)
 
         assert pred is not None, "Prediction must be provided to update_e()."
 
@@ -266,6 +268,8 @@ class Conv2d(nn.Module):
             e_below = e_below.detach()
             if e_below.dim() == 2:
                 e_below = e_below.unsqueeze(-1).unsqueeze(-1)
+            
+            prop = self.propagate(e_below)
             dx += self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
 
         dx += -state['e'].detach()
