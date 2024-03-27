@@ -180,9 +180,9 @@ class FCPCN(nn.Module):
         """
         # Reduce units for each layer
         if learn_layer is not None:
-            vfe = [0.5 * state[learn_layer-1]['e'].square().mean(dim=[i for i in range(1, state[learn_layer-1]['e'].dim())])]
+            vfe = [0.5 * state[learn_layer-1]['e'].square().sum(dim=[i for i in range(1, state[learn_layer-1]['e'].dim())])]
         else:
-            vfe = [0.5 * state_i['e'].square().mean(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
+            vfe = [0.5 * state_i['e'].square().sum(dim=[i for i in range(1, state_i['e'].dim())]) for state_i in state]
         
         if normalise:
             vfe = [vfe_i / (vfe_i.detach() + 1e-6) for vfe_i in vfe]

@@ -350,7 +350,7 @@ class ConvClassifier(nn.Module):
             mult = torch.where(vfe < prev_vfe, 1.0, 0.9)
             return gamma * mult, vfe
 
-    def forward(self, obs:torch.Tensor = None, pin_obs:bool = False, steps:int = None):
+    def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, pin_obs:bool = False, pin_target:bool = False, steps:int = None):
         """
         | Performs inference for the network.
 
@@ -358,6 +358,8 @@ class ConvClassifier(nn.Module):
         ----------
             obs : Optional[torch.Tensor]
                 Input data
+            y : Optional[torch.Tensor]
+                Target data
             steps : Optional[int]
                 Number of steps to run inference for
             learn_on_step : bool
@@ -373,12 +375,12 @@ class ConvClassifier(nn.Module):
         if steps is None:
             steps = self.steps
 
-        state = self.init_state(obs)
+        state = self.init_state(obs, y)
 
         prev_vfe = None
         gamma = torch.ones(state[0]['x'].shape[0]).to(self.device) * self.gamma
         for i in range(steps):
-            self.step(state, gamma, pin_obs)
+            self.step(state, gamma, pin_obs, pin_target)
             with torch.no_grad():
                 gamma, prev_vfe = self.update_gamma(state, gamma, prev_vfe)
             
