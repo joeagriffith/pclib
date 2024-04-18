@@ -23,8 +23,8 @@ def topk_accuracy(output:torch.Tensor, target:torch.Tensor, k:int = 1):
         batch_size = target.size(0)
         _, pred = output.topk(k, 1)
         correct = pred.eq(target.unsqueeze(1).expand_as(pred)).sum(dim=0)
-        accuracy = correct * (100 / batch_size)
-        return accuracy
+        accuracy = correct / batch_size
+        return accuracy * 100
 
 def track_vfe(model:torch.nn.Module, x:torch.Tensor = None, y:torch.Tensor = None, steps:int = 100, plot_Es:bool = False, plot_Xs:bool = False, flatten:bool = True):
     """

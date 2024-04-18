@@ -8,7 +8,7 @@ from pclib.utils.functional import format_y, identity
 from typing import List, Optional
 
 
-class FCPCN(nn.Module):
+class FCDPCN(nn.Module):
     """
     | The standard PC model which stacks FC layers.
     | Predictions flow from targets to inputs (top-down).
@@ -340,11 +340,8 @@ class FCPCN(nn.Module):
         """
         if self.inverted:
             return state[0]['x']
-            # return torch.cat([state_i['x'] for state_i in state[:-1]], dim=1)
         else:
             return state[-1]['x']
-            # return torch.cat([state_i['x'] for state_i in state[1:]], dim=1)
-
 
     def update_gamma(self, state, gamma, prev_vfe=None):
         """

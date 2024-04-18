@@ -187,4 +187,4 @@ class PreloadedDataset(Dataset):
                 val_transform(self.images[val_indices]).to(device) if val_transform is not None else self.images[val_indices].to(device)# Untransformed, as we want to test on un-augmented data
             ])
         
-        return train_dataset, val_dataset
+        return train_dataset, val_dataset   

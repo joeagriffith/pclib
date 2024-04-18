@@ -69,30 +69,28 @@ class Shrinkage(torch.autograd.Function):
         return grad_input, grad_output
 
 # To apply this function
-def shrinkage(input, lambda_=1.0):
+def shrinkage(input, lambda_=1e-3):
     return Shrinkage.apply(input, lambda_)
 
-def d_shrinkage(input, lambda_=1.0):
+def d_shrinkage(input, lambda_=1e-3):
     return (input.abs() > lambda_).float()
 
-# Calculate Correlations
+# Calculate Correlation between activations of top latent vector
 def calc_corr(state):
-    correlations = []
-    for state_i in state:
-        # Standardise activations
-        mean = state_i['x'].mean(dim=0, keepdim=True)
-        std = state_i['x'].std(dim=0, keepdim=True) + 1e-5
-        x = (state_i['x'] - mean) / std
+    # Standardise activations
+    mean = state[-1]['x'].mean(dim=0, keepdim=True)
+    std = state[-1]['x'].std(dim=0, keepdim=True) + 1e-5
+    x = (state[-1]['x'] - mean) / std
 
-        # Compute Correlation matrix
-        corr_matrix = torch.corrcoef(x.T)
-        mask = torch.triu(torch.ones_like(corr_matrix), diagonal=1).bool()
-        correlations.append(torch.nanmean(corr_matrix.masked_select(mask).abs()))
+    # Compute Correlation matrix
+    corr_matrix = torch.corrcoef(x.T)
+    mask = torch.triu(torch.ones_like(corr_matrix), diagonal=1).bool()
+    correlation = torch.nanmean(corr_matrix.masked_select(mask).abs())
     
-    return sum(correlations) / len(correlations)
+    return correlation
 
 def calc_sparsity(state):
-    num_zeros = [(state_i['x'].numel() - torch.count_nonzero(state_i['x'])) / state_i['x'].numel() for state_i in state]
+    num_zeros = [(state_i['x'].numel() - torch.count_nonzero(state_i['x'])) / state_i['x'].numel() for state_i in state[1:]]
     return sum(num_zeros) / len(num_zeros)
 
 # Will mix two numbers of same class 1/num_classes of the time

@@ -7,7 +7,7 @@ from torch.nn import Parameter
 from typing import Optional
 from pclib.utils.functional import reTanh, identity, trec, shrinkage, d_shrinkage
 
-class FC(nn.Module):
+class FCANN(nn.Module):
     """
     | Fully connected layer with optional bias and optionally symmetric weights.
     | The layer stores its state in a dictionary with keys 'x' and 'e'.
@@ -99,8 +99,7 @@ class FC(nn.Module):
         elif actv_fn == F.softsign:
             self.d_actv_fn: callable = lambda x: 1 / (1 + torch.abs(x)).square()
         elif actv_fn == F.elu:
-            # self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) + torch.sign(torch.minimum(x, torch.zeros_like(x))) * 0.01 + 1
-            self.d_actv_fn: callable = lambda x: torch.where(x > 0, torch.ones_like(x), torch.exp(x))
+            self.d_actv_fn: callable = lambda x: torch.sign(torch.relu(x)) + torch.sign(torch.minimum(x, torch.zeros_like(x))) * 0.01 + 1
         elif actv_fn == F.leaky_relu:
             self.d_actv_fn: callable = lambda x: torch.where(x > 0, torch.ones_like(x), 0.01 * torch.ones_like(x))
         elif actv_fn == trec:
@@ -138,25 +137,23 @@ class FC(nn.Module):
         """
         | Creates and initialises weight tensors and bias tensor based on args from self.__init__().
         """
+        assert not self.symmetric, "Symmetric weights not implemented yet."
         if self.in_features is not None:
-            self.weight = Parameter(torch.empty((self.out_features, self.in_features), **self.factory_kwargs))
-            bound = 4 * math.sqrt(6 / (self.in_features + self.out_features)) if self.actv_fn == F.sigmoid else math.sqrt(6 / (self.in_features + self.out_features))
-            self.weight.data.uniform_(-bound, bound)
+            self.td_net = nn.Sequential(*[
+                # nn.Linear(self.out_features, self.out_features),
+                # nn.ReLU(),
+                nn.Linear(self.out_features, self.in_features),
+                # nn.ReLU(),
+                # nn.Linear(self.in_features, self.in_features)
+            ])
 
-            if self.has_bias:
-                #  Bias is used in prediction of layer below, so it has shape (in_features)
-                self.bias = Parameter(torch.empty(self.in_features, **self.factory_kwargs))
-                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight.T)
-                bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-                nn.init.uniform_(self.bias, -bound, bound)
-            else:
-                self.register_parameter('bias', None)
-
-            if not self.symmetric:
-                self.weight_td = Parameter(torch.empty((self.in_features, self.out_features), **self.factory_kwargs))
-                nn.init.kaiming_uniform_(self.weight_td, a=math.sqrt(5))
-            else:
-                self.register_parameter('weight_td', None)
+            self.bu_net = nn.Sequential(*[
+                # nn.Linear(self.in_features, self.in_features, bias=False),
+                # nn.ReLU(),
+                nn.Linear(self.in_features, self.out_features, bias=False),
+                # nn.ReLU(),
+                # nn.Linear(self.out_features, self.out_features, bias=False)
+            ])
 
         else:
             self.register_parameter('weight', None)
@@ -180,9 +177,7 @@ class FC(nn.Module):
                 Dictionary containing 'x' and 'e' tensors of shape (batch_size, out_features).
         """
         return {
-            # 'x': torch.zeros((batch_size, self.out_features), device=self.device),
-            # 'x': torch.zeros((batch_size, self.out_features), device=self.device),
-            'x': (0.01 * torch.ones((batch_size, self.out_features), device=self.device)) / self.out_features,
+            'x': torch.zeros((batch_size, self.out_features), device=self.device),
             'e': torch.zeros((batch_size, self.out_features), device=self.device),
         }
 
@@ -206,9 +201,9 @@ class FC(nn.Module):
         """
         x = state['x'].detach() if self.symmetric else state['x']
         x = x.flatten(1)
-        weight_td = self.weight.T if self.symmetric else self.weight_td
         x = self.dropout(x)
-        return F.linear(self.actv_fn(x), weight_td, self.bias)
+        x = self.actv_fn(x)
+        return self.td_net(x)
 
     def propagate(self, e_below:torch.Tensor):
         """
@@ -226,7 +221,7 @@ class FC(nn.Module):
         """
         if e_below.dim() == 4:
             e_below = e_below.flatten(1)
-        return F.linear(e_below.detach(), self.weight, None)
+        return self.bu_net(e_below.detach())
     
 
     def update_x(self, state:dict, e_below:torch.Tensor = None, gamma:torch.Tensor = None):
@@ -248,20 +243,16 @@ class FC(nn.Module):
 
         # If not input layer, propagate error from layer below
         dx = -state['e'].detach()
-        # dx = torch.zeros_like(state['x'])
 
         if e_below is not None:
-            e_below = e_below.detach()
             if e_below.dim() == 4:
                 e_below = e_below.flatten(1)
-            dx += self.precision*self.propagate(e_below) * self.d_actv_fn(state['x'].detach())
+            dx += self.precision*self.propagate(e_below)
         
         if self.x_decay > 0:
-            # dx += -self.x_decay*state['x'].detach()*self.d_actv_fn(state['x'].detach())
-            dx += -self.x_decay*state['x'].detach()
+            dx += -self.x_decay*state['x'].detach()*self.d_actv_fn(state['x'].detach())
 
         state['x'] = state['x'].detach() + gamma.unsqueeze(-1) * dx
-        # state['x'] = shrinkage(state['x'], torch.tensor(0.0001).to(self.device))
     
 
     def update_e(self, state:dict, pred:torch.Tensor):
