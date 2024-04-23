@@ -76,11 +76,13 @@ def d_shrinkage(input, lambda_=1e-3):
     return (input.abs() > lambda_).float()
 
 # Calculate Correlation between activations of top latent vector
-def calc_corr(state):
+def calc_corr(state, layer=None):
+    if layer is None:
+        layer = -1
     # Standardise activations
-    mean = state[-1]['x'].mean(dim=0, keepdim=True)
-    std = state[-1]['x'].std(dim=0, keepdim=True) + 1e-5
-    x = (state[-1]['x'] - mean) / std
+    mean = state[layer]['x'].mean(dim=0, keepdim=True)
+    std = state[layer]['x'].std(dim=0, keepdim=True) + 1e-5
+    x = (state[layer]['x'] - mean) / std
 
     # Compute Correlation matrix
     corr_matrix = torch.corrcoef(x.T)

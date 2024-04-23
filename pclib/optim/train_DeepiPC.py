@@ -161,7 +161,7 @@ def val_pass(model:torch.nn.Module, val_loader:torch.utils.data.DataLoader, flat
                 x = images
 
             # Forward pass
-            _, state = model(x, pin_obs=True, learn_layer=learn_layer)
+            _, state, _ = model(x, pin_obs=True, learn_layer=learn_layer)
             vfe += model.vfe(state, batch_reduction='sum', learn_layer=learn_layer)
 
         vfe /= len(val_loader.dataset)
@@ -309,18 +309,22 @@ def train_iPC(
     if val_data is not None:
         val_loader = val_data if isinstance(val_data, DataLoader) else DataLoader(val_data, batch_size, shuffle=False)
 
-    if flatten:
-        pos_states = [model.init_state(images.flatten(1)) for images, _ in train_loader]
-        neg_states = [model.init_state(images.flatten(1)) for images, _ in train_loader]
+    if not supervised:
+        if flatten:
+            pos_states = [model.init_state(images.flatten(1)) for images, _ in train_loader]
+            neg_states = [model.init_state(images.flatten(1)) for images, _ in train_loader]
+        else:
+            pos_states = [model.init_state(images) for images, _ in train_loader]
+            neg_states = [model.init_state(images) for images, _ in train_loader]
     else:
-        pos_states = [model.init_state(images) for images, _ in train_loader]
-        neg_states = [model.init_state(images) for images, _ in train_loader]
-    if supervised:
-        for i, (_, targets) in enumerate(train_loader):
-            pos_states[i][-1]['x'] = format_y(targets, model.num_classes)
-            neg_states[i][-1]['x'] = format_y(targets, model.num_classes)
+        if flatten:
+            pos_states = [model.init_state(images.flatten(1), format_y(y)) for images, y in train_loader]
+            neg_states = [model.init_state(images.flatten(1), format_y(y)) for images, y in train_loader]
+        else:
+            pos_states = [model.init_state(images, format_y(y)) for images, y in train_loader]
+            neg_states = [model.init_state(images, format_y(y)) for images, y in train_loader]
     
-    gammas = [torch.ones(pos_states[i][-1]['x'].shape[0]).to(model.device) * model.gamma for i in range(len(pos_states))]
+    gammas = [torch.ones(pos_states[i][0][-1]['x'].shape[0]).to(model.device) for i in range(len(pos_states))]
 
     stats = {}
     loop = tqdm(range(num_epochs), leave=False)
@@ -340,55 +344,55 @@ def train_iPC(
         if epoch > 0:
             loop.set_postfix(stats)
 
+        print(f'begin training')
         for i in range(len(train_loader)):
 
-            optimiser.zero_grad()
+            # optimiser.zero_grad()
             # Forward pass and gradient calculation
             if supervised:
-                model.step(pos_states[i], gammas[i], pin_obs=True, pin_target=True, learn_layer=learn_layer)
+                model.step(pos_states[i][0], pos_states[i][1], gammas[i])
             else:
-                model.step(pos_states[i], gammas[i], pin_obs=True, learn_layer=learn_layer)
-            if lr > 0:
-                vfe = model.vfe(pos_states[i], learn_layer=learn_layer, normalise=norm_grads)
-                vfe.backward()
+                model.step(pos_states[i][0], pos_states[i][1], gammas[i])
+            # if lr > 0:
+                # optimiser.zero_grad()
+                # vfe = model.vfe(pos_states[i][0], learn_layer=learn_layer, normalise=norm_grads)
+                # vfe.backward()
 
-            if assert_grads: model.assert_grads(pos_states[i])
+            # if assert_grads: model.assert_grads(pos_states[i])
 
-            # Peroforms a negative pass, check function for details
-            if neg_coeff is not None and neg_coeff > 0: neg_pass(model, pos_states[i], neg_states[i], gammas[i], neg_coeff, norm_grads)
+            # # Peroforms a negative pass, check function for details
+            # if neg_coeff is not None and neg_coeff > 0: neg_pass(model, pos_states[i], neg_states[i], gammas[i], neg_coeff, norm_grads)
 
-            # Performs untraining pass, check function for details
-            if cd_coeff is not None and cd_coeff > 0: contrastive_divergence(model, pos_states[i], gammas[i], cd_coeff, norm_grads, cd_steps)
+            # # Performs untraining pass, check function for details
+            # if cd_coeff is not None and cd_coeff > 0: contrastive_divergence(model, pos_states[i], gammas[i], cd_coeff, norm_grads, cd_steps)
 
-            # Parameter Update (Grad Descent)
-            if lr > 0:
-                optimiser.step()
+            # # Parameter Update (Grad Descent)
+            # if lr > 0:
+            #     optimiser.step()
             
-            if norm_weights:
-                for layer_idx, layer in enumerate(model.layers):
-                    if layer_idx > 0:
-                        if hasattr(layer, 'weight'):
-                            layer.weight.data = F.normalize(layer.weight.data, dim=-1)
-                        elif hasattr(layer, 'conv'):
-                            layer.conv[0].weight.data = F.normalize(layer.conv[0].weight.data, dim=(0, 2, 3))
+            # if norm_weights:
+            #     raise NotImplementedError("Normalising weights not yet implemented")
+            #     for layer_idx, layer in enumerate(model.layers):
+            #         if layer_idx > 0:
+            #             if hasattr(layer, 'weight'):
+            #                 layer.weight.data = F.normalize(layer.weight.data, dim=-1)
+            #             elif hasattr(layer, 'conv'):
+            #                 layer.conv[0].weight.data = F.normalize(layer.conv[0].weight.data, dim=(0, 2, 3))
             
-            if model.has_top:
-                model.top.weight.data = model.top.weight.data - torch.diag(model.top.weight.data.diag())
+            # if model.has_top:
+            #     raise NotImplementedError("Normalising weights not yet implemented")
+            #     model.top.weight.data = model.top.weight.data - torch.diag(model.top.weight.data.diag())
 
-            if lr > 0:
-                # Track batch statistics
-                epoch_stats['train_vfe'].append(model.vfe(pos_states[i], batch_reduction='sum').item())
+            # if lr > 0:
+            #     # Track batch statistics
+            #     epoch_stats['train_vfe'].append(model.vfe(pos_states[i][0], batch_reduction='sum').item())
                 
-                if not minimal_stats:
-                    epoch_stats['train_corr'].append(calc_corr(pos_states[i], layer=learn_layer).item())
-                    epoch_stats['train_sparsity'].append(calc_sparsity(pos_states[i]).item())
-                    for l, layer in enumerate(model.layers):
-                        epoch_stats['X_norms'][l].append(pos_states[i][l]['x'].norm(dim=1).mean().item())
-                        epoch_stats['Layer_VFE'][l].append(0.5 * pos_states[i][l]['e'].square().sum(dim=[d for d in range(1, pos_states[i][l]['e'].dim())]).mean(0).item())
-                        if l > 0:
-                            if learn_layer is not None and l != learn_layer:
-                                continue
-                            epoch_stats['grad_norms'][l-1].append(layer.weight.grad.norm().item())
+            #     if not minimal_stats:
+            #         epoch_stats['train_corr'].append(calc_corr(pos_states[i][0]).item())
+            #         epoch_stats['train_sparsity'].append(calc_sparsity(pos_states[i][0]).item())
+            #         for l, layer in enumerate(model.layers):
+            #             epoch_stats['X_norms'][l].append(pos_states[i][0][l]['x'].norm(dim=1).mean().item())
+            #             epoch_stats['Layer_VFE'][l].append(0.5 * pos_states[i][0][l]['e'].square().sum(dim=[d for d in range(1, pos_states[i][0][l]['e'].dim())]).mean(0).item())
 
         # Collects statistics for validation data if it exists
         if val_data is not None and epoch % eval_every == 0:
@@ -410,10 +414,6 @@ def train_iPC(
                     for l, layer in enumerate(model.layers):
                         writer.add_scalar(f'X_norms/layer_{l}', torch.tensor(epoch_stats['X_norms'][l]).mean().item(), model.epochs_trained.item())
                         writer.add_scalar(f'Layer_VFE/layer_{l}', torch.tensor(epoch_stats['Layer_VFE'][l]).mean().item(), model.epochs_trained.item())
-                        if l > 0:
-                            if learn_layer is not None and l != learn_layer:
-                                continue
-                            writer.add_scalar(f'grad_norms/layer_{l}', torch.tensor(epoch_stats['grad_norms'][l-1]).mean().item(), model.epochs_trained.item())
         
         if scheduler is not None and lr > 0:
             sched.step(stats['train_vfe'])
