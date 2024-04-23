@@ -144,12 +144,12 @@ class FCDPCN(FCPCN):
         if self.inverted:
             obs, y = y, obs
         if obs is not None:
-            state[0]['x'] = obs.clone().requires_grad_(pin_obs)
+            state[0]['x'] = obs.clone().requires_grad_(not pin_obs)
         if y is not None:
-            state[-1]['x'] = y.clone().requires_grad_(pin_target)
+            state[-1]['x'] = y.clone().requires_grad_(not pin_target)
 
-        optimiser = torch.optim.SGD([state[i]['x'] for i in range(len(state)) if state[i]['x'].requires_grad], lr=self.gamma, momentum=0.9)
-    
+        optimiser = torch.optim.SGD([state[i]['x'] for i in range(len(state)) if state[i]['x'].requires_grad], lr=1.0, momentum=0.0)
+
         return state, optimiser
 
 
@@ -191,25 +191,18 @@ class FCDPCN(FCPCN):
             else:
                 continue
             # errors.append(layer.squared_errors(state[i], pred))
-            errors.append(layer.squared_errors(state[i], pred).sum())
+            errors.append(0.5 * layer.prediction_errors(state[i], pred).square().sum(-1))
         
-        return sum(errors)
+        # reduce layers
+        vfe = sum(errors)
 
-        # # Reduce units for each layer
-        # vfe = [0.5 * e.sum(dim=[i for i in range(1, e.dim())]) for e in errors[:learn_layer]]
+        # reduce batches
+        if batch_reduction == 'sum':
+            vfe = vfe.sum()
+        elif batch_reduction == 'mean':
+            vfe = vfe.mean()
         
-        # if normalise:
-        #     vfe = [vfe_i / (vfe_i.detach() + 1e-6) for vfe_i in vfe]
-
-        # # Reduce layers
-        # vfe = sum(vfe)
-        # # Reduce batches
-        # if batch_reduction == 'sum':
-        #     vfe = vfe.sum()
-        # elif batch_reduction == 'mean':
-        #     vfe = vfe.mean()
-
-        # return vfe
+        return vfe
 
 
     def step(self, state:List[dict], optimiser:torch.optim.Optimizer, gamma:torch.Tensor):
@@ -231,9 +224,14 @@ class FCDPCN(FCPCN):
                 If provided, only layers i where i <= learn_layer are updated.
         """
         optimiser.zero_grad()
-        vfe = (self.vfe(state, batch_reduction='none') * gamma.unsqueeze(1)).sum() 
+        for p in optimiser.param_groups[0]['params']:
+            assert p.grad is None, "Gradients should be zeroed before calling step()."
+        vfe = (self.vfe(state, batch_reduction='none') * gamma).sum() 
+        make_dot(vfe).render("deep_vfe", format="png")
         vfe.backward()
-        # optimiser.step()
+        # for p in optimiser.param_groups[0]['params']:
+        #     print(f'grad.mean(): {p.grad.mean()}, grad.std(): {p.grad.std()}')
+        optimiser.step()
 
     def forward(self, obs:torch.Tensor = None, y:torch.Tensor = None, pin_obs:bool = False, pin_target:bool = False, steps:int = None, learn_layer:int = None):
 
@@ -266,7 +264,7 @@ class FCDPCN(FCPCN):
         if steps is None:
             steps = self.steps
 
-        state, optimiser = self.init_state(obs, y, learn_layer=learn_layer)
+        state, optimiser = self.init_state(obs, y, learn_layer=learn_layer, pin_obs=pin_obs, pin_target=pin_target)
 
         prev_vfe = None
         gamma = torch.ones(state[0]['x'].shape[0]).to(self.device)

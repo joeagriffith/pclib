@@ -151,20 +151,19 @@ def val_pass(model:torch.nn.Module, val_loader:torch.utils.data.DataLoader, flat
         dict
             dictionary of validation results
     """
-    with torch.no_grad():
-        model.eval()
-        vfe = torch.tensor(0.0).to(model.device)
-        for images, target in val_loader:
-            if flatten:
-                x = images.flatten(start_dim=1)
-            else:
-                x = images
+    model.eval()
+    vfe = torch.tensor(0.0).to(model.device)
+    for images, target in val_loader:
+        if flatten:
+            x = images.flatten(start_dim=1)
+        else:
+            x = images
 
-            # Forward pass
-            _, state, _ = model(x, pin_obs=True, learn_layer=learn_layer)
-            vfe += model.vfe(state, batch_reduction='sum', learn_layer=learn_layer)
+        # Forward pass
+        _, state, _ = model(x, pin_obs=True, learn_layer=learn_layer)
+        vfe += model.vfe(state, batch_reduction='sum', learn_layer=learn_layer)
 
-        vfe /= len(val_loader.dataset)
+    vfe /= len(val_loader.dataset)
     return {'vfe': vfe}
 
 def val_pass_classifier(classifier:torch.nn.Module, val_batches):
@@ -311,20 +310,20 @@ def train_iPC(
 
     if not supervised:
         if flatten:
-            pos_states = [model.init_state(images.flatten(1)) for images, _ in train_loader]
-            neg_states = [model.init_state(images.flatten(1)) for images, _ in train_loader]
+            pos_states = [model.init_state(images.flatten(1), pin_obs=True) for images, _ in train_loader]
+            neg_states = [model.init_state(images.flatten(1), pin_obs=True) for images, _ in train_loader]
         else:
-            pos_states = [model.init_state(images) for images, _ in train_loader]
-            neg_states = [model.init_state(images) for images, _ in train_loader]
+            pos_states = [model.init_state(images, pin_obs=True) for images, _ in train_loader]
+            neg_states = [model.init_state(images, pin_obs=True) for images, _ in train_loader]
     else:
         if flatten:
-            pos_states = [model.init_state(images.flatten(1), format_y(y)) for images, y in train_loader]
-            neg_states = [model.init_state(images.flatten(1), format_y(y)) for images, y in train_loader]
+            pos_states = [model.init_state(images.flatten(1), format_y(y), pin_obs=True, pin_target=True) for images, y in train_loader]
+            neg_states = [model.init_state(images.flatten(1), format_y(y), pin_obs=True, pin_target=True) for images, y in train_loader]
         else:
-            pos_states = [model.init_state(images, format_y(y)) for images, y in train_loader]
-            neg_states = [model.init_state(images, format_y(y)) for images, y in train_loader]
+            pos_states = [model.init_state(images, format_y(y), pin_obs=True, pin_target=True) for images, y in train_loader]
+            neg_states = [model.init_state(images, format_y(y), pin_obs=True, pin_target=True) for images, y in train_loader]
     
-    gammas = [torch.ones(pos_states[i][0][-1]['x'].shape[0]).to(model.device) for i in range(len(pos_states))]
+    gammas = [torch.ones(pos_states[i][0][-1]['x'].shape[0]).to(model.device) * model.gamma for i in range(len(pos_states))]
 
     stats = {}
     loop = tqdm(range(num_epochs), leave=False)
@@ -344,19 +343,15 @@ def train_iPC(
         if epoch > 0:
             loop.set_postfix(stats)
 
-        print(f'begin training')
         for i in range(len(train_loader)):
 
             # optimiser.zero_grad()
             # Forward pass and gradient calculation
-            if supervised:
-                model.step(pos_states[i][0], pos_states[i][1], gammas[i])
-            else:
-                model.step(pos_states[i][0], pos_states[i][1], gammas[i])
-            # if lr > 0:
-                # optimiser.zero_grad()
-                # vfe = model.vfe(pos_states[i][0], learn_layer=learn_layer, normalise=norm_grads)
-                # vfe.backward()
+            model.step(pos_states[i][0], pos_states[i][1], gammas[i])
+            if lr > 0:
+                optimiser.zero_grad()
+                vfe = model.vfe(pos_states[i][0], learn_layer=learn_layer, normalise=norm_grads)
+                vfe.backward()
 
             # if assert_grads: model.assert_grads(pos_states[i])
 
@@ -366,9 +361,9 @@ def train_iPC(
             # # Performs untraining pass, check function for details
             # if cd_coeff is not None and cd_coeff > 0: contrastive_divergence(model, pos_states[i], gammas[i], cd_coeff, norm_grads, cd_steps)
 
-            # # Parameter Update (Grad Descent)
-            # if lr > 0:
-            #     optimiser.step()
+            # Parameter Update (Grad Descent)
+            if lr > 0:
+                optimiser.step()
             
             # if norm_weights:
             #     raise NotImplementedError("Normalising weights not yet implemented")
@@ -383,16 +378,13 @@ def train_iPC(
             #     raise NotImplementedError("Normalising weights not yet implemented")
             #     model.top.weight.data = model.top.weight.data - torch.diag(model.top.weight.data.diag())
 
-            # if lr > 0:
-            #     # Track batch statistics
-            #     epoch_stats['train_vfe'].append(model.vfe(pos_states[i][0], batch_reduction='sum').item())
+            if lr > 0:
+                # Track batch statistics
+                epoch_stats['train_vfe'].append(model.vfe(pos_states[i][0], batch_reduction='sum').item())
                 
-            #     if not minimal_stats:
-            #         epoch_stats['train_corr'].append(calc_corr(pos_states[i][0]).item())
-            #         epoch_stats['train_sparsity'].append(calc_sparsity(pos_states[i][0]).item())
-            #         for l, layer in enumerate(model.layers):
-            #             epoch_stats['X_norms'][l].append(pos_states[i][0][l]['x'].norm(dim=1).mean().item())
-            #             epoch_stats['Layer_VFE'][l].append(0.5 * pos_states[i][0][l]['e'].square().sum(dim=[d for d in range(1, pos_states[i][0][l]['e'].dim())]).mean(0).item())
+                if not minimal_stats:
+                    epoch_stats['train_corr'].append(calc_corr(pos_states[i][0]).item())
+                    epoch_stats['train_sparsity'].append(calc_sparsity(pos_states[i][0]).item())
 
         # Collects statistics for validation data if it exists
         if val_data is not None and epoch % eval_every == 0:
@@ -411,9 +403,6 @@ def train_iPC(
                     writer.add_scalar('Corr/train', stats['train_corr'], model.epochs_trained.item())
                     stats['train_sparsity'] = torch.tensor(epoch_stats['train_sparsity']).mean().item()
                     writer.add_scalar('Sparsity/train', stats['train_sparsity'], model.epochs_trained.item())
-                    for l, layer in enumerate(model.layers):
-                        writer.add_scalar(f'X_norms/layer_{l}', torch.tensor(epoch_stats['X_norms'][l]).mean().item(), model.epochs_trained.item())
-                        writer.add_scalar(f'Layer_VFE/layer_{l}', torch.tensor(epoch_stats['Layer_VFE'][l]).mean().item(), model.epochs_trained.item())
         
         if scheduler is not None and lr > 0:
             sched.step(stats['train_vfe'])

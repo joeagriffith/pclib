@@ -158,6 +158,14 @@ class FC(nn.Module):
             else:
                 self.register_parameter('weight_td', None)
 
+
+            # Use PyTorch initialisation
+            layer = nn.Linear(self.in_features, self.out_features, bias=False)
+            self.weight.data = layer.weight.data
+            if self.has_bias:
+                layer = nn.Linear(self.out_features, self.in_features, bias=True)
+                self.bias.data = layer.bias.data
+
         else:
             self.register_parameter('weight', None)
             self.register_parameter('weight_td', None)
@@ -182,7 +190,7 @@ class FC(nn.Module):
         return {
             # 'x': torch.zeros((batch_size, self.out_features), device=self.device),
             # 'x': torch.zeros((batch_size, self.out_features), device=self.device),
-            'x': (0.01 * torch.ones((batch_size, self.out_features), device=self.device)) / self.out_features,
+            'x': (torch.ones((batch_size, self.out_features), device=self.device)) / self.out_features,
             'e': torch.zeros((batch_size, self.out_features), device=self.device),
         }
 
@@ -259,8 +267,11 @@ class FC(nn.Module):
         if self.x_decay > 0:
             # dx += -self.x_decay*state['x'].detach()*self.d_actv_fn(state['x'].detach())
             dx += -self.x_decay*state['x'].detach()
+        
+        dx = gamma.unsqueeze(-1) * dx
+        # print(f'dx.mean: {dx.mean()}, dx.std: {dx.std()}')
 
-        state['x'] = state['x'].detach() + gamma.unsqueeze(-1) * dx
+        state['x'] = state['x'].detach() + dx
         # state['x'] = shrinkage(state['x'], torch.tensor(0.0001).to(self.device))
     
 

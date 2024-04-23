@@ -91,13 +91,16 @@ class DFC(FC):
         """
         if self.in_features is not None:
             self.mlp = nn.Sequential(
-                nn.Linear(self.out_features, self.out_features, bias=self.has_bias),
-                nn.ReLU(),
-                nn.Dropout(p=self.dropout),
-                nn.Linear(self.out_features, self.out_features, bias=self.has_bias),
-                nn.ReLU(),
-                nn.Dropout(p=self.dropout),
-                nn.Linear(self.out_features, self.in_features, bias=self.has_bias)
+                # nn.ReLU(),
+                nn.Linear(self.out_features, self.in_features, bias=self.has_bias),
+
+                # nn.Linear(self.out_features, self.out_features, bias=self.has_bias),
+                # nn.ReLU(),
+                # nn.Dropout(p=self.dropout),
+                # nn.Linear(self.out_features, self.out_features, bias=self.has_bias),
+                # nn.ReLU(),
+                # nn.Dropout(p=self.dropout),
+                # nn.Linear(self.out_features, self.in_features, bias=self.has_bias)
             )
 
         self.register_parameter('weight', None)
@@ -121,7 +124,7 @@ class DFC(FC):
         state = {
             # 'x': torch.zeros((batch_size, self.out_features), device=self.device, requires_grad=True),
             # 'x': torch.zeros((batch_size, self.out_features), device=self.device, requires_grad=True),
-            'x': (0.01 * torch.ones((batch_size, self.out_features), device=self.device)) / self.out_features,
+            'x': (torch.ones((batch_size, self.out_features), device=self.device)) / self.out_features,
             # 'e': torch.zeros((batch_size, self.out_features), device=self.device),
         }
         state['x'].requires_grad = True
@@ -142,10 +145,10 @@ class DFC(FC):
                 Prediction of state['x'] in the layer below.
         """
         x = state['x'].flatten(1)
-        print(f'x grad_fn: {x.grad_fn}')
-        print(f'x requires grad: {x.requires_grad}')
+        # print(f'x grad_fn: {x.grad_fn}')
+        # print(f'x requires grad: {x.requires_grad}')
         pred = self.mlp(self.actv_fn(x))
-        print(f'pred grad_fn: {pred.grad_fn}')
+        # print(f'pred grad_fn: {pred.grad_fn}')
         return pred
 
     def propagate(self, e_below:torch.Tensor):
@@ -172,12 +175,12 @@ class DFC(FC):
     def update_e(self, state:dict, pred:torch.Tensor):
         raise NotImplementedError("update_e() is not used in DFC, backpropagate VFE instead.")
     
-    def squared_errors(self, state:dict, pred:torch.Tensor):
+    def prediction_errors(self, state:dict, pred:torch.Tensor):
         assert pred is not None, "Prediction must be provided to update_e()."
         
         if pred.dim() == 4:
             pred = pred.flatten(1)
-        return (state['x'] - pred).square()
+        return state['x'] - pred
 
 
     def assert_grads(self, state, e_below):
