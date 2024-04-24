@@ -91,7 +91,6 @@ class DFC(FC):
         """
         if self.in_features is not None:
             self.mlp = nn.Sequential(
-                # nn.ReLU(),
                 nn.Linear(self.out_features, self.in_features, bias=self.has_bias),
 
                 # nn.Linear(self.out_features, self.out_features, bias=self.has_bias),
@@ -101,6 +100,13 @@ class DFC(FC):
                 # nn.ReLU(),
                 # nn.Dropout(p=self.dropout),
                 # nn.Linear(self.out_features, self.in_features, bias=self.has_bias)
+
+                # nn.Unflatten(1, (self.out_features, 1, 1)),
+                # nn.ConvTranspose2d(self.out_features, self.out_features, 7, stride=1),
+                # nn.ReLU(),
+                # nn.Dropout(p=self.dropout),
+                # nn.ConvTranspose2d(self.out_features, 1, 4, stride=4),
+                # nn.Flatten(),
             )
 
         self.register_parameter('weight', None)

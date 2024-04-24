@@ -148,7 +148,8 @@ class FCDPCN(FCPCN):
         if y is not None:
             state[-1]['x'] = y.clone().requires_grad_(not pin_target)
 
-        optimiser = torch.optim.SGD([state[i]['x'] for i in range(len(state)) if state[i]['x'].requires_grad], lr=1.0, momentum=0.0)
+        optimiser = torch.optim.SGD([state[i]['x'] for i in range(len(state)) if state[i]['x'].requires_grad], lr=1.0, momentum=0.9)
+        # optimiser = torch.optim.AdamW([state[i]['x'] for i in range(len(state)) if state[i]['x'].requires_grad], lr=1.0)
 
         return state, optimiser
 
@@ -267,7 +268,7 @@ class FCDPCN(FCPCN):
         state, optimiser = self.init_state(obs, y, learn_layer=learn_layer, pin_obs=pin_obs, pin_target=pin_target)
 
         prev_vfe = None
-        gamma = torch.ones(state[0]['x'].shape[0]).to(self.device)
+        gamma = torch.ones(state[0]['x'].shape[0]).to(self.device) * self.gamma
         for i in range(steps):
             self.step(state, optimiser, gamma)
             with torch.no_grad():

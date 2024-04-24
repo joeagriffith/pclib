@@ -36,6 +36,8 @@ class FC(nn.Module):
             Decay rate for x.
         dropout : float
             Dropout rate for predictions.
+        momentum : float
+            Momentum for x updates.
         device : torch.device
             Device to use for computation.
         dtype : torch.dtype
@@ -59,6 +61,7 @@ class FC(nn.Module):
                  gamma: float = 0.1,
                  x_decay: float = 0.0,
                  dropout: float = 0.0,
+                 momentum: float = 0.0,
                  device: torch.device = torch.device('cpu'),
                  dtype: torch.dtype = None
                  ) -> None:
@@ -75,6 +78,7 @@ class FC(nn.Module):
         self.gamma = gamma
         self.x_decay = x_decay
         self.dropout = dropout
+        self.momentum = momentum
         self.device = device
 
         # Automatically set d_actv_fn if not provided
@@ -127,7 +131,10 @@ class FC(nn.Module):
             f"    symmetric: {self.symmetric}\n" + \
             f"    actv_fn: {self.actv_fn.__name__}\n" + \
             f"    gamma: {self.gamma}" + \
-            f"    x_decay: {self.x_decay}"
+            f"    x_decay: {self.x_decay}" + \
+            f"    dropout: {self.dropout}" + \
+            f"    momentum: {self.momentum}"
+
         
         string = base_str[:base_str.find('\n')] + custom_info + base_str[base_str.find('\n'):]
         
@@ -140,15 +147,10 @@ class FC(nn.Module):
         """
         if self.in_features is not None:
             self.weight = Parameter(torch.empty((self.out_features, self.in_features), **self.factory_kwargs))
-            bound = 4 * math.sqrt(6 / (self.in_features + self.out_features)) if self.actv_fn == F.sigmoid else math.sqrt(6 / (self.in_features + self.out_features))
-            self.weight.data.uniform_(-bound, bound)
 
             if self.has_bias:
                 #  Bias is used in prediction of layer below, so it has shape (in_features)
                 self.bias = Parameter(torch.empty(self.in_features, **self.factory_kwargs))
-                fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight.T)
-                bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-                nn.init.uniform_(self.bias, -bound, bound)
             else:
                 self.register_parameter('bias', None)
 
@@ -158,12 +160,10 @@ class FC(nn.Module):
             else:
                 self.register_parameter('weight_td', None)
 
-
             # Use PyTorch initialisation
-            layer = nn.Linear(self.in_features, self.out_features, bias=False)
-            self.weight.data = layer.weight.data
+            layer = nn.Linear(self.out_features, self.in_features, bias=self.has_bias)
+            self.weight.data = layer.weight.data.T
             if self.has_bias:
-                layer = nn.Linear(self.out_features, self.in_features, bias=True)
                 self.bias.data = layer.bias.data
 
         else:
@@ -192,6 +192,7 @@ class FC(nn.Module):
             # 'x': torch.zeros((batch_size, self.out_features), device=self.device),
             'x': (torch.ones((batch_size, self.out_features), device=self.device)) / self.out_features,
             'e': torch.zeros((batch_size, self.out_features), device=self.device),
+            'prev_dx': None,
         }
 
     def to(self, *args, **kwargs):
@@ -269,7 +270,12 @@ class FC(nn.Module):
             dx += -self.x_decay*state['x'].detach()
         
         dx = gamma.unsqueeze(-1) * dx
-        # print(f'dx.mean: {dx.mean()}, dx.std: {dx.std()}')
+
+        if self.momentum > 0.0:
+            if state['prev_dx'] is not None:
+                dx = dx + self.momentum * state['prev_dx']
+            state['prev_dx'] = dx.detach()
+
 
         state['x'] = state['x'].detach() + dx
         # state['x'] = shrinkage(state['x'], torch.tensor(0.0001).to(self.device))

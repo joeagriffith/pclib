@@ -38,6 +38,8 @@ class FCPCN(nn.Module):
             Decay constant for x
         dropout : float
             Dropout rate for predictions
+        momentum: float
+            Momentum for value node updates
         inverted : bool
             Whether to switch observation and target in forward pass (WhittingtonBogacz2017)
         has_top : bool
@@ -63,6 +65,7 @@ class FCPCN(nn.Module):
             gamma:float = 0.1, 
             x_decay: float = 0.0,
             dropout:float = 0.0,
+            momentum:float = 0.0,
             inverted:bool = False,
             has_top: bool = False,
             device:torch.device = torch.device('cpu'), 
@@ -72,7 +75,7 @@ class FCPCN(nn.Module):
 
         assert len(precisions) == len(sizes), "Precisions must be the same length as sizes"
 
-        self.factory_kwargs = {'actv_fn': actv_fn, 'd_actv_fn': d_actv_fn, 'gamma': gamma, 'has_bias': bias, 'symmetric': symmetric, 'x_decay': x_decay, 'dropout': dropout, 'dtype': dtype}
+        self.factory_kwargs = {'actv_fn': actv_fn, 'd_actv_fn': d_actv_fn, 'gamma': gamma, 'has_bias': bias, 'symmetric': symmetric, 'x_decay': x_decay, 'dropout': dropout, 'momentum': momentum, 'dtype': dtype}
         self.sizes = sizes
         self.precisions = precisions
         self.bias = bias
@@ -80,6 +83,7 @@ class FCPCN(nn.Module):
         self.gamma = gamma
         self.x_decay = x_decay
         self.dropout = dropout
+        self.momentum = momentum
         self.steps = steps
         self.inverted = inverted
         self.has_top = has_top
@@ -102,6 +106,7 @@ class FCPCN(nn.Module):
             f"    gamma: {self.gamma}\n" + \
             f"    x_decay: {self.x_decay}\n" + \
             f"    dropout: {self.dropout}\n" + \
+            f"    momentum: {self.momentum}\n" + \
             f"    steps: {self.steps}\n" + \
             f"    inverted: {self.inverted}\n" + \
             f"    has_top: {self.has_top}\n" + \
@@ -313,6 +318,14 @@ class FCPCN(nn.Module):
         # # Alternative Initialisation
         # self._init_xs(state, obs, y, learn_layer=learn_layer)
         # self._init_es(state, learn_layer=learn_layer)
+        # Update Es
+        for i, layer in enumerate(self.layers):
+            # Dont update e if >= learn_layer, unless top layer
+            if i < len(self.layers) - 1:
+                pred = self.layers[i+1].predict(state[i+1])
+            else:
+                continue
+            layer.update_e(state[i], pred)
 
         return state
 
